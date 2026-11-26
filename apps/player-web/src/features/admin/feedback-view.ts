@@ -1,4 +1,10 @@
-import type { FeedbackAdminClient, FeedbackCounts, FeedbackFilter, FeedbackItem, FeedbackRange } from '../../services/feedback-admin-api.ts';
+import type {
+  FeedbackAdminClient,
+  FeedbackCounts,
+  FeedbackFilter,
+  FeedbackItem,
+  FeedbackRange,
+} from '../../services/feedback-admin-api.ts';
 import { h } from '../cocreation/h.ts';
 import type { MakeExport } from './export/export-dialog.ts';
 import { writerField } from './export/export-fields.ts';
@@ -108,14 +114,26 @@ export function feedbackView(
     model = value;
     void load();
   });
-  const bar = h('div', { class: 'admin-bar', attrs: { role: 'toolbar' } }, rangeBar.root, scopeBar.root, characterSelect, writerSelect, modelSelect);
+  const bar = h(
+    'div',
+    { class: 'admin-bar', attrs: { role: 'toolbar' } },
+    rangeBar.root,
+    scopeBar.root,
+    characterSelect,
+    writerSelect,
+    modelSelect,
+  );
   const exportButton = deps.makeExport?.(() => [
     {
       id: 'feedback',
       label: '语音反馈',
       kind: 'feedback',
       range: 'days',
-      filters: () => ({ ...(characterId ? { characterId } : {}), ...(model ? { model } : {}), ...(unheardOnly ? { unheardOnly: true } : {}) }),
+      filters: () => ({
+        ...(characterId ? { characterId } : {}),
+        ...(model ? { model } : {}),
+        ...(unheardOnly ? { unheardOnly: true } : {}),
+      }),
       fields: [writerField],
       tip: '每条踩一行：玩家的话、回复文字、踩的是语音还是内容。',
     },
@@ -124,13 +142,26 @@ export function feedbackView(
   const head = h('h2', { class: 'admin-page-title', text: feedbackCopy.title, attrs: { title: feedbackCopy.tip } });
   const summary = h('div', { class: 'fb-summary' });
   const list = h('div', { class: 'fb-list' });
-  const more = h('button', { class: 'admin-secondary', text: feedbackCopy.more, attrs: { type: 'button' }, hidden: true });
+  const more = h('button', {
+    class: 'admin-secondary',
+    text: feedbackCopy.more,
+    attrs: { type: 'button' },
+    hidden: true,
+  });
   more.addEventListener('click', () => void deps.run(() => loadList(true)));
   const errors = h('div', { class: 'fb-errors' });
   root.append(head, bar, errors, summary, list, more);
 
-  const fill = (select: HTMLSelectElement, all: string, options: readonly (readonly [string, string])[], value: string) => {
-    select.replaceChildren(h('option', { text: all, attrs: { value: '' } }), ...options.map(([v, l]) => h('option', { text: l, attrs: { value: v } })));
+  const fill = (
+    select: HTMLSelectElement,
+    all: string,
+    options: readonly (readonly [string, string])[],
+    value: string,
+  ) => {
+    select.replaceChildren(
+      h('option', { text: all, attrs: { value: '' } }),
+      ...options.map(([v, l]) => h('option', { text: l, attrs: { value: v } })),
+    );
     select.value = options.some(([v]) => v === value) ? value : '';
   };
   const num = (n: number) => hoverValue(h('span', { text: n.toLocaleString('en-US') }), exactCount(n));
@@ -138,8 +169,30 @@ export function feedbackView(
     const table = h('table', { class: 'admin-table fb-table' });
     table.append(
       h('caption', { text: title }),
-      h('thead', {}, h('tr', {}, h('th', { text: '' }), h('th', { class: 'num', text: feedbackCopy.up }), h('th', { class: 'num', text: feedbackCopy.down }))),
-      h('tbody', {}, ...rows.map((r) => h('tr', {}, h('th', { text: r.name }), h('td', { class: 'num' }, num(r.up)), h('td', { class: 'num' }, num(r.down))))),
+      h(
+        'thead',
+        {},
+        h(
+          'tr',
+          {},
+          h('th', { text: '' }),
+          h('th', { class: 'num', text: feedbackCopy.up }),
+          h('th', { class: 'num', text: feedbackCopy.down }),
+        ),
+      ),
+      h(
+        'tbody',
+        {},
+        ...rows.map((r) =>
+          h(
+            'tr',
+            {},
+            h('th', { text: r.name }),
+            h('td', { class: 'num' }, num(r.up)),
+            h('td', { class: 'num' }, num(r.down)),
+          ),
+        ),
+      ),
     );
     return table;
   };
@@ -164,9 +217,18 @@ export function feedbackView(
       h(
         'div',
         { class: 'fb-tables' },
-        countsTable(feedbackCopy.byCharacter, counts.byCharacter.map((r) => ({ name: r.label, up: r.up, down: r.down }))),
-        countsTable(feedbackCopy.byWriter, counts.byWriter.map((r) => ({ name: r.label, up: r.up, down: r.down }))),
-        countsTable(feedbackCopy.byModel, counts.byModel.map((r) => ({ name: r.model, up: r.up, down: r.down }))),
+        countsTable(
+          feedbackCopy.byCharacter,
+          counts.byCharacter.map((r) => ({ name: r.label, up: r.up, down: r.down })),
+        ),
+        countsTable(
+          feedbackCopy.byWriter,
+          counts.byWriter.map((r) => ({ name: r.label, up: r.up, down: r.down })),
+        ),
+        countsTable(
+          feedbackCopy.byModel,
+          counts.byModel.map((r) => ({ name: r.model, up: r.up, down: r.down })),
+        ),
       ),
     );
   };
@@ -179,38 +241,50 @@ export function feedbackView(
     playingItem = 0;
   };
   const card = (item: FeedbackItem) => {
-    const heard = h('button', { class: 'admin-secondary fb-heard', text: item.heard ? feedbackCopy.heard : feedbackCopy.unheard, attrs: { type: 'button', 'aria-pressed': String(item.heard) } });
-    heard.addEventListener('click', () =>
-      void deps.run(async () => {
-        const next = !item.heard;
-        await deps.api.heard(item.itemId, next);
-        item.heard = next;
-        heard.textContent = next ? feedbackCopy.heard : feedbackCopy.unheard;
-        heard.setAttribute('aria-pressed', String(next));
-        card.classList.toggle('is-heard', next);
-      }),
+    const heard = h('button', {
+      class: 'admin-secondary fb-heard',
+      text: item.heard ? feedbackCopy.heard : feedbackCopy.unheard,
+      attrs: { type: 'button', 'aria-pressed': String(item.heard) },
+    });
+    heard.addEventListener(
+      'click',
+      () =>
+        void deps.run(async () => {
+          const next = !item.heard;
+          await deps.api.heard(item.itemId, next);
+          item.heard = next;
+          heard.textContent = next ? feedbackCopy.heard : feedbackCopy.unheard;
+          heard.setAttribute('aria-pressed', String(next));
+          card.classList.toggle('is-heard', next);
+        }),
     );
-    const play = item.hasVoice ? h('button', { class: 'admin-secondary fb-play', text: feedbackCopy.play, attrs: { type: 'button' } }) : null;
-    play?.addEventListener('click', () =>
-      void deps.run(async () => {
-        if (playingItem === item.itemId) {
+    const play = item.hasVoice
+      ? h('button', { class: 'admin-secondary fb-play', text: feedbackCopy.play, attrs: { type: 'button' } })
+      : null;
+    play?.addEventListener(
+      'click',
+      () =>
+        void deps.run(async () => {
+          if (playingItem === item.itemId) {
+            stopAudio();
+            play.textContent = feedbackCopy.play;
+            return;
+          }
           stopAudio();
-          play.textContent = feedbackCopy.play;
-          return;
-        }
-        stopAudio();
-        for (const other of list.querySelectorAll<HTMLElement>('.fb-play')) other.textContent = feedbackCopy.play;
-        const clip = await deps.api.audio(item.itemId);
-        audioUrl = URL.createObjectURL(new Blob([Uint8Array.from(atob(clip.base64), (c) => c.charCodeAt(0))], { type: clip.contentType }));
-        audio = new Audio(audioUrl);
-        playingItem = item.itemId;
-        play.textContent = feedbackCopy.playing;
-        audio.addEventListener('ended', () => {
-          stopAudio();
-          play.textContent = feedbackCopy.play;
-        });
-        await audio.play();
-      }),
+          for (const other of list.querySelectorAll<HTMLElement>('.fb-play')) other.textContent = feedbackCopy.play;
+          const clip = await deps.api.audio(item.itemId);
+          audioUrl = URL.createObjectURL(
+            new Blob([Uint8Array.from(atob(clip.base64), (c) => c.charCodeAt(0))], { type: clip.contentType }),
+          );
+          audio = new Audio(audioUrl);
+          playingItem = item.itemId;
+          play.textContent = feedbackCopy.playing;
+          audio.addEventListener('ended', () => {
+            stopAudio();
+            play.textContent = feedbackCopy.play;
+          });
+          await audio.play();
+        }),
     );
     const card = h(
       'article',
@@ -225,19 +299,26 @@ export function feedbackView(
         play,
         heard,
       ),
-      ...item.playerLines.map((line) => h('p', { class: 'fb-line fb-player', text: line, attrs: { title: feedbackCopy.playerSays } })),
+      ...item.playerLines.map((line) =>
+        h('p', { class: 'fb-line fb-player', text: line, attrs: { title: feedbackCopy.playerSays } }),
+      ),
       h('p', { class: 'fb-line fb-reply', text: item.replyText, attrs: { title: feedbackCopy.replySays } }),
     );
     return card;
   };
   const drawList = () => {
-    list.replaceChildren(...(items.length ? items.map(card) : [h('p', { class: 'admin-empty', text: feedbackCopy.empty })]));
+    list.replaceChildren(
+      ...(items.length ? items.map(card) : [h('p', { class: 'admin-empty', text: feedbackCopy.empty })]),
+    );
     more.hidden = !hasMore;
   };
 
   async function loadList(append: boolean) {
     const mine = ++loadId;
-    const page = await deps.api.list({ ...filter(), ...(append && items.length ? { before: items[items.length - 1]!.itemId } : {}) });
+    const page = await deps.api.list({
+      ...filter(),
+      ...(append && items.length ? { before: items[items.length - 1]!.itemId } : {}),
+    });
     if (mine !== loadId || deps.disposed()) return;
     items = append ? [...items, ...page.items] : page.items;
     hasMore = page.hasMore;
@@ -250,9 +331,24 @@ export function feedbackView(
       await deps.run(async () => {
         counts = await deps.api.counts(filter());
         // the selects offer what the data has, keeping the choice
-        fill(characterSelect, feedbackCopy.allCharacters, counts.byCharacter.map((r) => [r.characterId, r.label] as const), characterId);
-        fill(writerSelect, feedbackCopy.allWriters, counts.byWriter.map((r) => [r.writer, r.label] as const), writer);
-        fill(modelSelect, feedbackCopy.allModels, counts.byModel.map((r) => [r.model, r.model] as const), model);
+        fill(
+          characterSelect,
+          feedbackCopy.allCharacters,
+          counts.byCharacter.map((r) => [r.characterId, r.label] as const),
+          characterId,
+        );
+        fill(
+          writerSelect,
+          feedbackCopy.allWriters,
+          counts.byWriter.map((r) => [r.writer, r.label] as const),
+          writer,
+        );
+        fill(
+          modelSelect,
+          feedbackCopy.allModels,
+          counts.byModel.map((r) => [r.model, r.model] as const),
+          model,
+        );
         characterId = characterSelect.value;
         writer = writerSelect.value;
         model = modelSelect.value;

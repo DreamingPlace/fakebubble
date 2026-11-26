@@ -58,7 +58,12 @@ export class FeedbackAdminClient {
       return { up: count(o.up), down: count(o.down), o };
     };
     return {
-      total: { up: count(total.up), down: count(total.down), downVoice: count(total.downVoice), downContent: count(total.downContent) },
+      total: {
+        up: count(total.up),
+        down: count(total.down),
+        downVoice: count(total.downVoice),
+        downContent: count(total.downContent),
+      },
       byCharacter: array(r.byCharacter).map((v) => {
         const { up, down, o } = pair(v);
         return { characterId: string(o.characterId), label: string(o.label), up, down };

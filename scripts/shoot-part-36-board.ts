@@ -19,8 +19,12 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const ICON = (d: string) =>
   `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-const THUMB_UP = ICON('<path d="M7 11v9H4v-9z"/><path d="M7 11l4-7c1.6 0 2.5 1.2 2.2 2.8L12.7 10H19a2 2 0 0 1 2 2.4l-1.3 6A2 2 0 0 1 17.7 20H7"/>');
-const THUMB_DOWN = ICON('<path d="M17 13V4h3v9z"/><path d="M17 13l-4 7c-1.6 0-2.5-1.2-2.2-2.8L11.3 14H5a2 2 0 0 1-2-2.4l1.3-6A2 2 0 0 1 6.3 4H17"/>');
+const THUMB_UP = ICON(
+  '<path d="M7 11v9H4v-9z"/><path d="M7 11l4-7c1.6 0 2.5 1.2 2.2 2.8L12.7 10H19a2 2 0 0 1 2 2.4l-1.3 6A2 2 0 0 1 17.7 20H7"/>',
+);
+const THUMB_DOWN = ICON(
+  '<path d="M17 13V4h3v9z"/><path d="M17 13l-4 7c-1.6 0-2.5-1.2-2.2-2.8L11.3 14H5a2 2 0 0 1-2-2.4l1.3-6A2 2 0 0 1 6.3 4H17"/>',
+);
 const QUOTE = ICON('<path d="M9 7 4 12l5 5"/><path d="M4 12h9a7 7 0 0 1 7 7"/>');
 const MIC = ICON('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>');
 const DOC = ICON('<path d="M6 4h12M6 9h12M6 14h12M6 19h8"/>');
@@ -81,7 +85,12 @@ try {
   }
   const ANDROID_UA =
     'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
-  const ANDROID = { ...pw.devices['Pixel 7'], viewport: { width: 412, height: 915 }, deviceScaleFactor: 3.5, userAgent: ANDROID_UA };
+  const ANDROID = {
+    ...pw.devices['Pixel 7'],
+    viewport: { width: 412, height: 915 },
+    deviceScaleFactor: 3.5,
+    userAgent: ANDROID_UA,
+  };
   const IOS = { ...pw.devices['iPhone 14'] };
   const DESKTOP = { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 };
   const configs: [string, string, Record<string, unknown>, boolean][] = [];
@@ -92,10 +101,15 @@ try {
   }
   const boardImages: Record<string, string[]> = {};
   for (const [name, theme, device, isWebkit] of configs) {
-    const ctx = await (isWebkit ? webkit : f.browser).newContext({ ...device, ignoreHTTPSErrors: true, bypassCSP: true });
+    const ctx = await (isWebkit ? webkit : f.browser).newContext({
+      ...device,
+      ignoreHTTPSErrors: true,
+      bypassCSP: true,
+    });
     const page: Page = await ctx.newPage();
     await page.addInitScript(
-      (t: string) => localStorage.setItem('fakebubble.player-prefs.v1', JSON.stringify({ lastViewed: 'wei-guagua', theme: t })),
+      (t: string) =>
+        localStorage.setItem('fakebubble.player-prefs.v1', JSON.stringify({ lastViewed: 'wei-guagua', theme: t })),
       theme,
     );
     await page.goto(`${f.origin}/?mode=provider`);
@@ -114,7 +128,8 @@ try {
         const title = slot.querySelector<HTMLElement>('.chat-head strong')!;
         const name = title.textContent ?? '';
         const welcome = slot.querySelector('.welcome-row');
-        const avatarHtml = welcome?.querySelector('.message-avatar')?.outerHTML ?? '<span class="avatar message-avatar"></span>';
+        const avatarHtml =
+          welcome?.querySelector('.message-avatar')?.outerHTML ?? '<span class="avatar message-avatar"></span>';
         const playHtml = welcome?.querySelector('.play-button')?.innerHTML ?? '';
         const mine = (text: string, tight: boolean, quoteHtml = '') => {
           const row = document.createElement('div');
@@ -141,13 +156,20 @@ try {
           holder.append(m);
         };
         const reset = () => {
-          for (const el of document.querySelectorAll('.b36-scrim,.b36-lift,.page-shell:has(> .card-slot > .b36-lift),.b36-menu,.b36-compose-quote,.b36-waiting')) el.remove();
+          for (const el of document.querySelectorAll(
+            '.b36-scrim,.b36-lift,.page-shell:has(> .card-slot > .b36-lift),.b36-menu,.b36-compose-quote,.b36-waiting',
+          ))
+            el.remove();
           slot.querySelector('.composer')?.classList.remove('b36-has-quote');
           title.textContent = name;
           for (const r of Array.from(list.querySelectorAll<HTMLElement>('.message-row'))) r.style.visibility = '';
           for (const row of Array.from(list.children)) row.remove();
         };
-        const menu = (row: HTMLElement, bubbleSel: string, items: { icon: string; label?: string; sep?: boolean }[]) => {
+        const menu = (
+          row: HTMLElement,
+          bubbleSel: string,
+          items: { icon: string; label?: string; sep?: boolean }[],
+        ) => {
           const rect = row.getBoundingClientRect();
           const rb = (row.querySelector(bubbleSel) as HTMLElement).getBoundingClientRect();
           const scrim = document.createElement('div');
@@ -156,10 +178,12 @@ try {
           const shell = document.createElement('div');
           shell.className = (document.querySelector('.page-shell') as HTMLElement).className;
           shell.style.display = 'contents';
-          for (const a of Array.from((document.querySelector('.page-shell') as HTMLElement).attributes)) if (a.name.startsWith('data-')) shell.setAttribute(a.name, a.value);
+          for (const a of Array.from((document.querySelector('.page-shell') as HTMLElement).attributes))
+            if (a.name.startsWith('data-')) shell.setAttribute(a.name, a.value);
           const holder = document.createElement('div');
           holder.className = slot.className;
-          for (const a of Array.from(slot.attributes)) if (a.name.startsWith('data-')) holder.setAttribute(a.name, a.value);
+          for (const a of Array.from(slot.attributes))
+            if (a.name.startsWith('data-')) holder.setAttribute(a.name, a.value);
           holder.style.display = 'contents';
           const clone = row.cloneNode(true) as HTMLElement;
           clone.classList.add('b36-lift');
@@ -169,10 +193,18 @@ try {
           const bar = document.createElement('div');
           bar.className = 'b36-menu';
           bar.innerHTML = items
-            .map((i) => (i.sep ? '<span class="b36-sep"></span>' : `<button type="button" aria-label="${i.label ?? ''}">${i.icon}${i.label ? `<span>${i.label}</span>` : ''}</button>`))
+            .map((i) =>
+              i.sep
+                ? '<span class="b36-sep"></span>'
+                : `<button type="button" aria-label="${i.label ?? ''}">${i.icon}${i.label ? `<span>${i.label}</span>` : ''}</button>`,
+            )
             .join('');
           document.body.append(scrim, shell, bar);
-          { const c = clone.getBoundingClientRect(); clone.style.left = `${rect.left + (rect.left - c.left)}px`; clone.style.top = `${rect.top + (rect.top - c.top)}px`; }
+          {
+            const c = clone.getBoundingClientRect();
+            clone.style.left = `${rect.left + (rect.left - c.left)}px`;
+            clone.style.top = `${rect.top + (rect.top - c.top)}px`;
+          }
           row.style.visibility = 'hidden';
           const bw = bar.getBoundingClientRect().width;
           const left = Math.max(12, Math.min(window.innerWidth - bw - 12, rb.left + rb.width / 2 - bw / 2));
@@ -182,7 +214,24 @@ try {
           bar.style.setProperty('--ox', `${Math.round(rb.left + rb.width / 2 - left)}px`);
           bar.style.setProperty('--oy', above ? '100%' : '0%');
         };
-        (window as unknown as Record<string, unknown>).__b = { mine, her, q, mark, reset, menu, list, body, title, up, down, quote, cardIcon, mic, doc, name };
+        (window as unknown as Record<string, unknown>).__b = {
+          mine,
+          her,
+          q,
+          mark,
+          reset,
+          menu,
+          list,
+          body,
+          title,
+          up,
+          down,
+          quote,
+          cardIcon,
+          mic,
+          doc,
+          name,
+        };
       },
       [THUMB_UP, THUMB_DOWN, QUOTE, CARD, MIC, DOC],
     );
@@ -193,7 +242,8 @@ try {
       return path;
     };
     const run = (fn: (b: any) => void) => page.evaluate(`(${fn.toString()})(window.__b)`);
-    const batch = (b: any) => b.list.append(b.mine('在吗', true), b.mine('我刚下班', true), b.mine('今天好累啊……', false));
+    const batch = (b: any) =>
+      b.list.append(b.mine('在吗', true), b.mine('我刚下班', true), b.mine('今天好累啊……', false));
     const batchSrc = batch.toString();
     const frames: string[] = [];
     // 1. several bubbles in a row; she has not started yet (three quiet dots where her reply will appear)
@@ -241,12 +291,23 @@ try {
     await ctx.close();
   }
   const boardCtx = await f.browser.newContext({ viewport: { width: 1300, height: 900 }, deviceScaleFactor: 1.5 });
-  const labels = ['连发', '她开始回复', '长按她的语音', '长按我的气泡', '引用中', '已评价 · 引用 · 无分享图标', '点 👎 后选 语音 / 内容'];
+  const labels = [
+    '连发',
+    '她开始回复',
+    '长按她的语音',
+    '长按我的气泡',
+    '引用中',
+    '已评价 · 引用 · 无分享图标',
+    '点 👎 后选 语音 / 内容',
+  ];
   for (const [name, frames] of Object.entries(boardImages)) {
     const desktop = name.startsWith('desktop');
     const dark = name.endsWith('dark');
     const imgs = frames
-      .map((p, i) => `<figure><img src="data:image/png;base64,${readFileSync(p).toString('base64')}"><figcaption>${i + 1} ${labels[i]}</figcaption></figure>`)
+      .map(
+        (p, i) =>
+          `<figure><img src="data:image/png;base64,${readFileSync(p).toString('base64')}"><figcaption>${i + 1} ${labels[i]}</figcaption></figure>`,
+      )
       .join('');
     const html = `<!doctype html><meta charset="utf-8"><style>
       body{margin:0;padding:24px;background:${dark ? '#0c0b10' : '#ece9e4'};font:14px system-ui,sans-serif;color:${dark ? '#f5f3f7' : '#141414'}}

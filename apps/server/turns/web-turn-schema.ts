@@ -53,7 +53,10 @@ export function installWebTurns(store: BusinessStore) {
     const guards = store.get<{ n: number }>(
       "SELECT count(*) n FROM sqlite_master WHERE type='trigger' AND name GLOB 'web_turn*'",
     )!.n;
-    ensure(rows.length === 1 && rows[0]!.version === 1 && rows[0]!.sha256 === digest && guards === 1, 'WEB_TURN_SCHEMA_MISMATCH');
+    ensure(
+      rows.length === 1 && rows[0]!.version === 1 && rows[0]!.sha256 === digest && guards === 1,
+      'WEB_TURN_SCHEMA_MISMATCH',
+    );
   });
 }
 

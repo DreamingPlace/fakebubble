@@ -80,7 +80,9 @@ test('旧 (v7): the request names every bubble of the batch in order, with its q
     delivery: 'text',
   });
   assert.equal(request.messages[2]!.replyTo!.id, 'b1', 'a bubble can quote one of its own batch');
-  const prompt = promptMessages(request).map((m) => m.content).join('\n');
+  const prompt = promptMessages(request)
+    .map((m) => m.content)
+    .join('\n');
   assert.ok(prompt.includes('requiredMessageIds') && prompt.includes('"replyTo"'), 'the form v7 already understands');
 });
 
@@ -92,7 +94,11 @@ test('新 (v8): the batch words are in the writer prompt for a batch or a quote,
   const [system] = writerDraftMessages(request);
   assert.ok(system!.content.endsWith(WRITER_BATCH_NOTE), 'appended last, after every stable block');
   // one bubble, no quote: exactly the prompt it always was
-  const single = { ...request, requiredMessageIds: ['b3'], messages: request.messages.slice(2).map(({ replyTo: _r, ...m }) => m) };
+  const single = {
+    ...request,
+    requiredMessageIds: ['b3'],
+    messages: request.messages.slice(2).map(({ replyTo: _r, ...m }) => m),
+  };
   assert.ok(!writerDraftMessages(single as typeof request)[0]!.content.includes(WRITER_BATCH_NOTE));
   // one bubble WITH a quote gets it
   const quoted = { ...request, requiredMessageIds: ['b3'], messages: request.messages.slice(2) };
@@ -109,12 +115,14 @@ test('a bubble of ANOTHER conversation is never a quote in the request', (t) => 
   // a second conversation of the same world holds a message; a bubble row (bypassing the service) points at it
   store.run("INSERT INTO character_templates VALUES ('character2',1,'{}')");
   store.run("INSERT INTO world_characters VALUES ('world','character2','friend')");
-  store.run("INSERT INTO conversations(world_id,id,kind,private_character_id) VALUES ('world','other','private','character2')");
+  store.run(
+    "INSERT INTO conversations(world_id,id,kind,private_character_id) VALUES ('world','other','private','character2')",
+  );
   store.run(
     "INSERT INTO messages(id,world_id,conversation_id,author_kind,author_id,body,created_at,delivery,proactive) VALUES ('elsewhere','world','other','player','player','别处的话',?,'text',0)",
     FREEZE_NOW - 9_000,
   );
-  store.run("DROP TRIGGER web_turn_bubbles_fixed");
+  store.run('DROP TRIGGER web_turn_bubbles_fixed');
   store.run("UPDATE web_turn_bubbles SET quote_message_id='elsewhere' WHERE message_id='b2'");
   const request = freeze(store);
   assert.equal(request.messages[1]!.replyTo, undefined, 'read only inside the conversation of the turn');

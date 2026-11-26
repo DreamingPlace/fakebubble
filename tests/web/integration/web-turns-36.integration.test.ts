@@ -23,7 +23,12 @@ const headers = (player: Player) => ({
   'cf-connecting-ip': player.ip,
 });
 
-const bubble = async (f: Awaited<ReturnType<typeof topology54>>, player: Player, text: string, quoteMessageId?: string) => {
+const bubble = async (
+  f: Awaited<ReturnType<typeof topology54>>,
+  player: Player,
+  text: string,
+  quoteMessageId?: string,
+) => {
   const response = await f.call(
     {
       action: 'edge',
@@ -34,13 +39,26 @@ const bubble = async (f: Awaited<ReturnType<typeof topology54>>, player: Player,
     },
     202,
   );
-  return (await response.json()) as { messageId: string; conversationId: string; turn: { state: string; pending: number; operationId: string | null } };
+  return (await response.json()) as {
+    messageId: string;
+    conversationId: string;
+    turn: { state: string; pending: number; operationId: string | null };
+  };
 };
 const turn = async (f: Awaited<ReturnType<typeof topology54>>, player: Player) => {
-  const response = await f.call({ action: 'edge', path: `${api}/characters/wei-guagua/turn`, headers: { cookie: player.cookie, 'cf-connecting-ip': player.ip } });
+  const response = await f.call({
+    action: 'edge',
+    path: `${api}/characters/wei-guagua/turn`,
+    headers: { cookie: player.cookie, 'cf-connecting-ip': player.ip },
+  });
   return (await response.json()) as { state: string; pending: number; operationId: string | null };
 };
-const untilTurn = async (f: Awaited<ReturnType<typeof topology54>>, player: Player, wanted: (t: { state: string; pending: number; operationId: string | null }) => boolean, ms = 30_000) => {
+const untilTurn = async (
+  f: Awaited<ReturnType<typeof topology54>>,
+  player: Player,
+  wanted: (t: { state: string; pending: number; operationId: string | null }) => boolean,
+  ms = 30_000,
+) => {
   let last: { state: string; pending: number; operationId: string | null } | null = null;
   for (const deadline = Date.now() + ms; Date.now() < deadline; ) {
     last = await turn(f, player);
@@ -55,25 +73,55 @@ test('three bubbles → ONE reply after 4 s of quiet (the alarm closes the batch
   await f.install();
   await f.configure({ scale: 0.01, slowEvery: 0 });
   const player = await f.newPlayer(1);
-  const before = JSON.parse(JSON.stringify(await (await f.call({ action: 'edge', path: api + '/bootstrap', headers: { cookie: player.cookie, 'cf-connecting-ip': player.ip } })).json())) as { access: { remainingReplies: number } };
+  const before = JSON.parse(
+    JSON.stringify(
+      await (
+        await f.call({
+          action: 'edge',
+          path: api + '/bootstrap',
+          headers: { cookie: player.cookie, 'cf-connecting-ip': player.ip },
+        })
+      ).json(),
+    ),
+  ) as { access: { remainingReplies: number } };
   const sentAt = Date.now();
   const sent = [];
   for (const text of ['在吗', '我刚下班', '今天好累']) sent.push(await bubble(f, player, text));
   assert.equal(sent[2]!.turn.state, 'collecting');
   assert.equal(sent[2]!.turn.pending, 3);
   // reload mid-batch: the history already holds all three, none answered yet
-  const mid = (await (await f.call({ action: 'edge', path: `${api}/conversations/${sent[0]!.conversationId}/history`, headers: { cookie: player.cookie, 'cf-connecting-ip': player.ip } })).json()) as { messages: { text: string; operationId: string | null }[] };
-  assert.deepEqual(mid.messages.filter((m) => m.operationId === null).map((m) => m.text), ['在吗', '我刚下班', '今天好累'], 'nothing is lost on reload, in order');
+  const mid = (await (
+    await f.call({
+      action: 'edge',
+      path: `${api}/conversations/${sent[0]!.conversationId}/history`,
+      headers: { cookie: player.cookie, 'cf-connecting-ip': player.ip },
+    })
+  ).json()) as { messages: { text: string; operationId: string | null }[] };
+  assert.deepEqual(
+    mid.messages.filter((m) => m.operationId === null).map((m) => m.text),
+    ['在吗', '我刚下班', '今天好累'],
+    'nothing is lost on reload, in order',
+  );
   const replying = await untilTurn(f, player, (s) => s.state === 'replying');
   assert.ok(Date.now() - sentAt >= 3_500, `the batch waited for the quiet period (${Date.now() - sentAt} ms)`);
   const done = await f.poll(player, replying.operationId!, 60_000);
   assert.equal(done.status, 'published', JSON.stringify(done));
   const stats = await f.stats();
   const speeches = stats.calls.filter((c) => c.stage === 'speech').length;
-  assert.deepEqual(stats.calls.filter((c) => c.stage !== 'speech').map((c) => c.stage), ['draft', 'review'], 'one text call for the whole batch');
+  assert.deepEqual(
+    stats.calls.filter((c) => c.stage !== 'speech').map((c) => c.stage),
+    ['draft', 'review'],
+    'one text call for the whole batch',
+  );
   assert.equal(stats.roundTrips, 1 + speeches, JSON.stringify(stats));
   assert.equal(stats.opens, 0);
-  const after = (await (await f.call({ action: 'edge', path: api + '/bootstrap', headers: { cookie: player.cookie, 'cf-connecting-ip': player.ip } })).json()) as { access: { remainingReplies: number } };
+  const after = (await (
+    await f.call({
+      action: 'edge',
+      path: api + '/bootstrap',
+      headers: { cookie: player.cookie, 'cf-connecting-ip': player.ip },
+    })
+  ).json()) as { access: { remainingReplies: number } };
   assert.equal(before.access.remainingReplies - after.access.remainingReplies, 1, 'one trial reply for three bubbles');
   const final = await untilTurn(f, player, (s) => s.state === 'idle');
   assert.equal(final.pending, 0);
@@ -111,12 +159,27 @@ test('a quote of a message from another conversation is refused by the real edge
   const ok = await bubble(f, player, '引用上一句', first.messageId);
   assert.ok(ok.messageId);
   const refused = await f.call(
-    { action: 'edge', path: `${api}/characters/wei-guagua/bubbles`, method: 'POST', headers: headers(player), body: { requestId: randomUUID(), text: '引用别处', quoteMessageId: 'not-a-message-of-this-chat' } },
+    {
+      action: 'edge',
+      path: `${api}/characters/wei-guagua/bubbles`,
+      method: 'POST',
+      headers: headers(player),
+      body: { requestId: randomUUID(), text: '引用别处', quoteMessageId: 'not-a-message-of-this-chat' },
+    },
     404,
   );
   assert.equal(((await refused.json()) as { error: { code: string } }).error.code, 'QUOTE_UNAVAILABLE');
-  const history = (await (await f.call({ action: 'edge', path: `${api}/conversations/${first.conversationId}/history`, headers: { cookie: player.cookie, 'cf-connecting-ip': player.ip } })).json()) as { messages: { text: string; quote?: { text: string | null } }[] };
-  assert.deepEqual(history.messages.map((m) => m.text), ['第一句', '引用上一句']);
+  const history = (await (
+    await f.call({
+      action: 'edge',
+      path: `${api}/conversations/${first.conversationId}/history`,
+      headers: { cookie: player.cookie, 'cf-connecting-ip': player.ip },
+    })
+  ).json()) as { messages: { text: string; quote?: { text: string | null } }[] };
+  assert.deepEqual(
+    history.messages.map((m) => m.text),
+    ['第一句', '引用上一句'],
+  );
   assert.equal(history.messages[1]!.quote?.text, '第一句');
 });
 
@@ -129,17 +192,55 @@ test('👍 / 👎 through the real edge: rate, switch, remove; CSRF and Origin; 
   const sent = await bubble(f, a, '你好');
   const replying = await untilTurn(f, a, (s) => s.state === 'replying');
   assert.equal((await f.poll(a, replying.operationId!, 60_000)).status, 'published');
-  const history = (await (await f.call({ action: 'edge', path: `${api}/conversations/${sent.conversationId}/history`, headers: { cookie: a.cookie, 'cf-connecting-ip': a.ip } })).json()) as {
-    messages: { messageId: string; author: string; origin: string; operationId: string | null; audio: { mediaId: string | null } | null; rating?: unknown }[];
+  const history = (await (
+    await f.call({
+      action: 'edge',
+      path: `${api}/conversations/${sent.conversationId}/history`,
+      headers: { cookie: a.cookie, 'cf-connecting-ip': a.ip },
+    })
+  ).json()) as {
+    messages: {
+      messageId: string;
+      author: string;
+      origin: string;
+      operationId: string | null;
+      audio: { mediaId: string | null } | null;
+      rating?: unknown;
+    }[];
   };
   const reply = history.messages.find((m) => m.author === 'character' && m.origin === 'narrative' && m.operationId);
   assert.ok(reply, 'her reply is in the history');
   const rate = (player: Player, body: Record<string, unknown>, status = 200, extra: Record<string, string> = {}) =>
-    f.call({ action: 'edge', path: `${api}/ratings`, method: 'POST', headers: { ...headers(player), ...extra }, body: { requestId: randomUUID(), conversationId: sent.conversationId, messageId: reply!.messageId, ...body } }, status).then((r) => r.json()) as Promise<{ rating: string | null; target: string | null }>;
+    f
+      .call(
+        {
+          action: 'edge',
+          path: `${api}/ratings`,
+          method: 'POST',
+          headers: { ...headers(player), ...extra },
+          body: { requestId: randomUUID(), conversationId: sent.conversationId, messageId: reply!.messageId, ...body },
+        },
+        status,
+      )
+      .then((r) => r.json()) as Promise<{ rating: string | null; target: string | null }>;
   assert.deepEqual(await rate(a, { rating: 'up' }), { rating: 'up', target: null });
-  assert.deepEqual(await rate(a, { rating: 'down', target: 'content' }), { rating: 'down', target: 'content' }, 'the other button switches it');
-  const marked = (await (await f.call({ action: 'edge', path: `${api}/conversations/${sent.conversationId}/history`, headers: { cookie: a.cookie, 'cf-connecting-ip': a.ip } })).json()) as { messages: { messageId: string; rating?: { value: string; target: string } }[] };
-  assert.deepEqual(marked.messages.find((m) => m.messageId === reply!.messageId)!.rating, { value: 'down', target: 'content' }, 'a reload shows the mark');
+  assert.deepEqual(
+    await rate(a, { rating: 'down', target: 'content' }),
+    { rating: 'down', target: 'content' },
+    'the other button switches it',
+  );
+  const marked = (await (
+    await f.call({
+      action: 'edge',
+      path: `${api}/conversations/${sent.conversationId}/history`,
+      headers: { cookie: a.cookie, 'cf-connecting-ip': a.ip },
+    })
+  ).json()) as { messages: { messageId: string; rating?: { value: string; target: string } }[] };
+  assert.deepEqual(
+    marked.messages.find((m) => m.messageId === reply!.messageId)!.rating,
+    { value: 'down', target: 'content' },
+    'a reload shows the mark',
+  );
   assert.deepEqual(await rate(a, { rating: 'none' }), { rating: null, target: null });
   await rate(a, { rating: 'up' }, 403, { 'x-csrf-token': 'wrong' });
   await rate(a, { rating: 'up' }, 403, { origin: 'https://evil.invalid' });

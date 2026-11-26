@@ -8,7 +8,10 @@ const BASE = '/api/web/local/admin/feedback/';
  * Part 36: the 语音反馈 page. POST .../admin/feedback/{counts,list,heard,audio} (owner only; session, CSRF and Origin first). A path
  * outside /feedback/ is not this router's: it returns null and the next router looks at it.
  */
-export async function routeWebFeedbackAdmin(feedback: WebFeedbackAdmin | null, req: WebInviteRequest): Promise<WebInviteResult | null> {
+export async function routeWebFeedbackAdmin(
+  feedback: WebFeedbackAdmin | null,
+  req: WebInviteRequest,
+): Promise<WebInviteResult | null> {
   if (!req.path.startsWith(BASE)) return null;
   ensure(feedback && req.method === 'POST', 'NOT_FOUND');
   ensure(

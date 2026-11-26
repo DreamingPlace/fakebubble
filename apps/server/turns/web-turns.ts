@@ -6,7 +6,13 @@ import type { WebAdmission } from '../admission/web-admission.ts';
 import { requireWebContent, webDataLifecycleEnabled } from '../admission/web-retention.ts';
 import { requirePublishedWebCharacter, webCharacterOnline } from '../characters/web-character-catalog.ts';
 import type { WebRuntimeStore } from '../platform/web-store-contract.ts';
-import { TURN_MAX_BUBBLES, TURN_MAX_PENDING, TURN_QUIET_MS, installWebTurns, webTurnsInstalled } from './web-turn-schema.ts';
+import {
+  TURN_MAX_BUBBLES,
+  TURN_MAX_PENDING,
+  TURN_QUIET_MS,
+  installWebTurns,
+  webTurnsInstalled,
+} from './web-turn-schema.ts';
 
 /**
  * Part 36: 连发. The only writer of the turn rows. A bubble is stored the moment it is sent (an ordinary `messages` row plus a
@@ -62,7 +68,12 @@ export class WebTurns {
   private readonly nextId: () => string;
   /** Called after a turn is admitted so the executor can start it at once. */
   onAdmitted: (() => void) | null = null;
-  constructor(store: WebRuntimeStore, clock: Clock, admission: WebAdmission, nextId: () => string = () => globalThis.crypto.randomUUID()) {
+  constructor(
+    store: WebRuntimeStore,
+    clock: Clock,
+    admission: WebAdmission,
+    nextId: () => string = () => globalThis.crypto.randomUUID(),
+  ) {
     installWebTurns(store);
     this.store = store;
     this.clock = clock;
@@ -87,7 +98,9 @@ export class WebTurns {
       'INVALID_REQUEST',
     );
     const quote = input.quoteMessageId ?? null;
-    const hash = createHash('sha256').update(JSON.stringify([input.characterId, input.text, quote, 'bubble'])).digest('hex');
+    const hash = createHash('sha256')
+      .update(JSON.stringify([input.characterId, input.text, quote, 'bubble']))
+      .digest('hex');
     return this.store.transaction(() => {
       const prior = this.store.get<{ message_id: string; request_hash: string; conversation_id: string }>(
         'SELECT message_id,request_hash,conversation_id FROM web_turn_bubbles WHERE principal_id=? AND request_id=?',
@@ -96,10 +109,16 @@ export class WebTurns {
       );
       if (prior) {
         ensure(prior.request_hash === hash, 'IDEMPOTENCY_CONFLICT');
-        return { messageId: prior.message_id, conversationId: prior.conversation_id, duplicate: true as const, turn: this.view(actor, input.characterId) };
+        return {
+          messageId: prior.message_id,
+          conversationId: prior.conversation_id,
+          duplicate: true as const,
+          turn: this.view(actor, input.characterId),
+        };
       }
       // The lifecycle gate precedes everything else: expired content stays private.
-      if (webDataLifecycleEnabled(this.store)) requireWebContent(this.store, this.clock, actor.principalId, actor.world_id);
+      if (webDataLifecycleEnabled(this.store))
+        requireWebContent(this.store, this.clock, actor.principalId, actor.world_id);
       requirePublishedWebCharacter(this.store, input.characterId);
       ensure(webCharacterOnline(this.store, input.characterId), 'WEB_CHARACTER_UNAVAILABLE');
       ensure(
@@ -109,7 +128,12 @@ export class WebTurns {
         'INVALID_TEXT',
       );
       // The same decisions a single message gets (entitlement, points, trial counters, queue limits); nothing is written.
-      this.admission.canAdmit({ principalId: actor.principalId, characterId: input.characterId, text: input.text, ipHash: input.ipHash });
+      this.admission.canAdmit({
+        principalId: actor.principalId,
+        characterId: input.characterId,
+        text: input.text,
+        ipHash: input.ipHash,
+      });
       let conversation = this.store.get<{ id: string }>(
         `SELECT id FROM conversations WHERE world_id=? AND private_character_id=? AND kind='private'`,
         actor.world_id,
@@ -174,7 +198,12 @@ export class WebTurns {
       );
       // The fifth waiting bubble closes the batch right now (when no reply is running); otherwise the quiet period decides.
       this.closeConversation(actor.principalId, actor.world_id, conversation.id, now, true);
-      return { messageId, conversationId: conversation.id, duplicate: false as const, turn: this.view(actor, input.characterId) };
+      return {
+        messageId,
+        conversationId: conversation.id,
+        duplicate: false as const,
+        turn: this.view(actor, input.characterId),
+      };
     });
   }
 
@@ -223,16 +252,35 @@ export class WebTurns {
       actor.world_id,
       conversation.id,
     );
-    if (refused && !last) return { state: 'refused', dueAt: null, pending: 0, operationId: null, errorCode: refused.refused_code };
-    return { state: 'idle', dueAt: null, pending: 0, operationId: last?.operation_id ?? null, errorCode: refused?.refused_code ?? null };
+    if (refused && !last)
+      return { state: 'refused', dueAt: null, pending: 0, operationId: null, errorCode: refused.refused_code };
+    return {
+      state: 'idle',
+      dueAt: null,
+      pending: 0,
+      operationId: last?.operation_id ?? null,
+      errorCode: refused?.refused_code ?? null,
+    };
   }
 
   /**
    * Closes the batch of one conversation when it is due (or `force`d by the fifth bubble). Returns the operation id or null.
    * Runs inside the caller's transaction. An operation of this conversation that is still running keeps the bubbles waiting.
    */
-  private closeConversation(principalId: string, worldId: string, conversationId: string, now: number, fiveCloses = false) {
-    const pending = this.store.all<{ message_id: string; character_id: string; ip_hash: string; created_at: number; body: string }>(
+  private closeConversation(
+    principalId: string,
+    worldId: string,
+    conversationId: string,
+    now: number,
+    fiveCloses = false,
+  ) {
+    const pending = this.store.all<{
+      message_id: string;
+      character_id: string;
+      ip_hash: string;
+      created_at: number;
+      body: string;
+    }>(
       `SELECT b.message_id,b.character_id,b.ip_hash,b.created_at,m.body FROM web_turn_bubbles b JOIN messages m ON m.id=b.message_id
       WHERE b.principal_id=? AND b.world_id=? AND b.conversation_id=? AND b.state='pending' ORDER BY m.seq LIMIT ?`,
       principalId,
@@ -299,7 +347,11 @@ export class WebTurns {
     );
     let closed = 0;
     for (const group of groups)
-      if (this.store.transaction(() => this.closeConversation(group.principal_id, group.world_id, group.conversation_id, now)))
+      if (
+        this.store.transaction(() =>
+          this.closeConversation(group.principal_id, group.world_id, group.conversation_id, now),
+        )
+      )
         closed++;
     return closed;
   }
@@ -334,7 +386,14 @@ export function turnQuotes(
 ): Map<string, MessageQuote> {
   const out = new Map<string, MessageQuote>();
   if (!messageIds.length || !webTurnsInstalled(store)) return out;
-  const rows = store.all<{ message_id: string; id: string; author_kind: 'player' | 'character'; author_id: string; body: string; delivery: 'text' | 'voice' }>(
+  const rows = store.all<{
+    message_id: string;
+    id: string;
+    author_kind: 'player' | 'character';
+    author_id: string;
+    body: string;
+    delivery: 'text' | 'voice';
+  }>(
     `SELECT b.message_id,q.id,q.author_kind,q.author_id,q.body,q.delivery
     FROM web_turn_bubbles b JOIN messages q ON q.id=b.quote_message_id AND q.world_id=b.world_id AND q.conversation_id=b.conversation_id
     WHERE b.world_id=? AND b.conversation_id=? AND b.message_id IN (${messageIds.map(() => '?').join(',')})`,

@@ -5,7 +5,13 @@ import { scrubText } from '../export/web-export-admin.ts';
 import { utc8Time, WRITER_LABEL } from '../export/web-export-conversations.ts';
 import type { Sheet } from '../export/web-export-file.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
-import { characterFacts, nicknamesOfWorld, redactNicknames, reviewCodeFor, reviewLabel } from '../review/web-chat-review.ts';
+import {
+  characterFacts,
+  nicknamesOfWorld,
+  redactNicknames,
+  reviewCodeFor,
+  reviewLabel,
+} from '../review/web-chat-review.ts';
 import { turnMemberIds } from './web-turns.ts';
 import { webFeedbackInstalled } from './web-feedback-schema.ts';
 
@@ -20,7 +26,8 @@ type Auth = { cookie: unknown; csrf: unknown; origin: unknown };
 export const FEEDBACK_RANGES = [7, 30, 90] as const;
 const DAY = 86_400_000;
 const WRITERS = Object.keys(WRITER_LABEL) as (keyof typeof WRITER_LABEL)[];
-const identifier = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+const identifier = (value: unknown): value is string =>
+  typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 
 export interface FeedbackFilters {
   range: (typeof FEEDBACK_RANGES)[number];
@@ -55,14 +62,24 @@ export function parseFeedbackFilters(input: unknown): FeedbackFilters {
   ensure(input !== null && typeof input === 'object' && !Array.isArray(input), 'INVALID_REQUEST');
   const value = input as Record<string, unknown>;
   ensure(
-    Object.keys(value).every((key) => ['range', 'characterId', 'writer', 'model', 'unheardOnly', 'before'].includes(key)),
+    Object.keys(value).every((key) =>
+      ['range', 'characterId', 'writer', 'model', 'unheardOnly', 'before'].includes(key),
+    ),
     'INVALID_REQUEST',
   );
   ensure(FEEDBACK_RANGES.includes(value.range as never), 'INVALID_REQUEST');
-  ensure(value.characterId === undefined || value.characterId === '' || identifier(value.characterId), 'INVALID_REQUEST');
-  ensure(value.writer === undefined || value.writer === '' || WRITERS.includes(value.writer as never), 'INVALID_REQUEST');
   ensure(
-    value.model === undefined || value.model === '' || (typeof value.model === 'string' && /^[a-z0-9_.-]{1,64}$/i.test(value.model)),
+    value.characterId === undefined || value.characterId === '' || identifier(value.characterId),
+    'INVALID_REQUEST',
+  );
+  ensure(
+    value.writer === undefined || value.writer === '' || WRITERS.includes(value.writer as never),
+    'INVALID_REQUEST',
+  );
+  ensure(
+    value.model === undefined ||
+      value.model === '' ||
+      (typeof value.model === 'string' && /^[a-z0-9_.-]{1,64}$/i.test(value.model)),
     'INVALID_REQUEST',
   );
   ensure(value.unheardOnly === undefined || typeof value.unheardOnly === 'boolean', 'INVALID_REQUEST');
@@ -79,13 +96,11 @@ export class WebFeedbackAdmin {
   private readonly store: BusinessStore;
   private readonly clock: Clock;
   private readonly admin: WebAccountAdmin;
-  private readonly readAudio: (scope: { principalId: string; playerId: string; worldId: string; conversationId: string; characterId: string }, mediaId: string) => Promise<Uint8Array>;
-  constructor(
-    store: BusinessStore,
-    clock: Clock,
-    admin: WebAccountAdmin,
-    readAudio: WebFeedbackAdmin['readAudio'],
-  ) {
+  private readonly readAudio: (
+    scope: { principalId: string; playerId: string; worldId: string; conversationId: string; characterId: string },
+    mediaId: string,
+  ) => Promise<Uint8Array>;
+  constructor(store: BusinessStore, clock: Clock, admin: WebAccountAdmin, readAudio: WebFeedbackAdmin['readAudio']) {
     this.store = store;
     this.clock = clock;
     this.admin = admin;
@@ -97,15 +112,21 @@ export class WebFeedbackAdmin {
     return actor;
   }
   private audit(actorId: string, action: string, target: string) {
-    this.store.run('INSERT INTO web_admin_audit(actor_id,action,target_id,created_at) VALUES (?,?,?,?)', actorId, action, target, this.clock.now());
+    this.store.run(
+      'INSERT INTO web_admin_audit(actor_id,action,target_id,created_at) VALUES (?,?,?,?)',
+      actorId,
+      action,
+      target,
+      this.clock.now(),
+    );
   }
   private where(filters: FeedbackFilters, down: boolean) {
     const sql: string[] = ['updated_at>=?'];
     const args: (string | number)[] = [this.clock.now() - filters.range * DAY];
     if (down) sql.push("rating='down'");
-    if (filters.characterId) (sql.push('character_id=?'), args.push(filters.characterId));
-    if (filters.writer) (sql.push('writer=?'), args.push(filters.writer));
-    if (filters.model) (sql.push('model=?'), args.push(filters.model));
+    if (filters.characterId) sql.push('character_id=?'), args.push(filters.characterId);
+    if (filters.writer) sql.push('writer=?'), args.push(filters.writer);
+    if (filters.model) sql.push('model=?'), args.push(filters.model);
     if (down && filters.unheardOnly) sql.push('heard_at IS NULL');
     return { sql: sql.join(' AND '), args };
   }
@@ -114,21 +135,37 @@ export class WebFeedbackAdmin {
   counts(auth: Auth, input: unknown): FeedbackCounts {
     this.owner(auth);
     const filters = parseFeedbackFilters(input);
-    if (!webFeedbackInstalled(this.store)) return { total: { up: 0, down: 0, downVoice: 0, downContent: 0 }, byCharacter: [], byWriter: [], byModel: [] };
+    if (!webFeedbackInstalled(this.store))
+      return { total: { up: 0, down: 0, downVoice: 0, downContent: 0 }, byCharacter: [], byWriter: [], byModel: [] };
     const where = this.where({ ...filters, unheardOnly: false }, false);
     const group = (column: string) =>
       this.store.all<{ key: string; up: number; down: number }>(
         `SELECT ${column} key,sum(rating='up') up,sum(rating='down') down FROM web_feedback WHERE ${where.sql} GROUP BY ${column} ORDER BY sum(rating='down') DESC,key`,
         ...where.args,
       );
-    const total = this.store.get<{ up: number | null; down: number | null; voice: number | null; content: number | null }>(
+    const total = this.store.get<{
+      up: number | null;
+      down: number | null;
+      voice: number | null;
+      content: number | null;
+    }>(
       `SELECT sum(rating='up') up,sum(rating='down') down,sum(target='voice') voice,sum(target='content') content FROM web_feedback WHERE ${where.sql}`,
       ...where.args,
     )!;
     return {
       total: { up: total.up ?? 0, down: total.down ?? 0, downVoice: total.voice ?? 0, downContent: total.content ?? 0 },
-      byCharacter: group('character_id').map((row) => ({ characterId: row.key, label: characterFacts(this.store, row.key).label, up: row.up, down: row.down })),
-      byWriter: group('writer').map((row) => ({ writer: row.key, label: WRITER_LABEL[row.key as keyof typeof WRITER_LABEL] ?? row.key, up: row.up, down: row.down })),
+      byCharacter: group('character_id').map((row) => ({
+        characterId: row.key,
+        label: characterFacts(this.store, row.key).label,
+        up: row.up,
+        down: row.down,
+      })),
+      byWriter: group('writer').map((row) => ({
+        writer: row.key,
+        label: WRITER_LABEL[row.key as keyof typeof WRITER_LABEL] ?? row.key,
+        up: row.up,
+        down: row.down,
+      })),
       byModel: group('model').map((row) => ({ model: row.key, up: row.up, down: row.down })),
     };
   }
@@ -143,7 +180,11 @@ export class WebFeedbackAdmin {
     return this.items(filters, before as number | undefined, 50);
   }
 
-  private items(filters: FeedbackFilters, before: number | undefined, limit: number): { items: FeedbackItem[]; hasMore: boolean } {
+  private items(
+    filters: FeedbackFilters,
+    before: number | undefined,
+    limit: number,
+  ): { items: FeedbackItem[]; hasMore: boolean } {
     const where = this.where(filters, true);
     const cursor = before
       ? this.store.get<{ updated_at: number }>('SELECT updated_at FROM web_feedback WHERE rowid=?', before)
@@ -177,19 +218,28 @@ export class WebFeedbackAdmin {
       nameCache.set(row.world_id, names);
       const clean = (text: string) => scrubText(redactNicknames(text, names));
       const reply = this.store.get<{ body: string }>('SELECT body FROM messages WHERE id=?', row.message_id);
-      const input = this.store.get<{ input_message_id: string }>('SELECT input_message_id FROM web_operations WHERE id=?', row.operation_id);
+      const input = this.store.get<{ input_message_id: string }>(
+        'SELECT input_message_id FROM web_operations WHERE id=?',
+        row.operation_id,
+      );
       const lines = input
         ? turnMemberIds(this.store, row.operation_id, input.input_message_id)
             .map((id) => this.store.get<{ body: string }>('SELECT body FROM messages WHERE id=?', id)?.body)
             .filter((body): body is string => typeof body === 'string')
             .map(clean)
         : [];
-      const media = this.store.get<{ media_id: string | null }>('SELECT media_id FROM web_publication_items WHERE message_id=?', row.message_id);
+      const media = this.store.get<{ media_id: string | null }>(
+        'SELECT media_id FROM web_publication_items WHERE message_id=?',
+        row.message_id,
+      );
       return {
         itemId: row.id,
         time: utc8Time(row.updated_at),
         characterId: row.character_id,
-        label: reviewLabel(characterFacts(this.store, row.character_id), reviewCodeFor(this.store, row.principal_id, now)),
+        label: reviewLabel(
+          characterFacts(this.store, row.character_id),
+          reviewCodeFor(this.store, row.principal_id, now),
+        ),
         target: row.target,
         writer: row.writer,
         writerLabel: WRITER_LABEL[row.writer as keyof typeof WRITER_LABEL] ?? row.writer,
@@ -209,7 +259,10 @@ export class WebFeedbackAdmin {
     ensure(input !== null && typeof input === 'object' && !Array.isArray(input), 'INVALID_REQUEST');
     const body = input as Record<string, unknown>;
     ensure(Object.keys(body).sort().join(',') === 'heard,itemId', 'INVALID_REQUEST');
-    ensure(Number.isSafeInteger(body.itemId) && (body.itemId as number) > 0 && typeof body.heard === 'boolean', 'INVALID_REQUEST');
+    ensure(
+      Number.isSafeInteger(body.itemId) && (body.itemId as number) > 0 && typeof body.heard === 'boolean',
+      'INVALID_REQUEST',
+    );
     ensure(webFeedbackInstalled(this.store), 'NOT_FOUND');
     const changed = this.store.run(
       "UPDATE web_feedback SET heard_at=? WHERE rowid=? AND rating='down' AND (heard_at IS NULL)=?",
@@ -218,10 +271,12 @@ export class WebFeedbackAdmin {
       body.heard ? 1 : 0,
     ).changes;
     ensure(
-      changed === 1 || this.store.get("SELECT 1 FROM web_feedback WHERE rowid=? AND rating='down'", body.itemId as number),
+      changed === 1 ||
+        this.store.get("SELECT 1 FROM web_feedback WHERE rowid=? AND rating='down'", body.itemId as number),
       'NOT_FOUND',
     );
-    if (changed === 1) this.audit(actor.memberId, body.heard ? 'feedback-heard' : 'feedback-unheard', `item ${body.itemId}`);
+    if (changed === 1)
+      this.audit(actor.memberId, body.heard ? 'feedback-heard' : 'feedback-unheard', `item ${body.itemId}`);
     return { itemId: body.itemId as number, heard: body.heard };
   }
 
@@ -230,18 +285,39 @@ export class WebFeedbackAdmin {
     this.owner(auth);
     ensure(input !== null && typeof input === 'object' && !Array.isArray(input), 'INVALID_REQUEST');
     const body = input as Record<string, unknown>;
-    ensure(Object.keys(body).join(',') === 'itemId' && Number.isSafeInteger(body.itemId) && (body.itemId as number) > 0, 'INVALID_REQUEST');
+    ensure(
+      Object.keys(body).join(',') === 'itemId' && Number.isSafeInteger(body.itemId) && (body.itemId as number) > 0,
+      'INVALID_REQUEST',
+    );
     ensure(webFeedbackInstalled(this.store), 'NOT_FOUND');
-    const row = this.store.get<{ principal_id: string; world_id: string; conversation_id: string; character_id: string; message_id: string }>(
+    const row = this.store.get<{
+      principal_id: string;
+      world_id: string;
+      conversation_id: string;
+      character_id: string;
+      message_id: string;
+    }>(
       "SELECT principal_id,world_id,conversation_id,character_id,message_id FROM web_feedback WHERE rowid=? AND rating='down'",
       body.itemId as number,
     );
     ensure(row, 'NOT_FOUND');
-    const media = this.store.get<{ media_id: string | null }>('SELECT media_id FROM web_publication_items WHERE message_id=?', row.message_id);
-    const player = this.store.get<{ player_id: string }>('SELECT player_id FROM web_principals WHERE id=?', row.principal_id);
+    const media = this.store.get<{ media_id: string | null }>(
+      'SELECT media_id FROM web_publication_items WHERE message_id=?',
+      row.message_id,
+    );
+    const player = this.store.get<{ player_id: string }>(
+      'SELECT player_id FROM web_principals WHERE id=?',
+      row.principal_id,
+    );
     ensure(media?.media_id && player, 'NOT_FOUND');
     const bytes = await this.readAudio(
-      { principalId: row.principal_id, playerId: player.player_id, worldId: row.world_id, conversationId: row.conversation_id, characterId: row.character_id },
+      {
+        principalId: row.principal_id,
+        playerId: player.player_id,
+        worldId: row.world_id,
+        conversationId: row.conversation_id,
+        characterId: row.character_id,
+      },
       media.media_id,
     );
     return { contentType: 'audio/wav', base64: Buffer.from(bytes).toString('base64') };
@@ -250,12 +326,26 @@ export class WebFeedbackAdmin {
   /** The export (Part 57): the same items under the same filters, with the rating column. Owner only; whitelisted columns. */
   exportSheets(filters: Record<string, unknown>): Sheet[] {
     const parsed = parseFeedbackFilters({ range: 30, ...filters });
-    const { items } = webFeedbackInstalled(this.store) ? this.items(parsed, undefined, 50_000) : { items: [] as FeedbackItem[] };
+    const { items } = webFeedbackInstalled(this.store)
+      ? this.items(parsed, undefined, 50_000)
+      : { items: [] as FeedbackItem[] };
     return [
       {
         name: '语音反馈',
         file: 'feedback',
-        header: ['时间（UTC+8）', '对话编号', '角色', '评价', '踩的是', '回复写法', '模型', '玩家的话', '回复文字', '有语音', '已听'],
+        header: [
+          '时间（UTC+8）',
+          '对话编号',
+          '角色',
+          '评价',
+          '踩的是',
+          '回复写法',
+          '模型',
+          '玩家的话',
+          '回复文字',
+          '有语音',
+          '已听',
+        ],
         rows: items.map((item) => [
           item.time,
           item.label,

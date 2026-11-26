@@ -45,7 +45,13 @@ export class WebFeedback {
 
   rate(
     actor: Actor,
-    input: { requestId: string; conversationId: string; messageId: string; rating: Rating | 'none'; target?: RatingTarget },
+    input: {
+      requestId: string;
+      conversationId: string;
+      messageId: string;
+      rating: Rating | 'none';
+      target?: RatingTarget;
+    },
   ): { rating: Rating | null; target: RatingTarget | null } {
     ensure(
       REQUEST_ID.test(input.requestId) &&
@@ -59,7 +65,8 @@ export class WebFeedback {
       .update(JSON.stringify([input.conversationId, input.messageId, input.rating, input.target ?? null]))
       .digest('hex');
     return this.store.transaction(() => {
-      if (webDataLifecycleEnabled(this.store)) requireWebContent(this.store, this.clock, actor.principalId, actor.world_id);
+      if (webDataLifecycleEnabled(this.store))
+        requireWebContent(this.store, this.clock, actor.principalId, actor.world_id);
       const prior = this.store.get<{ request_hash: string }>(
         'SELECT request_hash FROM web_feedback_requests WHERE principal_id=? AND request_id=?',
         actor.principalId,
@@ -99,7 +106,11 @@ export class WebFeedback {
           now,
         );
       if (input.rating === 'none') {
-        this.store.run('DELETE FROM web_feedback WHERE principal_id=? AND message_id=?', actor.principalId, input.messageId);
+        this.store.run(
+          'DELETE FROM web_feedback WHERE principal_id=? AND message_id=?',
+          actor.principalId,
+          input.messageId,
+        );
         return { rating: null, target: null };
       }
       const existing = this.store.get<{ rating: Rating; target: RatingTarget | null }>(
@@ -108,7 +119,8 @@ export class WebFeedback {
         input.messageId,
       );
       const target = input.rating === 'down' ? (input.target ?? null) : null;
-      if (existing && existing.rating === input.rating && existing.target === target) return { rating: existing.rating, target };
+      if (existing && existing.rating === input.rating && existing.target === target)
+        return { rating: existing.rating, target };
       const request = this.store.get<{ request_json: string }>(
         'SELECT request_json FROM web_v7_requests WHERE operation_id=?',
         reply.operation_id,

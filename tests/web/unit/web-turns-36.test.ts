@@ -46,12 +46,17 @@ function fixture(t: import('node:test').TestContext) {
     store.transaction(() => {
       store.run('INSERT INTO api_players VALUES (?,?)', playerId, now);
       store.run('INSERT INTO worlds VALUES (?,?,?,?)', worldId, playerId, 'Asia/Singapore', '{}');
-      for (const id of [characterA, characterB]) store.run("INSERT INTO world_characters VALUES (?,?,'new')", worldId, id);
+      for (const id of [characterA, characterB])
+        store.run("INSERT INTO world_characters VALUES (?,?,'new')", worldId, id);
     });
     admission.registerGuest({ principalId, playerId, worldId });
     return { principalId, world_id: worldId, player_id: playerId };
   }
-  const bubble = (actor: ReturnType<typeof guest>, text: string, extra: { quote?: string; character?: string; id?: string } = {}) =>
+  const bubble = (
+    actor: ReturnType<typeof guest>,
+    text: string,
+    extra: { quote?: string; character?: string; id?: string } = {},
+  ) =>
     turns.addBubble(actor, {
       requestId: extra.id ?? `r-${++sequence}`,
       characterId: extra.character ?? characterA,
@@ -59,14 +64,21 @@ function fixture(t: import('node:test').TestContext) {
       quoteMessageId: extra.quote ?? null,
       ipHash: ip('a'),
     });
-  const operations = () => store.all<{ id: string; input_message_id: string; status: string }>('SELECT id,input_message_id,status FROM web_operations');
+  const operations = () =>
+    store.all<{ id: string; input_message_id: string; status: string }>(
+      'SELECT id,input_message_id,status FROM web_operations',
+    );
   return { store, admission, turns, clock, guest, bubble, operations, advance: (ms: number) => void (now += ms) };
 }
 
 test('three bubbles are answered by ONE turn after 4 s of quiet; one reservation; the turn ends on the last bubble', (t) => {
   const f = fixture(t);
   const actor = f.guest('a');
-  const ids = [f.bubble(actor, '在吗').messageId, f.bubble(actor, '我刚下班').messageId, f.bubble(actor, '今天好累').messageId];
+  const ids = [
+    f.bubble(actor, '在吗').messageId,
+    f.bubble(actor, '我刚下班').messageId,
+    f.bubble(actor, '今天好累').messageId,
+  ];
   // every bubble is stored the moment it is sent: nothing is an operation yet, nothing is charged
   assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM messages')!.n, 3);
   assert.equal(f.operations().length, 0);
@@ -78,7 +90,7 @@ test('three bubbles are answered by ONE turn after 4 s of quiet; one reservation
   assert.equal(f.turns.pass(), 1);
   const [operation] = f.operations();
   assert.equal(f.operations().length, 1, 'one turn for three bubbles');
-  assert.equal(operation!.input_message_id, ids[2], 'the last bubble is the turn\'s input message');
+  assert.equal(operation!.input_message_id, ids[2], "the last bubble is the turn's input message");
   assert.deepEqual(turnMemberIds(f.store, operation!.id, operation!.input_message_id), ids, 'all three, in order');
   assert.equal(
     f.store.get<{ trial_reserved: number }>('SELECT trial_reserved FROM web_principals')!.trial_reserved,
@@ -166,10 +178,22 @@ test('a quote must name a message of THIS conversation of this player; the quote
   const mine = f.bubble(a, '我的第一句');
   const otherConversation = f.bubble(a, '另一个角色里的', { character: characterB });
   const theirs = f.bubble(b, '别人的一句');
-  assert.throws(() => f.bubble(a, '引用', { quote: otherConversation.messageId }), /QUOTE_UNAVAILABLE/, 'another conversation');
-  assert.throws(() => f.bubble(a, '引用', { quote: theirs.messageId }), /QUOTE_UNAVAILABLE/, 'another player\'s message');
+  assert.throws(
+    () => f.bubble(a, '引用', { quote: otherConversation.messageId }),
+    /QUOTE_UNAVAILABLE/,
+    'another conversation',
+  );
+  assert.throws(
+    () => f.bubble(a, '引用', { quote: theirs.messageId }),
+    /QUOTE_UNAVAILABLE/,
+    "another player's message",
+  );
   assert.throws(() => f.bubble(a, '引用', { quote: 'does-not-exist' }), /QUOTE_UNAVAILABLE/);
-  assert.equal(f.store.get<{ n: number }>("SELECT count(*) n FROM web_turn_bubbles WHERE principal_id='principal-a'")!.n, 2, 'a refused quote stores nothing');
+  assert.equal(
+    f.store.get<{ n: number }>("SELECT count(*) n FROM web_turn_bubbles WHERE principal_id='principal-a'")!.n,
+    2,
+    'a refused quote stores nothing',
+  );
   const quoting = f.bubble(a, '接着说', { quote: mine.messageId });
   const quotes = turnQuotes(f.store, a.world_id, quoting.conversationId, [quoting.messageId, mine.messageId]);
   assert.deepEqual(quotes.get(quoting.messageId), {
@@ -216,11 +240,21 @@ test('the bubble rows are fixed: a pending row changes state once and nothing el
   const f = fixture(t);
   const actor = f.guest('a');
   const sent = f.bubble(actor, '一');
-  assert.throws(() => f.store.run("UPDATE web_turn_bubbles SET quote_message_id='x' WHERE message_id=?", sent.messageId), /WEB_TURN_IMMUTABLE/);
-  assert.throws(() => f.store.run("UPDATE web_turn_bubbles SET ip_hash=? WHERE message_id=?", ip('b'), sent.messageId), /WEB_TURN_IMMUTABLE/);
+  assert.throws(
+    () => f.store.run("UPDATE web_turn_bubbles SET quote_message_id='x' WHERE message_id=?", sent.messageId),
+    /WEB_TURN_IMMUTABLE/,
+  );
+  assert.throws(
+    () => f.store.run('UPDATE web_turn_bubbles SET ip_hash=? WHERE message_id=?', ip('b'), sent.messageId),
+    /WEB_TURN_IMMUTABLE/,
+  );
   f.advance(TURN_QUIET_MS);
   f.turns.pass();
-  assert.throws(() => f.store.run("UPDATE web_turn_bubbles SET state='pending',operation_id=NULL WHERE message_id=?", sent.messageId), /WEB_TURN_IMMUTABLE|CHECK/);
+  assert.throws(
+    () =>
+      f.store.run("UPDATE web_turn_bubbles SET state='pending',operation_id=NULL WHERE message_id=?", sent.messageId),
+    /WEB_TURN_IMMUTABLE|CHECK/,
+  );
 });
 
 test('the schema step is digest-checked: a changed table stops the start with WEB_TURN_SCHEMA_MISMATCH', (t) => {

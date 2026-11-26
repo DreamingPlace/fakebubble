@@ -73,7 +73,8 @@ function fixture(t: test.TestContext) {
   const actor = { principalId: guest.principalId, world_id: principal.world_id, player_id: principal.player_id };
   const bubbleIds = ['C synthetic input', 'second bubble', 'third bubble'].map(
     (text, at) =>
-      turns.addBubble(actor, { requestId: `batch-36-${at}`, characterId: 'synthetic', text, ipHash: 'c'.repeat(64) }).messageId,
+      turns.addBubble(actor, { requestId: `batch-36-${at}`, characterId: 'synthetic', text, ipHash: 'c'.repeat(64) })
+        .messageId,
   );
   now += 4_000;
   assert.equal(turns.pass(), 1);

@@ -173,7 +173,8 @@ export class WebExportAdmin {
     const owner = actor.role === 'owner';
     // The permission first, then the filters: a caller who may not export never learns what a filter would have found.
     if (kind === 'conversations') ensure(this.deps.chatReview && chatReviewTablesExist(this.store), 'NOT_FOUND');
-    if (kind === 'conversations' || kind === 'calls' || kind === 'failures' || kind === 'feedback') ensure(owner, 'ADMIN_OWNER_REQUIRED');
+    if (kind === 'conversations' || kind === 'calls' || kind === 'failures' || kind === 'feedback')
+      ensure(owner, 'ADMIN_OWNER_REQUIRED');
     // Broadcast, rehearsal and co-creation check the permission of their own page when they read.
     else if (kind !== 'broadcast' && kind !== 'rehearsal' && kind !== 'cocreation')
       ensure(this.mayExport(kind, owner, grants), 'ADMIN_PERMISSION_REQUIRED');

@@ -48,7 +48,9 @@ export function quoteBlock(quote: QuoteDraft, name: string, interactive = true):
 
 export function scrollToMessage(from: HTMLElement, messageId: string) {
   const list = from.closest('.chat-body') ?? document;
-  const target = Array.from(list.querySelectorAll<HTMLElement>('[data-message-id]')).find((row) => row.dataset.messageId === messageId);
+  const target = Array.from(list.querySelectorAll<HTMLElement>('[data-message-id]')).find(
+    (row) => row.dataset.messageId === messageId,
+  );
   if (!target) return;
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   target.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });

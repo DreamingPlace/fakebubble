@@ -16,7 +16,7 @@ export interface MenuItem {
   name: string;
   on?: boolean;
   /** Return `'stay'` to keep the menu open (the 👎 question); anything else closes it. */
-  run: () => void | 'stay';
+  run: () => unknown;
 }
 export type MenuSet = (MenuItem | 'separator')[];
 
@@ -25,8 +25,12 @@ const svg = (path: string) =>
 export const MENU_ICONS = {
   quote: svg('<path d="M9 7 4 12l5 5"/><path d="M4 12h9a7 7 0 0 1 7 7"/>'),
   card: svg('<rect x="4" y="3.5" width="16" height="17" rx="3.5"/><path d="M8 15.5h8M8 11.5h5"/>'),
-  up: svg('<path d="M7 11v9H4v-9z"/><path d="M7 11l4-7c1.6 0 2.5 1.2 2.2 2.8L12.7 10H19a2 2 0 0 1 2 2.4l-1.3 6A2 2 0 0 1 17.7 20H7"/>'),
-  down: svg('<path d="M17 13V4h3v9z"/><path d="M17 13l-4 7c-1.6 0-2.5-1.2-2.2-2.8L11.3 14H5a2 2 0 0 1-2-2.4l1.3-6A2 2 0 0 1 6.3 4H17"/>'),
+  up: svg(
+    '<path d="M7 11v9H4v-9z"/><path d="M7 11l4-7c1.6 0 2.5 1.2 2.2 2.8L12.7 10H19a2 2 0 0 1 2 2.4l-1.3 6A2 2 0 0 1 17.7 20H7"/>',
+  ),
+  down: svg(
+    '<path d="M17 13V4h3v9z"/><path d="M17 13l-4 7c-1.6 0-2.5-1.2-2.2-2.8L11.3 14H5a2 2 0 0 1-2-2.4l1.3-6A2 2 0 0 1 6.3 4H17"/>',
+  ),
   voice: svg('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>'),
   content: svg('<path d="M6 4h12M6 9h12M6 14h12M6 19h8"/>'),
 };
@@ -119,7 +123,8 @@ export function openMessageMenu(row: HTMLElement, bubbleSelector: string, initia
   const copyContext = (from: HTMLElement | null, to: HTMLElement) => {
     if (!from) return;
     to.className = `${to.className} ${from.className}`.trim();
-    for (const attribute of Array.from(from.attributes)) if (attribute.name.startsWith('data-')) to.setAttribute(attribute.name, attribute.value);
+    for (const attribute of Array.from(from.attributes))
+      if (attribute.name.startsWith('data-')) to.setAttribute(attribute.name, attribute.value);
   };
   copyContext(shell, wrapper);
   const holder = document.createElement('div');
@@ -205,7 +210,10 @@ export function openMessageMenu(row: HTMLElement, bubbleSelector: string, initia
   };
   const position = () => {
     const width = bar.getBoundingClientRect().width;
-    const left = Math.max(12, Math.min(window.innerWidth - width - 12, bubbleRect.left + bubbleRect.width / 2 - width / 2));
+    const left = Math.max(
+      12,
+      Math.min(window.innerWidth - width - 12, bubbleRect.left + bubbleRect.width / 2 - width / 2),
+    );
     const above = bubbleRect.top > 90;
     bar.style.left = `${left}px`;
     bar.style.top = `${above ? bubbleRect.top - 62 : bubbleRect.bottom + 12}px`;

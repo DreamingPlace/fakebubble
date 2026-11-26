@@ -39,7 +39,14 @@ function scenario() {
       FREEZE_NOW,
     );
     items.forEach(([id, origin, media], ordinal) =>
-      store.run('INSERT INTO web_publication_items(operation_id,ordinal,message_id,media_id,origin) VALUES (?,?,?,?,?)', operation, ordinal, id, media, origin),
+      store.run(
+        'INSERT INTO web_publication_items(operation_id,ordinal,message_id,media_id,origin) VALUES (?,?,?,?,?)',
+        operation,
+        ordinal,
+        id,
+        media,
+        origin,
+      ),
     );
   };
   message('voice', 'character', '先把鞋脱了');
@@ -54,8 +61,23 @@ function scenario() {
   const feedback = new WebFeedback(store as unknown as WebRuntimeStore, { now: () => FREEZE_NOW });
   const actor = { principalId: 'principal', world_id: 'world', player_id: 'player' };
   let n = 0;
-  const rate = (input: { messageId: string; rating: 'up' | 'down' | 'none'; target?: 'voice' | 'content'; id?: string; conversationId?: string }, who = actor) =>
-    feedback.rate(who, { requestId: input.id ?? `r${++n}`, conversationId: input.conversationId ?? 'conversation', messageId: input.messageId, rating: input.rating, ...(input.target ? { target: input.target } : {}) });
+  const rate = (
+    input: {
+      messageId: string;
+      rating: 'up' | 'down' | 'none';
+      target?: 'voice' | 'content';
+      id?: string;
+      conversationId?: string;
+    },
+    who = actor,
+  ) =>
+    feedback.rate(who, {
+      requestId: input.id ?? `r${++n}`,
+      conversationId: input.conversationId ?? 'conversation',
+      messageId: input.messageId,
+      rating: input.rating,
+      ...(input.target ? { target: input.target } : {}),
+    });
   return { store, feedback, actor, rate };
 }
 
@@ -63,14 +85,37 @@ test('rate, switch and remove are idempotent; one rating per message', (t) => {
   const { store, rate, feedback, actor } = scenario();
   t.after(() => store.close());
   assert.deepEqual(rate({ messageId: 'voice', rating: 'up' }), { rating: 'up', target: null });
-  assert.deepEqual(rate({ messageId: 'voice', rating: 'up' }), { rating: 'up', target: null }, 'the same desired state again changes nothing');
+  assert.deepEqual(
+    rate({ messageId: 'voice', rating: 'up' }),
+    { rating: 'up', target: null },
+    'the same desired state again changes nothing',
+  );
   assert.equal(store.get<{ n: number }>('SELECT count(*) n FROM web_feedback')!.n, 1);
-  assert.deepEqual(rate({ messageId: 'voice', rating: 'down', target: 'voice' }), { rating: 'down', target: 'voice' }, 'the other button switches it');
+  assert.deepEqual(
+    rate({ messageId: 'voice', rating: 'down', target: 'voice' }),
+    { rating: 'down', target: 'voice' },
+    'the other button switches it',
+  );
   assert.equal(store.get<{ n: number }>('SELECT count(*) n FROM web_feedback')!.n, 1, 'still one row');
-  assert.deepEqual(rate({ messageId: 'voice', rating: 'down', target: 'content' }), { rating: 'down', target: 'content' }, 'what is rated down can change');
-  assert.deepEqual([...feedback.ratingsOf(actor, ['voice', 'fallback']).entries()], [['voice', { value: 'down', target: 'content' }]]);
-  assert.deepEqual(rate({ messageId: 'voice', rating: 'none' }), { rating: null, target: null }, 'tapping again removes it');
-  assert.deepEqual(rate({ messageId: 'voice', rating: 'none' }), { rating: null, target: null }, 'removing twice is fine');
+  assert.deepEqual(
+    rate({ messageId: 'voice', rating: 'down', target: 'content' }),
+    { rating: 'down', target: 'content' },
+    'what is rated down can change',
+  );
+  assert.deepEqual(
+    [...feedback.ratingsOf(actor, ['voice', 'fallback']).entries()],
+    [['voice', { value: 'down', target: 'content' }]],
+  );
+  assert.deepEqual(
+    rate({ messageId: 'voice', rating: 'none' }),
+    { rating: null, target: null },
+    'tapping again removes it',
+  );
+  assert.deepEqual(
+    rate({ messageId: 'voice', rating: 'none' }),
+    { rating: null, target: null },
+    'removing twice is fine',
+  );
   assert.equal(store.get<{ n: number }>('SELECT count(*) n FROM web_feedback')!.n, 0);
 });
 
@@ -79,7 +124,10 @@ test('a repeated request id answers the same; a different body under it is a con
   t.after(() => store.close());
   rate({ id: 'same', messageId: 'voice', rating: 'up' });
   assert.deepEqual(rate({ id: 'same', messageId: 'voice', rating: 'up' }), { rating: 'up', target: null });
-  assert.throws(() => rate({ id: 'same', messageId: 'voice', rating: 'down', target: 'content' }), /IDEMPOTENCY_CONFLICT/);
+  assert.throws(
+    () => rate({ id: 'same', messageId: 'voice', rating: 'down', target: 'content' }),
+    /IDEMPOTENCY_CONFLICT/,
+  );
   assert.equal(store.get<{ n: number }>('SELECT count(*) n FROM web_feedback_requests')!.n, 1);
 });
 
@@ -87,20 +135,40 @@ test('a 👎 on a text-fallback reply is content only; a voice reply may be rate
   const { store, rate } = scenario();
   t.after(() => store.close());
   assert.throws(() => rate({ messageId: 'fallback', rating: 'down', target: 'voice' }), /FEEDBACK_TARGET_INVALID/);
-  assert.deepEqual(rate({ messageId: 'fallback', rating: 'down', target: 'content' }), { rating: 'down', target: 'content' });
+  assert.deepEqual(rate({ messageId: 'fallback', rating: 'down', target: 'content' }), {
+    rating: 'down',
+    target: 'content',
+  });
   assert.deepEqual(rate({ messageId: 'fallback', rating: 'up' }), { rating: 'up', target: null });
   assert.throws(() => rate({ messageId: 'voice', rating: 'down' }), /INVALID_REQUEST/, 'a 👎 must say what it rates');
   assert.throws(() => rate({ messageId: 'voice', rating: 'up', target: 'voice' }), /INVALID_REQUEST/);
 });
 
-test('only the character\'s replies of the player\'s own conversation can be rated', (t) => {
+test("only the character's replies of the player's own conversation can be rated", (t) => {
   const { store, rate, actor } = scenario();
   t.after(() => store.close());
-  for (const messageId of ['footer', 'mine', 'does-not-exist']) assert.throws(() => rate({ messageId, rating: 'up' }), /NOT_FOUND/, messageId);
-  assert.throws(() => rate({ messageId: 'voice', rating: 'up', conversationId: 'other-conversation' }), /NOT_FOUND/, 'another conversation');
+  for (const messageId of ['footer', 'mine', 'does-not-exist'])
+    assert.throws(() => rate({ messageId, rating: 'up' }), /NOT_FOUND/, messageId);
+  assert.throws(
+    () => rate({ messageId: 'voice', rating: 'up', conversationId: 'other-conversation' }),
+    /NOT_FOUND/,
+    'another conversation',
+  );
   // another player (another principal and world) rating this player's message id
-  assert.throws(() => rate({ messageId: 'voice', rating: 'up' }, { principalId: 'someone-else', world_id: 'other-world', player_id: 'other-player' }), /NOT_FOUND|WEB_RETENTION_SCOPE_INVALID/, 'a principal this world does not know is refused before anything is read');
-  assert.throws(() => rate({ messageId: 'voice', rating: 'up' }, { ...actor, principalId: 'someone-else' }), /NOT_FOUND|WEB_RETENTION_SCOPE_INVALID/, 'the publication belongs to another principal');
+  assert.throws(
+    () =>
+      rate(
+        { messageId: 'voice', rating: 'up' },
+        { principalId: 'someone-else', world_id: 'other-world', player_id: 'other-player' },
+      ),
+    /NOT_FOUND|WEB_RETENTION_SCOPE_INVALID/,
+    'a principal this world does not know is refused before anything is read',
+  );
+  assert.throws(
+    () => rate({ messageId: 'voice', rating: 'up' }, { ...actor, principalId: 'someone-else' }),
+    /NOT_FOUND|WEB_RETENTION_SCOPE_INVALID/,
+    'the publication belongs to another principal',
+  );
   assert.equal(store.get<{ n: number }>('SELECT count(*) n FROM web_feedback')!.n, 0);
 });
 
@@ -113,13 +181,15 @@ test('a rating copies the writer and the model of the reply', (t) => {
     FREEZE_NOW,
   );
   rate({ messageId: 'voice', rating: 'down', target: 'voice' });
-  const row = store.get<{ writer: string; model: string; heard_at: number | null }>('SELECT writer,model,heard_at FROM web_feedback');
+  const row = store.get<{ writer: string; model: string; heard_at: number | null }>(
+    'SELECT writer,model,heard_at FROM web_feedback',
+  );
   assert.equal(row!.writer, 'v8p');
   assert.equal(row!.model, 'deepseek');
   assert.equal(row!.heard_at, null);
 });
 
-test('a switch clears the owner\'s 「已听」 mark; the same rating again does not', (t) => {
+test("a switch clears the owner's 「已听」 mark; the same rating again does not", (t) => {
   const { store, rate } = scenario();
   t.after(() => store.close());
   rate({ messageId: 'voice', rating: 'down', target: 'voice' });

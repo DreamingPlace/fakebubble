@@ -436,7 +436,9 @@ export class WebProviderHTTP {
           typeof body.conversationId === 'string' &&
           typeof body.messageId === 'string' &&
           typeof body.rating === 'string' &&
-          Object.keys(body).every((key) => ['requestId', 'conversationId', 'messageId', 'rating', 'target'].includes(key)),
+          Object.keys(body).every((key) =>
+            ['requestId', 'conversationId', 'messageId', 'rating', 'target'].includes(key),
+          ),
         'INVALID_REQUEST',
       );
       return Response.json(

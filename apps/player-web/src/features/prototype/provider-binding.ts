@@ -1131,7 +1131,12 @@ export class LiveBinding {
           icon: MENU_ICONS.quote,
           label: '引用',
           name: '引用',
-          run: () => this.setQuote(characterId, card, { messageId: id, author: message.author === 'player' ? 'player' : 'character', text: message.text }),
+          run: () =>
+            this.setQuote(characterId, card, {
+              messageId: id,
+              author: message.author === 'player' ? 'player' : 'character',
+              text: message.text,
+            }),
         },
       ];
       const voice = message.author === 'character' && message.origin === 'narrative' && !!message.audio?.mediaId;
@@ -1173,8 +1178,20 @@ export class LiveBinding {
               menu.render([
                 { key: 'down', icon: MENU_ICONS.down, name: '踩', on: true, run: () => 'stay' },
                 'separator',
-                { key: 'voice', icon: MENU_ICONS.voice, label: '语音', name: '语音', run: () => void this.rate(characterId, message, 'down', 'voice') },
-                { key: 'content', icon: MENU_ICONS.content, label: '内容', name: '内容', run: () => void this.rate(characterId, message, 'down', 'content') },
+                {
+                  key: 'voice',
+                  icon: MENU_ICONS.voice,
+                  label: '语音',
+                  name: '语音',
+                  run: () => void this.rate(characterId, message, 'down', 'voice'),
+                },
+                {
+                  key: 'content',
+                  icon: MENU_ICONS.content,
+                  label: '内容',
+                  name: '内容',
+                  run: () => void this.rate(characterId, message, 'down', 'content'),
+                },
               ]);
               return 'stay';
             },
@@ -1186,7 +1203,12 @@ export class LiveBinding {
     const menu = openMessageMenu(row, bubbleSelector, items());
   }
 
-  private openShare(characterId: WebProviderCharacterId, row: HTMLElement, bubbleSelector: string, message: WebProviderMessage) {
+  private openShare(
+    characterId: WebProviderCharacterId,
+    row: HTMLElement,
+    bubbleSelector: string,
+    message: WebProviderMessage,
+  ) {
     const shell = this.shell!;
     const anchor = row.querySelector<HTMLElement>(bubbleSelector) ?? row;
     const target = {
@@ -1231,7 +1253,9 @@ export class LiveBinding {
     target?: 'voice' | 'content',
   ) {
     const before = this.ratings.get(message.messageId) ?? null;
-    const row = this.shell?.card(characterId).querySelector<HTMLElement>(`[data-message-id="${CSS.escape(message.messageId)}"]`);
+    const row = this.shell
+      ?.card(characterId)
+      .querySelector<HTMLElement>(`[data-message-id="${CSS.escape(message.messageId)}"]`);
     // The mark answers at once; a refused request puts it back.
     if (rating === 'none') this.ratings.delete(message.messageId);
     else this.ratings.set(message.messageId, { value: rating, target: target ?? null });
@@ -1270,7 +1294,8 @@ export class LiveBinding {
     const strip = composer?.querySelector<HTMLElement>('.quote-strip');
     composer?.classList.remove('has-quote');
     if (!strip) return;
-    if (typeof strip.animate !== 'function' || globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) strip.remove();
+    if (typeof strip.animate !== 'function' || globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+      strip.remove();
     else {
       strip.classList.add('is-leaving');
       window.setTimeout(() => strip.remove(), 160);
@@ -1506,7 +1531,9 @@ export class LiveBinding {
           }
         if (operation.status !== 'published') {
           this.markUnanswered(card, answered, 'delivery-unconfirmed', '已发送 · 回复未完成，请勿重复发送');
-          this.fail(new ProviderApiError(409, operation.status === 'unknown' ? 'REPLY_UNKNOWN' : 'REPLY_NOT_DELIVERED'));
+          this.fail(
+            new ProviderApiError(409, operation.status === 'unknown' ? 'REPLY_UNKNOWN' : 'REPLY_NOT_DELIVERED'),
+          );
           // The turn is over (never resent); bubbles sent meanwhile get their own turn.
           this.speaking(characterId, card, false);
           continue;
@@ -1529,7 +1556,12 @@ export class LiveBinding {
    * The bubbles a turn answered but whose reply did not arrive: say so on the rows the page shows, once. `ids` null = every bubble
    * still waiting for a turn (a refused batch).
    */
-  private markUnanswered(card: HTMLElement, ids: Set<string> | null, state: 'not-sent' | 'delivery-unconfirmed', text: string) {
+  private markUnanswered(
+    card: HTMLElement,
+    ids: Set<string> | null,
+    state: 'not-sent' | 'delivery-unconfirmed',
+    text: string,
+  ) {
     for (const row of card.querySelectorAll<HTMLElement>('.message-row.outgoing[data-message-id]')) {
       const id = row.dataset.messageId!;
       if (row.classList.contains('not-sent') || row.classList.contains('delivery-unconfirmed')) continue;
