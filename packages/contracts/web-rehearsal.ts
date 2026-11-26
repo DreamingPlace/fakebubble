@@ -141,6 +141,12 @@ export type RehearsalRulesToneSet = (typeof REHEARSAL_RULES_TONE_SETS)[number];
  * ordinary 「今天吃了什么」. {别名} / {饰演} are filled in like the 名字 scripts. The owner judges the replies by ear.
  */
 export const REHEARSAL_RULES_56_SET = 'rules-56';
+/**
+ * Part 58: 「v8 规则 58」, one fixed script (paraphrased from the owner's examples; no real player text): care given to her, an
+ * ambiguous 「如果你认为我在关心你」, a reminder to dress warmly, a confession, a bored player, a player who is down. The owner
+ * judges the replies by ear; the table counts the 行-family fillers and shows the distribution of her purposes.
+ */
+export const REHEARSAL_RULES_58_SET = 'rules-58';
 export const REHEARSAL_SETS = [
   'chat',
   'repeat',
@@ -151,6 +157,7 @@ export const REHEARSAL_SETS = [
   ...REHEARSAL_RULES_NAME_SETS,
   ...REHEARSAL_RULES_TONE_SETS,
   REHEARSAL_RULES_56_SET,
+  REHEARSAL_RULES_58_SET,
 ] as const;
 export type RehearsalSet = (typeof REHEARSAL_SETS)[number];
 export const isProfileSet = (set: unknown): set is RehearsalProfileSet =>
@@ -185,6 +192,7 @@ export const REHEARSAL_SET_LABELS: Readonly<Record<RehearsalSet | 'memes', strin
   'rules-51-small-day': 'v8 规则 51 · 情绪 小事 忙了一天',
   'rules-51-big': 'v8 规则 51 · 情绪 大事 考试成绩',
   'rules-56': 'v8 规则 56',
+  'rules-58': 'v8 规则 58',
   memes: '梗与故事',
 });
 
@@ -272,6 +280,8 @@ export interface RehearsalCell {
   bubbles: string[] | null;
   /** The reply covers the turn's message and defers nothing. null for a 新 column (it does not track that). */
   answered: boolean | null;
+  /** Part 58: the hidden plan of a 新 reply (what she read, her purpose), for the owner only. null = none. */
+  plan: { read: string; aim: string; aims: string[] } | null;
 }
 export interface RehearsalTurn {
   text: string;
@@ -289,6 +299,10 @@ export interface RehearsalCounts {
   avgBubbles: number | null;
   customerService: number;
   repeated: number;
+  /** Part 58: replies with a dismissive 行-family opener (行 / 行吧 / 行行行 / 行了行了 / 好吧好吧 / 随你 / 得了), counted by code. */
+  fillers: number;
+  /** Part 58: how many replies of a 新 column aimed at each purpose (a reply that names two counts for both); {} for 旧. */
+  aims: Record<string, number>;
   unconfirmed: number;
   failed: number;
   /** Part 40: the codes of the cells that did not produce a reply (failed, unconfirmed, not sent), each with how many cells carry it. */

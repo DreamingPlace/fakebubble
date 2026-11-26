@@ -241,6 +241,20 @@ const RULES_56: readonly string[] = [
   '你刚才是不是说你叫{别名}来着',
   '对了，你今天吃了什么',
 ];
+/**
+ * Part 58: 「v8 规则 58」, paraphrased from the owner's examples (no real player text): 1 care given to her, 2 an ambiguous 「如果你
+ * 认为我在关心你」, 3 a reminder to dress warmly, 4 care phrased as 「你怎么定义都行」, 5 a confession, 6 a bored player, 7 a player
+ * who is down. A real person would take the care, flirt back, or stay with the feeling; she must not answer the literal point.
+ */
+const RULES_58: readonly string[] = [
+  '你今天辛苦了，我都看在眼里',
+  '如果你觉得我是在关心你，那也可以，看你怎么理解',
+  '外面降温了，冷了记得多穿点',
+  '你怎么定义都行，反正别着凉感冒就好',
+  '我喜欢你，不是随便说说的',
+  '好无聊啊，不知道干什么',
+  '今天有点难过，什么都不想做',
+];
 const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = {
   chat: CHAT,
   repeat: REPEAT,
@@ -251,6 +265,7 @@ const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = {
   ...RULES_51_NAMES,
   ...RULES_51_TONE,
   'rules-56': RULES_56,
+  'rules-58': RULES_58,
 };
 
 /** The turns of a set; with `names` (the character's own names) the {别名} / {饰演} / {黑称} marks are filled in. */

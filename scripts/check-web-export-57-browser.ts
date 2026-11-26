@@ -285,7 +285,7 @@ try {
   assert.equal(first.length - 1 + (second.length - 1), 50_010 + 7, 'every message of every conversation, once');
   assert.match(
     first[0]!,
-    /^对话编号,时间（UTC\+8）,说话人,角色,内容,方式,回复写法,草稿模型,审核模型,审核改动,改动原因,状态,错误代码$/,
+    /^对话编号,时间（UTC\+8）,说话人,角色,内容,方式,回复写法,草稿模型,审核模型,审核改动,改动原因,状态,错误代码,读到,目的$/, // NAMED EXCEPTION (Part 58): 读到,目的 at the end
   );
   for (const part of parts) scan(part.name, part.bytes.toString('utf8'));
   // a filtered workbook: the failed replies of the page's own character filter, .xlsx with both sheets

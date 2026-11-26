@@ -44,6 +44,9 @@ export const CSV_HEADER = [
   '草稿耗时(ms)',
   '审核耗时(ms)',
   '模拟时间',
+  // Part 58: the writer's hidden plan (owner only), appended so the earlier columns keep their place.
+  '读到',
+  '目的',
 ];
 export function previewCsvRow(p: PreviewRow): (string | number | null)[] {
   return [
@@ -61,6 +64,8 @@ export function previewCsvRow(p: PreviewRow): (string | number | null)[] {
     p.latency.draftMs,
     p.latency.reviewMs,
     p.simulatedTime ? `${p.simulatedTime.time} ${p.simulatedTime.timeZone}` : '',
+    p.final?.plan?.read ?? '',
+    p.final?.plan?.aim ?? '',
   ];
 }
 /** UTF-8 with a byte-order mark, CRLF rows: Excel opens Chinese text correctly. */

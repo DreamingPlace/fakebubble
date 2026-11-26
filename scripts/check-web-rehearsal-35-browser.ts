@@ -178,11 +178,12 @@ try {
     const counts = await page
       .locator('.rh-counts tbody tr')
       .evaluateAll((trs: HTMLElement[]) => trs.map((tr) => tr.innerText.replace(/\s+/g, ' ')));
-    check(counts.length === 8, `${at}: eight counts per model (${counts.length})`);
+    // NAMED EXCEPTION (Part 58): two more rows (行类敷衍, 目的分布) sit before 客服腔: ten rows, 客服腔 is the eighth.
+    check(counts.length === 10, `${at}: ten counts per model (${counts.length})`);
     check(/答全每条 8 \/ 8/.test(counts[0] ?? ''), `${at}: answers counted (${counts[0]})`);
     check(
-      /客服腔 0 \d+ \d+/.test(counts[5] ?? '') && !/客服腔 0 0 0/.test(counts[5] ?? ''),
-      `${at}: customer-service phrases counted (${counts[5]})`,
+      /客服腔 0 \d+ \d+/.test(counts[7] ?? '') && !/客服腔 0 0 0/.test(counts[7] ?? ''),
+      `${at}: customer-service phrases counted (${counts[7]})`,
     );
     await shot(`counts-${at}`);
 

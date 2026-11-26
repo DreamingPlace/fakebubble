@@ -24,26 +24,26 @@ const v8 = (over: Partial<TextGenerationRequest> = {}): TextGenerationRequest =>
 const sha = (text: string | Buffer) => createHash('sha256').update(text).digest('hex');
 const V8_DIR = new URL('../../../prompts/v8/', import.meta.url);
 
-test('37a-3 pins: every v8 file and the whole set are pinned, and the new pin is written in docs/status/part-56.md', () => {
+test('37a-3 pins: every v8 file and the whole set are pinned, and the new pin is written in docs/status/part-58.md', () => {
   // Named, deliberate change (Part 37a-3): v8 is not live, so these hashes moved; v7 did not.
   const pinned: Record<string, string> = {
     'cast-context.md': '533488c6a6e27c0fba1ecc01317e24f05d7f9ff6f856cbc8d3d45b2fd0daa42f',
-    'guard.md': '399f9c19007e78c56d02b1dd6c63ff956042b5b09f5675cba97dcec40deaaeca',
+    'guard.md': 'cbfc5b4045709751d74759bc560200d720c4c708e1cee759a35022c67021c7cc',
     'writer-addendum-deepseek.md': '4fa7b9f3497637f3c8ef30d48f69c2af551afa5a5a4a5e302fbf0ab4b105f359',
     'writer-addendum-gemini.md': 'd430a20548be34d725518d1e36bd166be1bd9669d3e0bd44db6bf45e50c601ea',
     'writer-addendum-grok.md': 'af2561424f21aafc8568f4d1b6d5800ca0d1c5fcc03b4dc77306627040bdb70f',
     'writer-directions.md': '1457f247f8cbb1d4bb60ffed958fd059d62b52cad20034a68b807bc86f3a6e00',
-    'writer.md': 'a7f0f55db48c51d6bfbceda8e56ead8a9aad00568ede13db04c4f596b4224425',
+    'writer.md': 'dd7aaf7413a80b6aa1d4e903a29a34efd487f0585c5a5f26253628ab291dea6d',
   };
   assert.deepEqual(readdirSync(V8_DIR).sort(), Object.keys(pinned).sort(), 'a new v8 file must be pinned here');
   for (const [file, hash] of Object.entries(pinned)) assert.equal(sha(readFileSync(new URL(file, V8_DIR))), hash, file);
-  assert.equal(WRITER_V8_PROMPT_SHA256, '4f53da3f850005fed1c5686d16abda9bdcf7ccf7e43d3596f198ed8b4fce922a');
+  assert.equal(WRITER_V8_PROMPT_SHA256, '73d6855c6a5edcfa6b89684ec5f2824e888f39413cbb0d70741e93045fd1315d');
   assert.equal(writerPromptBytesHash(), WRITER_V8_PROMPT_SHA256);
-  assert.equal(writerPromptHash(), '4186fe6b18b75e9af1d26c57d47b32776a601e73ba6d2dfd75122559ba78b6bb');
-  // Part 50 and later keep their notes in docs/status/; the pin is documented in the notes of the Part that changed it (Part 56).
+  assert.equal(writerPromptHash(), '6cb2cf4724c335db073cf156eeacddfbfcce0fa5622e46e44a2cd6eb6cf1b20f');
+  // Part 50 and later keep their notes in docs/status/; the pin is documented in the notes of the Part that changed it (Part 58).
   const status =
     readFileSync(new URL('../../../docs/STATUS.md', import.meta.url), 'utf8') +
-    readFileSync(new URL('../../../docs/status/part-56.md', import.meta.url), 'utf8');
+    readFileSync(new URL('../../../docs/status/part-58.md', import.meta.url), 'utf8');
   assert.ok(status.includes(WRITER_V8_PROMPT_SHA256), 'STATUS.md documents the pin');
   assert.ok(status.includes(writerPromptHash()), 'STATUS.md documents the request prompt hash');
   // v7 does not move.

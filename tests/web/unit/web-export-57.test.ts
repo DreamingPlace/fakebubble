@@ -156,6 +156,8 @@ function fixture(t: test.TestContext) {
     draft?: string;
     review?: string;
     reasons?: string[];
+    /** Part 58: the writer's hidden plan, as stored in the candidate. */
+    plan?: { read: string; aim: string; aims: string[] };
     voice?: boolean;
     stage?: 'draft' | 'review' | 'speech';
   };
@@ -240,7 +242,11 @@ function fixture(t: test.TestContext) {
         VALUES (?,?,?,?,?,?,?,?)`,
         op,
         'd'.repeat(64),
-        JSON.stringify({ guardReasons: over.reasons, bubbles: [{ text: '秘密文本不应出现' }] }),
+        JSON.stringify({
+          guardReasons: over.reasons,
+          bubbles: [{ text: '秘密文本不应出现' }],
+          ...(over.plan ? { plan: over.plan } : {}),
+        }),
         'd'.repeat(64),
         'v',
         'd'.repeat(64),
@@ -310,6 +316,7 @@ const seedChats = (f: Fixture) => {
     review: 'deepseek-v4-flash',
     writer: { writer: 'v8', writerProfile: true },
     reasons: ['distress', 'denied_ai'],
+    plan: { read: '阿泡在关心我，想被回应', aim: '心动（回撩）：把外套说成他的爱', aims: ['心动'] },
     voice: true,
   });
   f.round(a, 'jojo', '再说一句', [], T0 + 60_000, {
@@ -469,6 +476,12 @@ test('conversations: one row per message with the review columns; the second she
   assert.equal(first[col(h, '审核模型')], 'deepseek-v4-flash');
   assert.equal(first[col(h, '审核改动')], '是');
   assert.equal(first[col(h, '改动原因')], 'distress、denied_ai');
+  // Part 58: the hidden plan (two new columns at the end), the nickname replaced; the candidate's bubbles are still never read
+  assert.deepEqual([...h].slice(-2), ['读到', '目的']);
+  assert.equal(first[col(h, '读到')], '〔昵称〕在关心我，想被回应');
+  assert.equal(first[col(h, '目的')], '心动（回撩）：把外套说成他的爱');
+  const planless = body.find((r) => r[col(h, '说话人')] === '玩家')!;
+  assert.deepEqual([planless[col(h, '读到')], planless[col(h, '目的')]], ['', ''], 'a player line has no plan');
   assert.equal(first[col(h, '状态')], '已发布');
   assert.equal(first[col(h, '方式')], '语音');
   const player = body.find((r) => r[col(h, '说话人')] === '玩家' && r[col(h, '内容')]!.startsWith('你好'))!;

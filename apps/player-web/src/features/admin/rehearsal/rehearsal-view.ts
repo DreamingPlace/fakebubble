@@ -603,7 +603,8 @@ export function rehearsalView(host: RehearsalHost) {
     if (!gone() && panel.isOpen() && detail?.run.status === 'running')
       timer = setTimer(() => void load(), Math.min(POLL_MS * 1.6 ** idle, POLL_MAX_MS));
   }
-  const cellSig = (cell: RehearsalCell) => JSON.stringify([cell.state, cell.errorCode, cell.bubbles, cell.answered]);
+  const cellSig = (cell: RehearsalCell) =>
+    JSON.stringify([cell.state, cell.errorCode, cell.bubbles, cell.answered, cell.plan]);
   const bubbleList = (cell: RehearsalCell, key = '', player = '') => {
     const box = h('div', {
       class: 'rh-cell',
@@ -629,6 +630,15 @@ export function rehearsalView(host: RehearsalHost) {
         box.append(h('p', { class: 'rh-bubble' }, h('span', { class: 'rh-bubble-text', text: b }), star));
       }
       if (cell.answered === false) box.append(statusBadge('未答全', 'warn'));
+      // Part 58: what she read and what she aimed for (owner only; a player never gets this).
+      if (cell.plan)
+        box.append(
+          h('p', {
+            class: 'rh-plan admin-hint',
+            text: `读到：${cell.plan.read}　目的：${cell.plan.aim}`,
+            attrs: { 'data-plan': '1' },
+          }),
+        );
     } else {
       const tone = cell.state === 'unconfirmed' ? 'warn' : cell.state === 'failed' ? 'danger' : 'neutral';
       const chip =
@@ -769,6 +779,27 @@ export function rehearsalView(host: RehearsalHost) {
         (c) => (c.avgBubbles === null ? '—' : String(c.avgBubbles)),
         (c) => c.avgBubbles,
       ),
+    },
+    // Part 58: counted by code from the stored replies (the same on every read). A 行-family opener sounds dismissive.
+    {
+      label: '行类敷衍',
+      note: '行 / 行吧 / 行行行 / 行了行了 / 好吧好吧 / 随你 / 得了 开头',
+      value: plain(
+        (c) => String(c.fillers),
+        (c) => c.fillers,
+      ),
+    },
+    {
+      label: '目的分布',
+      note: '新写法的每条回复想让对方感到什么',
+      value: (c) => ({
+        text: Object.keys(c.counts.aims).length
+          ? Object.entries(c.counts.aims)
+              .map(([aim, n]) => `${aim} ${n}`)
+              .join('、')
+          : '—',
+        n: null,
+      }),
     },
     {
       label: '客服腔',

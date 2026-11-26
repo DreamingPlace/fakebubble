@@ -194,7 +194,11 @@ test('chat review over real HTTP: transcripts under an anonymous code, no identi
     code: labelOne.code,
     archived: false,
   });
-  assert.equal(exported.csv.replace(/^﻿/, '').split('\r\n')[0], 'label,time,speaker,text,status,error_code,审核改动');
+  // NAMED EXCEPTION (Part 58): the page CSV gained 读到,目的 at the end.
+  assert.equal(
+    exported.csv.replace(/^﻿/, '').split('\r\n')[0],
+    'label,time,speaker,text,status,error_code,审核改动,读到,目的',
+  );
   assert.ok(exported.csv.includes('你好，我是〔昵称〕') && !exported.csv.includes('阿泡'));
   const everyone = await f.call(conv('export'), reader, { characterId: 'wei-guagua', code: null, archived: null });
   assert.ok(everyone.lines > exported.lines - 1, 'all conversations of the character');
