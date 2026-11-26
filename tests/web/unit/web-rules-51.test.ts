@@ -119,7 +119,7 @@ test('51 the guard text: shared history is supported by history or memory, flagg
   // NAMED EXCEPTION (Part 56): relaxed, a name the player used, asked for or agreed never fires it
   assert.ok(text.includes('对方用过、要求过、已同意的叫法，永远不算，不要改'));
   assert.ok(GUARD_REASONS.includes('presumptuous_address' as never));
-  assert.equal(GUARD_REASONS.length, 14); // NAMED EXCEPTION (Part 56): five more reasons
+  assert.equal(GUARD_REASONS.length, 18); // NAMED EXCEPTION (Part 56): five more reasons; (Part 58): four more
   assert.equal((text.match(/^- [a-z_]+：/gmu) ?? []).length >= 8, true);
 });
 

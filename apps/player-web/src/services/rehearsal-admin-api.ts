@@ -109,6 +109,10 @@ const cell = (v: unknown): RehearsalCell => {
     errorCode: nstring(o.errorCode),
     bubbles: o.bubbles === null ? null : strings(o.bubbles),
     answered: nbool(o.answered),
+    plan:
+      o.plan === null || o.plan === undefined
+        ? null
+        : { read: string(object(o.plan).read), aim: string(object(o.plan).aim), aims: strings(object(o.plan).aims) },
   };
 };
 const nnum = (v: unknown) => {
@@ -134,6 +138,8 @@ const counts = (v: unknown): RehearsalCounts => {
     avgBubbles: nnum(o.avgBubbles),
     customerService: int(o.customerService),
     repeated: int(o.repeated),
+    fillers: o.fillers === undefined ? 0 : int(o.fillers),
+    aims: codes(o.aims),
     unconfirmed: int(o.unconfirmed),
     failed: int(o.failed),
     codes: codes(o.codes),

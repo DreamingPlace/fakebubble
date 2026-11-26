@@ -37,6 +37,7 @@ import { castPromptHash } from './cast-prompt.ts';
 import { frozenOpening, openingForWriter } from './opening-line.ts';
 import { writerOwnNames } from './writer-own-names.ts';
 import { writerRoster } from './writer-roster.ts';
+import { MAX_RECENT_AIMS } from './writer-plan.ts';
 
 /** Messages (published prior turns + the current input) a request carries; the opening is added only when none was cut. */
 const HISTORY_WINDOW = 24;
@@ -449,6 +450,14 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     ...(v8 ? { roster: writerRoster(store as never, scope.characterId) } : {}),
     // Part 51: her own names with kind and attitude (published cast file + profile settings), whatever CAST_CONTEXT_ENABLED says.
     ...(v8 ? ownNamesKey(writerOwnNames(store as never, scope.characterId, template)) : {}),
+    // Part 58: her last few purposes in this conversation, read from the stored candidates of her earlier published replies (the
+    // plan rides in the candidate JSON; no new column). Absent when there are none, so such a request is what it was.
+    ...(v8
+      ? recentAimsKey(
+          store,
+          prior.map((row) => row.operation_id),
+        )
+      : {}),
     messages: selected.map((row) => dto(row!)),
     mustClose: false,
     evidence: [],
@@ -498,6 +507,26 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     now,
   );
   return requestDigest;
+}
+
+/** The first purpose of each of her last published replies that carried a plan, oldest first (at most MAX_RECENT_AIMS). */
+function recentAimsKey(store: WebStore, operationIds: readonly string[]) {
+  const aims: string[] = [];
+  if (!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_provider_candidates'")) return {};
+  for (const operationId of operationIds.slice(-12)) {
+    const row = store.get<{ candidate_json: string }>(
+      'SELECT candidate_json FROM web_provider_candidates WHERE operation_id=?',
+      operationId,
+    );
+    if (!row) continue;
+    try {
+      const aim = (JSON.parse(row.candidate_json) as { plan?: { aims?: unknown } }).plan?.aims;
+      if (Array.isArray(aim) && typeof aim[0] === 'string') aims.push(aim[0]);
+    } catch {
+      /* a candidate that does not parse has no aim */
+    }
+  }
+  return aims.length ? { recentAims: aims.slice(-MAX_RECENT_AIMS) } : {};
 }
 
 export function readWebV7Request(

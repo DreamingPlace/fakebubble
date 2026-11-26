@@ -273,6 +273,8 @@ test('built-in sets: 日常闲聊 and 重复检测 are 6 to 20 turns, there is n
       'v8 规则 51 · 情绪 大事 考试成绩',
       // NAMED EXCEPTION (Part 56): the fixed 「v8 规则 56」 script is listed last.
       'v8 规则 56',
+      // NAMED EXCEPTION (Part 58): the fixed 「v8 规则 58」 script follows.
+      'v8 规则 58',
     ],
   );
   // NAMED EXCEPTION (Part 37a-2): 开场 is 5 player follow-ups (the welcome line is the first, character, message); every other set still needs 6.
@@ -471,6 +473,8 @@ test('scripts: save, rename and delete are idempotent per request id; 6 to 20 tu
       'v8 规则 51 · 情绪 大事 考试成绩',
       // NAMED EXCEPTION (Part 56): the fixed 「v8 规则 56」 script is listed last.
       'v8 规则 56',
+      // NAMED EXCEPTION (Part 58): the fixed 「v8 规则 58」 script follows.
+      'v8 规则 58',
     ],
   );
   assert.deepEqual(
