@@ -37,6 +37,8 @@ test('24l the rail has a small heading and a count per group; an empty group is 
     role('d', 'offline'),
     role('n', 'draft', null),
   ]);
+  // Part 59 (named exception): the rail lists live characters by default; 「显示未上线」 shows the rest, so this test turns it on.
+  one(host, '.admin-pick-toggle').click();
   const heads = all(host, '.admin-pick-head').map((n) => n.textContent);
   assert.deepEqual(heads, ['当前阵容3', '未发布草稿1', '已下线1']);
   assert.deepEqual(ids(host, 'live'), ['a', 'b', 'c']);
@@ -64,6 +66,8 @@ test('24l Alt+↓ / Alt+↑ moves a row inside its group and reports the whole g
     },
   });
   picker.show([role('a', 'live'), role('b', 'live'), role('c', 'live'), role('d', 'offline'), role('e', 'offline')]);
+  // Part 59 (named exception): offline characters are shown only with 「显示未上线」.
+  one(host, '.admin-pick-toggle').click();
   const key = (id: string, k: string) =>
     one(host, `.admin-pick[data-character="${id}"]`).dispatch('keydown', { key: k, altKey: true } as never);
   key('a', 'ArrowDown');

@@ -10,6 +10,9 @@
  * whatever it is). Going to another page (`reset`) starts again at the top.
  */
 export function keepScroll(root: HTMLElement) {
+  // A page without a real DOM (a test's stand-in) has nothing to keep.
+  if (!root.ownerDocument || typeof MutationObserver === 'undefined' || typeof requestAnimationFrame === 'undefined')
+    return { reset() {}, stop() {} };
   const want = new Map<HTMLElement, number>();
   // The page itself is the main scroller of the console (the document, not a box inside it): its scroll events do not pass through
   // `root`, so it is watched on its own.

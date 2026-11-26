@@ -434,14 +434,16 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           item.kind === 'pair' && item.decision === 'rejected' ? h('span', { class: 'cc-chip', text: '不采纳' }) : null,
           item.kind === 'pair' && item.excluded ? h('span', { class: 'cc-chip', text: '不计入' }) : null,
           h('span', { class: 'cc-count', text: `${item.answerCount} 条` }),
-          // Part 59: the note stays in 新 until every item is handled; the chip says how far it is.
-          item.status !== 'processed' &&
-            (item.handledCount ?? item.adoptedCount) > 0 &&
-            (item.handledCount ?? item.adoptedCount) < (item.itemCount ?? item.answerCount)
-            ? h('span', {
-                class: 'cc-chip cc-chip-progress',
-                text: `已处理 ${item.handledCount ?? item.adoptedCount}/${item.itemCount ?? item.answerCount}`,
-              })
+          // Part 59: the note stays in 新 until every item is handled; the chip says how far it is. (A server before Part 59 has no
+          // item counts: the old 「已采用 x/n」.)
+          item.itemCount === undefined && item.adoptedCount > 0
+            ? h('span', { class: 'cc-chip', text: `已采用 ${item.adoptedCount}/${item.answerCount}` })
+            : null,
+          item.itemCount !== undefined &&
+            item.status !== 'processed' &&
+            (item.handledCount ?? 0) > 0 &&
+            (item.handledCount ?? 0) < item.itemCount
+            ? h('span', { class: 'cc-chip cc-chip-progress', text: `已处理 ${item.handledCount}/${item.itemCount}` })
             : null,
           h('span', { class: 'cc-spacer' }),
           item.starred
@@ -564,6 +566,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
    * reason) the note is read again, and only a note whose every item is handled leaves 新. (Before, the first 采纳 moved the whole
    * note, hiding the items nobody had handled.)
    */
+  /** A server before Part 59 sends no item counts: there a note is processed by its first adoption, as it always was. */
+  const legacy = (d: { itemCount?: number } | null | undefined) => !!d && d.itemCount === undefined;
   const resync = async (id: string) => {
     try {
       const fresh = await deps.api.detail(id);
@@ -1038,9 +1042,13 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         if (adoptedNow) {
           detail = {
             ...current,
+            ...(legacy(current) ? { status: 'processed' as const } : {}),
             answers: current.answers.map((e) => (e.ordinal === answer.ordinal ? { ...e, adoptedAt: stamp } : e)),
           };
-          patchItem(current.id, { adoptedCount: detail.answers.filter((a) => a.adoptedAt !== null).length });
+          patchItem(current.id, {
+            adoptedCount: detail.answers.filter((a) => a.adoptedAt !== null).length,
+            ...(legacy(current) ? { status: 'processed' as const } : {}),
+          });
           saved = { ordinal: answer.ordinal, revision: saved_.revision };
         }
         adoptError = '';
@@ -1048,7 +1056,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         renderDetail();
         if (adoptedNow) {
           // Part 59: only the last unhandled item moves the note to 已处理 (the server says).
-          void resync(current.id);
+          if (legacy(current)) void leaveList([current.id]);
+          else void resync(current.id);
           changed();
         }
         deps.status(
@@ -1335,6 +1344,19 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
             relationCache.set(current.id, { ...(relationCache.get(current.id) ?? found), ...patch } as RelationDetail);
             // The reason and the story are separate items: the server says where the note stands now (Part 59).
             const { reasonMark: _mark, ...own } = patch;
+            if (legacy(detail)) {
+              const settled =
+                patch.decision === 'adopted' ? 'processed' : patch.decision === 'rejected' ? 'archived' : null;
+              patchItem(current.id, { ...own, ...(settled ? { status: settled } : {}) });
+              if (settled && detail?.id === current.id) detail = { ...detail, status: settled };
+              renderList();
+              if (settled) {
+                renderDetail();
+                void leaveList([current.id]);
+              }
+              changed();
+              return;
+            }
             patchItem(current.id, own);
             renderList();
             void resync(current.id);
@@ -1394,11 +1416,16 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       ...detail,
       answers: detail.answers.map((entry) => (entry.ordinal === ordinal ? { ...entry, adoptedAt: stamp } : entry)),
     };
-    patchItem(current.id, { adoptedCount: detail.answers.filter((entry) => entry.adoptedAt !== null).length });
+    patchItem(current.id, {
+      adoptedCount: detail.answers.filter((entry) => entry.adoptedAt !== null).length,
+      ...(legacy(detail) ? { status: 'processed' as const } : {}),
+    });
+    if (legacy(detail)) detail = { ...detail, status: 'processed' };
     renderList();
     renderDetail();
-    // The server decides whether that was the last unhandled item.
-    void resync(current.id);
+    // The server decides whether that was the last unhandled item (a server without per-item counts: the first adoption, as before).
+    if (legacy(detail)) void leaveList([current.id]);
+    else void resync(current.id);
     deps.onChanged?.();
   }
 
@@ -1449,12 +1476,14 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       const item = items.find((entry) => entry.id === id);
       relationCache.delete(id);
       patchItem(id, {
+        ...(item?.itemCount === undefined ? { status: 'processed' as const } : {}),
         adoptedCount: Math.max(item?.adoptedCount ?? 0, okCount),
         ...(item?.kind === 'pair' ? { decision: 'adopted' as const } : {}),
       });
       if (detail?.id === id)
         detail = {
           ...detail,
+          ...(legacy(detail) ? { status: 'processed' as const } : {}),
           answers: detail.answers.map((answer) =>
             mine.some((result) => result.ok && result.ordinal === answer.ordinal) && answer.adoptedAt === null
               ? { ...answer, adoptedAt: stamp }
@@ -1463,9 +1492,10 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         };
     }
     // Part 59: per item. The server says which notes are now fully handled (those leave 新); the others stay with their count.
-    for (const id of settled) await resync(id);
     const failed = results.filter((result) => !result.ok);
-    return { results, settled: [], failed };
+    const legacyIds = [...settled].filter((id) => legacy(items.find((entry) => entry.id === id)));
+    for (const id of settled) if (!legacyIds.includes(id)) await resync(id);
+    return { results, settled: legacyIds, failed };
   }
   const finishAdopt = (outcome: Awaited<ReturnType<typeof adoptAnswers>>, extra: string[] = []) => {
     const done = outcome.results.filter((result) => result.ok && result.duplicate !== true).length;

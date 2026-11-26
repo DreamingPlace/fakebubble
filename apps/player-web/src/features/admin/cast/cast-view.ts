@@ -184,11 +184,11 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   const versionsButton = h('button', {
     class: 'cs-versions-btn cs-quiet',
     text: '版本',
-    attrs: { type: 'button', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'data-versions-button': '' },
+    attrs: { type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'data-versions-button': '' },
   });
   const versionsPop = h(
     'div',
-    { class: 'cs-versions-pop', hidden: true, attrs: { role: 'dialog', 'aria-label': '版本' } },
+    { class: 'cs-versions-pop', hidden: true, attrs: { role: 'group', 'aria-label': '版本' } },
     frame.versions,
   );
   const versionsWrap = h('span', { class: 'cs-versions-wrap' }, versionsButton, versionsPop);

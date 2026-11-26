@@ -695,7 +695,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     bindId = null;
     resetId = null;
     // Part 59: this is the verification / sign-in popup the connection line opened: it did its job, the page that asked carries on.
-    if (window.location.hash === '#/reauth' && window.opener) {
+    if (window.location?.hash === '#/reauth' && window.opener) {
       window.close();
       if (window.closed) return;
     }

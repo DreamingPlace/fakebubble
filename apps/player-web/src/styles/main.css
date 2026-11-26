@@ -18252,6 +18252,98 @@ button:not(
   font-size: 12px;
 }
 
+/* ---- Part 59: kept edits, the connection line ---- */
+/* 「恢复未保存的修改」: the same amber bar as the conflict bar; it is part of the page's flow only where the editor puts it. */
+.wb-restore {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid #d9a441;
+  border-radius: 8px;
+  background: #fdf6e6;
+  font-size: 13px;
+}
+.wb-restore span {
+  flex: 1 1 auto;
+}
+/* The connection line floats over the content (it never pushes the page down, so the scroll position is never moved by it). */
+.admin-conn {
+  position: fixed;
+  z-index: 60;
+  bottom: 84px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 10px 14px;
+  border: 1px solid #d9a441;
+  border-radius: 8px;
+  background: #fdf6e6;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  font-size: 13px;
+}
+.admin-conn[hidden] {
+  display: none;
+}
+.admin-conn p {
+  margin: 0;
+}
+
+/* ---- Part 59: 显示未上线 (角色工作台 rail, 共创收件箱, 关系与故事) ---- */
+.admin-pick-toggle {
+  display: block;
+  width: 100%;
+  margin: 8px 0 6px;
+  padding: 4px 6px;
+  border: 1px dashed var(--ad-border, #d7d3c9);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: normal;
+  cursor: pointer;
+}
+.admin-pick-toggle[aria-pressed="true"] {
+  border-style: solid;
+  background: var(--ad-warn-soft, #fdf3dc);
+}
+.admin-pick-toggle .full {
+  display: none;
+}
+.wb-roster:hover .admin-pick-toggle .short,
+.wb-roster:focus-within .admin-pick-toggle .short {
+  display: none;
+}
+.wb-roster:hover .admin-pick-toggle .full,
+.wb-roster:focus-within .admin-pick-toggle .full {
+  display: inline;
+}
+
+/* ---- Part 59: the one 「版本」 control of 关系与故事 (a popover over the page, never a bar above it) ---- */
+.account-admin-page.admin-shell .cs-versions-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.account-admin-page.admin-shell .cs-versions-pop {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(640px, calc(100vw - 80px));
+  max-height: 70vh;
+  overflow: auto;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.16);
+  border-radius: var(--ad-card-radius);
+}
+.account-admin-page.admin-shell .cs-versions-pop[hidden] {
+  display: none;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;
@@ -23197,101 +23289,4 @@ body,
   .share-scrim {
     animation: none;
   }
-}
-
-/* ---- Part 59: kept edits, the connection line ---- */
-/* 「恢复未保存的修改」: the same amber bar as the conflict bar; it is part of the page's flow only where the editor puts it. */
-.wb-restore {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 12px;
-  padding: 10px 14px;
-  border: 1px solid #d9a441;
-  border-radius: 8px;
-  background: #fdf6e6;
-  font-size: 13px;
-}
-.wb-restore span {
-  flex: 1 1 auto;
-}
-/* The connection line floats over the content (it never pushes the page down, so the scroll position is never moved by it). */
-.admin-conn {
-  position: fixed;
-  z-index: 60;
-  bottom: 84px;
-  right: 24px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  max-width: min(560px, calc(100vw - 48px));
-  padding: 10px 14px;
-  border: 1px solid #d9a441;
-  border-radius: 8px;
-  background: #fdf6e6;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
-  font-size: 13px;
-}
-.admin-conn[hidden] {
-  display: none;
-}
-.admin-conn p {
-  margin: 0;
-}
-:root[data-theme="dark"] .wb-restore,
-:root[data-theme="dark"] .admin-conn {
-  background: #3a2f17;
-  border-color: #8a6a22;
-}
-
-/* ---- Part 59: 显示未上线 (角色工作台 rail, 共创收件箱, 关系与故事) ---- */
-.admin-pick-toggle {
-  display: block;
-  width: 100%;
-  margin: 8px 0 6px;
-  padding: 4px 6px;
-  border: 1px dashed var(--ad-border, #d7d3c9);
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  font-size: 11px;
-  line-height: 1.3;
-  white-space: normal;
-  cursor: pointer;
-}
-.admin-pick-toggle[aria-pressed="true"] {
-  border-style: solid;
-  background: var(--ad-warn-soft, #fdf3dc);
-}
-.admin-pick-toggle .full {
-  display: none;
-}
-.wb-roster:hover .admin-pick-toggle .short,
-.wb-roster:focus-within .admin-pick-toggle .short {
-  display: none;
-}
-.wb-roster:hover .admin-pick-toggle .full,
-.wb-roster:focus-within .admin-pick-toggle .full {
-  display: inline;
-}
-
-/* ---- Part 59: the one 「版本」 control of 关系与故事 (a popover over the page, never a bar above it) ---- */
-.account-admin-page.admin-shell .cs-versions-wrap {
-  position: relative;
-  display: inline-flex;
-}
-.account-admin-page.admin-shell .cs-versions-pop {
-  position: absolute;
-  z-index: 50;
-  top: calc(100% + 8px);
-  right: 0;
-  width: min(640px, calc(100vw - 80px));
-  max-height: 70vh;
-  overflow: auto;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.16);
-  border-radius: var(--ad-card-radius);
-}
-.account-admin-page.admin-shell .cs-versions-pop[hidden] {
-  display: none;
 }
