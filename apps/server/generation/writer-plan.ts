@@ -24,9 +24,15 @@ export interface WriterPlan {
   aims: Aim[];
 }
 
-/** 【读到】 / [目的] / 【回复】：  with an optional colon, and markdown bold stars around it. */
-const MARKER = /\**[【[［〖]\s*(读到|目的|回复)\s*[】\]］〗]\**\s*[：:]?/gu;
-const hasMarker = (text: string) => new RegExp(MARKER.source, 'u').test(text);
+/**
+ * A marker is either bracketed (【读到】 / [目的] / 【回复】, optional colon, optional markdown bold) anywhere, or a BARE label at the
+ * START of a line (optional markdown: #, -, *, >, bold; then 读到 / 目的 / 回复 and a full- or half-width colon). A normal sentence
+ * that merely contains these words is untouched. Group 1 names a bracketed marker, group 2 a bare one.
+ */
+const MARKER =
+  /\**[【[［〖]\s*(读到|目的|回复)\s*[】\]］〗]\**\s*[：:]?|^[ \t]*(?:(?:#{1,6}|[-*+>])[ \t]*)*\**[ \t]*(读到|目的|回复)[ \t]*\**[ \t]*[：:][ \t]*\**/gmu;
+const nameOf = (mark: RegExpMatchArray) => mark[1] ?? mark[2];
+const hasMarker = (text: string) => new RegExp(MARKER.source, 'mu').test(text);
 const dropMarkers = (text: string) => text.replace(MARKER, '');
 const clip = (text: string, max: number) => [...text.trim().replace(/\s+/gu, ' ')].slice(0, max).join('');
 
@@ -51,7 +57,7 @@ export function aimsOf(line: string): Aim[] {
 function planOf(head: string): WriterPlan | null {
   const marks = [...head.matchAll(MARKER)];
   const section = (name: string) => {
-    const at = marks.findIndex((mark) => mark[1] === name);
+    const at = marks.findIndex((mark) => nameOf(mark) === name);
     if (at < 0) return null;
     const from = marks[at]!.index + marks[at]![0].length;
     const to = marks[at + 1]?.index ?? head.length;
@@ -73,10 +79,13 @@ function planOf(head: string): WriterPlan | null {
  */
 export function splitWriterOutput(raw: string): { reply: string; plan: WriterPlan | null } {
   if (!hasMarker(raw)) return { reply: raw, plan: null };
-  const replyMark = [...raw.matchAll(MARKER)].find((mark) => mark[1] === PLAN_REPLY);
+  const replyMark = [...raw.matchAll(MARKER)].find((mark) => nameOf(mark) === PLAN_REPLY);
   if (replyMark) {
     const head = raw.slice(0, replyMark.index);
-    return { reply: dropMarkers(raw.slice(replyMark.index + replyMark[0].length)), plan: planOf(head) };
+    return {
+      reply: dropMarkers(raw.slice(replyMark.index + replyMark[0].length)).replace(/^\s+/u, ''),
+      plan: planOf(head),
+    };
   }
   const lines = raw.split(/\r\n|\r|\n/u);
   return {

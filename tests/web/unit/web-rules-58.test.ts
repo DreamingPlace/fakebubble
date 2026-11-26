@@ -109,6 +109,43 @@ test('58 the plan is stripped: format, malformed output, stray markers, voice', 
   for (const aim of AIMS) assert.ok(PROMPTS_V8.writer.includes(aim), aim);
 });
 
+test('58 bare labels at the start of a line are markers too (plain, bold, mixed); a mid-sentence 目的 is untouched; voice as well', () => {
+  const plain = splitWriterOutput(
+    '读到：对方在关心我\n目的：被关心，回一句暖的\n回复：谢谢，好久没人这么关心我了\n有你在就不冷',
+  );
+  assert.equal(plain.reply, '谢谢，好久没人这么关心我了\n有你在就不冷');
+  assert.deepEqual(plain.plan?.aims, ['被关心']);
+  assert.equal(plain.plan?.read, '对方在关心我');
+  const bold = splitWriterOutput('**读到：** 想被疼\n- **目的**：心动（回撩）：笑\n## 回复：\n好呀');
+  assert.equal(bold.reply, '好呀');
+  assert.deepEqual(bold.plan?.aims, ['心动']);
+  const mixed = splitWriterOutput('【读到】想被疼\n目的: 惊喜：说起新伞\n【回复】\n下雨了，我刚买了把伞');
+  assert.equal(mixed.reply, '下雨了，我刚买了把伞');
+  assert.deepEqual(mixed.plan?.aims, ['惊喜']);
+  // malformed with bare labels: marker lines go, the rest stays
+  const bare = splitWriterOutput('读到：难过\n目的：被认真对待：陪着\n我在这儿');
+  assert.equal(bare.reply, '我在这儿');
+  // a stray bare 回复 label inside the reply is removed
+  assert.equal(splitWriterOutput('读到：x\n目的：被接住\n回复：好呀\n回复：嗯').reply, '好呀\n嗯');
+  // a normal sentence that merely contains the words is intact, and no plan
+  for (const line of ['我的目的是想你开心', '今天读到一句话，回复：不用了也行', '这个目的地不错\n你说的读到了']) {
+    const out = splitWriterOutput(line);
+    assert.equal(out.reply, line);
+    assert.equal(out.plan, null);
+  }
+  for (const delivery of ['text', 'voice'] as const) {
+    const draft = parseDraft(
+      { text: '读到：对方在关心我\n目的：被关心，回一句暖的\n回复：谢谢，好久没人这么关心我了\n我的目的是你开心' },
+      v8({ deliveryMode: delivery }),
+    ) as WriterDraft;
+    assert.deepEqual(
+      draft.bubbles.map((b) => b.text),
+      ['谢谢，好久没人这么关心我了', '我的目的是你开心'],
+    );
+    assert.ok(draft.plan);
+  }
+});
+
 test('58 parseDraft never publishes a marker or plan text (text and voice), and keeps the plan beside the reply', () => {
   for (const delivery of ['text', 'voice'] as const) {
     const request = v8({ deliveryMode: delivery });
