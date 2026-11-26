@@ -47,6 +47,8 @@ export const feedbackCopy = {
   empty: '这段时间还没有踩。',
   playerSays: '玩家',
   replySays: '角色',
+  read: '读到',
+  aim: '目的',
 };
 
 export function feedbackView(
@@ -303,6 +305,12 @@ export function feedbackView(
         h('p', { class: 'fb-line fb-player', text: line, attrs: { title: feedbackCopy.playerSays } }),
       ),
       h('p', { class: 'fb-line fb-reply', text: item.replyText, attrs: { title: feedbackCopy.replySays } }),
+      ...(item.plan
+        ? [
+            h('p', { class: 'fb-line fb-plan' }, h('b', { text: `${feedbackCopy.read}　` }), item.plan.read),
+            h('p', { class: 'fb-line fb-plan' }, h('b', { text: `${feedbackCopy.aim}　` }), item.plan.aim),
+          ]
+        : []),
     );
     return card;
   };

@@ -20,7 +20,8 @@ import { webFeedbackInstalled } from './web-feedback-schema.ts';
  * replies, newest first. Each item is in the SAME pseudonymous form as the 测试对话 transcripts: the review page's anonymous code, the
  * player's nicknames replaced, every text scrubbed of an email / uuid / long hex; never an id, email, nickname or IP hash. The owner can
  * mark an item 「已听」 and play her voice. Owner only (it shows transcripts); every action checks the session, CSRF and Origin first.
- * Her plan (读到 / 目的) is a Part 58 field: it is not on this branch, so an item carries none.
+ * Her hidden plan (Part 58: 读到 / 目的) is read from the stored candidate of the reply, the way 测试对话 reads it (nicknames replaced,
+ * scrubbed, cut at 200 characters); an item of a 旧 reply, or one with no plan, carries none.
  */
 type Auth = { cookie: unknown; csrf: unknown; origin: unknown };
 export const FEEDBACK_RANGES = [7, 30, 90] as const;
@@ -50,6 +51,8 @@ export interface FeedbackItem {
   replyText: string;
   hasVoice: boolean;
   heard: boolean;
+  /** Part 58: what she read behind the player's words and what she aimed for (null = none). */
+  plan: { read: string; aim: string } | null;
 }
 export interface FeedbackCounts {
   total: { up: number; down: number; downVoice: number; downContent: number };
@@ -232,6 +235,18 @@ export class WebFeedbackAdmin {
         'SELECT media_id FROM web_publication_items WHERE message_id=?',
         row.message_id,
       );
+      const planned = this.store.get(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_provider_candidates'",
+      )
+        ? this.store.get<{ read: string | null; aim: string | null }>(
+            "SELECT json_extract(candidate_json,'$.plan.read') read,json_extract(candidate_json,'$.plan.aim') aim FROM web_provider_candidates WHERE operation_id=?",
+            row.operation_id,
+          )
+        : undefined;
+      const plan =
+        typeof planned?.read === 'string' && typeof planned.aim === 'string'
+          ? { read: clean(planned.read.slice(0, 200)), aim: clean(planned.aim.slice(0, 200)) }
+          : null;
       return {
         itemId: row.id,
         time: utc8Time(row.updated_at),
@@ -248,6 +263,7 @@ export class WebFeedbackAdmin {
         replyText: clean(reply?.body ?? ''),
         hasVoice: !!media?.media_id,
         heard: row.heard_at !== null,
+        plan,
       };
     });
     return { items, hasMore: rows.length > limit };
@@ -343,6 +359,8 @@ export class WebFeedbackAdmin {
           '模型',
           '玩家的话',
           '回复文字',
+          '读到',
+          '目的',
           '有语音',
           '已听',
         ],
@@ -356,6 +374,8 @@ export class WebFeedbackAdmin {
           item.model,
           item.playerLines.join('\n'),
           item.replyText,
+          item.plan?.read ?? '',
+          item.plan?.aim ?? '',
           item.hasVoice ? '是' : '否',
           item.heard ? '是' : '否',
         ]),

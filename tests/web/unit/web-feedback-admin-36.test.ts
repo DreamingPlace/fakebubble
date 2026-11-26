@@ -595,3 +595,62 @@ test("the routes: counts, list, heard, audio; any other path is not this router'
   );
   await assert.rejects(() => routeWebFeedbackAdmin(null, req('counts', { range: 7 })), /NOT_FOUND/);
 });
+
+test('Part 58: an item shows her hidden plan (读到 / 目的) read from the stored candidate, nicknames replaced; none for a 旧 reply', (t) => {
+  const f = fixture(t);
+  f.rated({
+    name: 'a',
+    character: 'guagua',
+    rating: 'down',
+    target: 'content',
+    writer: 'v8',
+    model: 'deepseek',
+    at: T0 - 1,
+    lines: ['阿泡今天好累'],
+    reply: '先歇一歇',
+    voice: false,
+  });
+  f.rated({
+    name: 'b',
+    character: 'jojo',
+    rating: 'down',
+    target: 'content',
+    writer: 'v7',
+    model: 'gemini',
+    at: T0 - 2,
+    lines: ['哈喽'],
+    reply: '哈喽',
+    voice: false,
+  });
+  const candidate = (operation: string, plan: unknown) => {
+    f.store.run(
+      `INSERT INTO web_provider_candidates(operation_id,request_digest,candidate_json,candidate_digest,voice_version,draft_output_digest,review_output_digest,reviewed_at)
+      VALUES (?,'d',?,'d','v','d','d',?)`,
+      operation,
+      JSON.stringify(plan === null ? { bubbles: [] } : { bubbles: [], plan }),
+      T0,
+    );
+  };
+  candidate('op-1', { read: '阿泡其实是想被安慰 someone@example.com', aim: '让对方放松下来，轻轻接住' });
+  const { items } = f.feedback.list(f.ownerAuth, { range: 7 });
+  const planned = items.find((i) => i.writer === 'v8')!;
+  assert.deepEqual(planned.plan, { read: '〔昵称〕其实是想被安慰 〔邮箱〕', aim: '让对方放松下来，轻轻接住' });
+  assert.equal(items.find((i) => i.writer === 'v7')!.plan, null, 'a 旧 reply has no plan');
+  const exporter = new WebExportAdmin(f.store as never, f.clock, f.accounts, {
+    chatReview: true,
+    feedback: f.feedback,
+  });
+  const file = exporter.export(f.ownerAuth, {
+    kind: 'feedback',
+    format: 'csv',
+    part: 1,
+    sheet: 0,
+    filters: { range: 30 },
+  });
+  const text = Buffer.from((file as { content: string }).content, 'utf8').toString('utf8');
+  assert.ok(
+    text.includes('读到') && text.includes('目的') && text.includes('让对方放松下来'),
+    'the export carries the plan columns',
+  );
+  assert.ok(!text.includes('someone@example.com'));
+});

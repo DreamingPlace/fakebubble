@@ -26,6 +26,7 @@ export type FeedbackItem = {
   replyText: string;
   hasVoice: boolean;
   heard: boolean;
+  plan: { read: string; aim: string } | null;
 };
 const invalid = () => new Error('ADMIN_FEEDBACK_PROTOCOL_INVALID');
 const object = (v: unknown): Record<string, unknown> => {
@@ -97,6 +98,11 @@ export class FeedbackAdminClient {
           replyText: string(o.replyText),
           hasVoice: o.hasVoice === true,
           heard: o.heard === true,
+          plan: (() => {
+            if (o.plan === null || o.plan === undefined) return null;
+            const plan = object(o.plan);
+            return { read: string(plan.read), aim: string(plan.aim) };
+          })(),
         };
       }),
       hasMore: r.hasMore === true,
