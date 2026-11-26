@@ -15,6 +15,7 @@ import { installMemeStore } from '../memes/web-meme-store.ts';
 import { installCastDocs } from '../cast/cast-doc-store.ts';
 import { WebTurns } from '../turns/web-turns.ts';
 import { WebFeedback } from '../turns/web-feedback.ts';
+import { WebFeedbackAdmin } from '../turns/web-feedback-admin.ts';
 import { installWebShare } from '../share/web-share-schema.ts';
 import { WebShare } from '../share/web-share.ts';
 import { broadcastHistoryRows } from '../broadcast/web-broadcast-read.ts';
@@ -219,6 +220,8 @@ export class WebProviderApplication {
   /** Part 36: 连发 (the bubbles of a turn; the only writer of the turn rows) and 👍 / 👎 (the only writer of the feedback rows). */
   readonly turns: WebTurns;
   readonly feedback: WebFeedback;
+  /** Part 36: 语音反馈, the owner's page. */
+  readonly feedbackAdmin: WebFeedbackAdmin;
   readonly avatars: WebAvatars;
   /** GUEST_GRACE_ENABLED: 0 when off. */
   readonly graceMs: number;
@@ -382,12 +385,16 @@ export class WebProviderApplication {
     );
     this.cocreation.enableCharacterDrafts(this.characterAdmin);
     this.billing = new WebBilling(store, clock, this.identity);
+    this.feedbackAdmin = new WebFeedbackAdmin(store, clock, this.inviteAdmin, (scope, mediaId) =>
+      this.publisher.readPublishedAudioAsync(scope, mediaId),
+    );
     // Part 57: every page's 导出. It reads through the pages' own readers and keeps nothing.
     this.exporter = new WebExportAdmin(store, clock, this.inviteAdmin, {
       chatReview: chatReviewOn,
       characters: this.characterAdmin as never,
       broadcast: this.broadcast as never,
       shareStats: () => this.shares.stats(),
+      feedback: this.feedbackAdmin,
       cocreation: {
         exportSheets: (auth, filters) =>
           cocreationSheets(

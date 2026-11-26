@@ -26,6 +26,7 @@ import { serveLocalStatic } from '../platform/web-local-static.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import { routeWebAdminExport } from '../export/web-export-routes.ts';
+import { routeWebFeedbackAdmin } from '../turns/web-feedback-routes.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
@@ -603,6 +604,7 @@ export class WebProviderServer {
             path.startsWith(`${API}/account/`) ? this.application.playerAccounts : null,
             input,
           )) ??
+          (await routeWebFeedbackAdmin(this.application.feedbackAdmin, input)) ??
           routeWebAdminExport(this.application.exporter, input) ??
           (await routeWebAccountAdmin(
             this.inviteAdmin,

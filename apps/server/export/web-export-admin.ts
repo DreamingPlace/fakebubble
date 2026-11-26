@@ -45,6 +45,8 @@ export const EXPORT_KINDS = [
   'broadcast',
   'shares',
   'rehearsal',
+  // Part 36: 语音反馈 (the 👎 replies; owner only, like the transcripts they quote).
+  'feedback',
 ] as const;
 export type ExportKind = (typeof EXPORT_KINDS)[number];
 /** More rows than this in one export asks for narrower filters (a part holds 50,000). */
@@ -64,6 +66,8 @@ export interface ExportDeps {
   broadcast?: { list(auth: Auth): never } | null;
   shareStats?: (() => { created: number; opened: number; expired: number; active: number }) | null;
   cocreation?: CocreationExportSource | null;
+  /** Part 36: the 语音反馈 page's own table (owner only). */
+  feedback?: { exportSheets(filters: Record<string, unknown>): Sheet[] } | null;
 }
 
 /** What may never reach a file even inside free text a player typed: an email address, a UUID, a long hex digest. */
@@ -117,6 +121,8 @@ export class WebExportAdmin {
       case 'calls':
       case 'failures':
         return owner;
+      case 'feedback':
+        return owner && this.deps.feedback != null;
       case 'stats':
         return owner || hasStatsPermission(grants as never);
       case 'memes':
@@ -167,7 +173,7 @@ export class WebExportAdmin {
     const owner = actor.role === 'owner';
     // The permission first, then the filters: a caller who may not export never learns what a filter would have found.
     if (kind === 'conversations') ensure(this.deps.chatReview && chatReviewTablesExist(this.store), 'NOT_FOUND');
-    if (kind === 'conversations' || kind === 'calls' || kind === 'failures') ensure(owner, 'ADMIN_OWNER_REQUIRED');
+    if (kind === 'conversations' || kind === 'calls' || kind === 'failures' || kind === 'feedback') ensure(owner, 'ADMIN_OWNER_REQUIRED');
     // Broadcast, rehearsal and co-creation check the permission of their own page when they read.
     else if (kind !== 'broadcast' && kind !== 'rehearsal' && kind !== 'cocreation')
       ensure(this.mayExport(kind, owner, grants), 'ADMIN_PERMISSION_REQUIRED');
@@ -212,6 +218,11 @@ export class WebExportAdmin {
           // Players are counted, never listed: even a pseudonymous code stays out of the log.
           summary: pairs({ ...parsed }),
         };
+      }
+      case 'feedback': {
+        keys(['range', 'characterId', 'writer', 'model', 'unheardOnly']);
+        ensure(this.deps.feedback, 'NOT_FOUND');
+        return { sheets: this.deps.feedback.exportSheets(filters), base: 'feedback', summary: pairs({ ...filters }) };
       }
       case 'calls': {
         keys(['from', 'to', 'provider', 'state']);

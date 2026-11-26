@@ -15,6 +15,7 @@ import { webProviderHTTPError } from '../platform/web-provider-http-error.ts';
 import { logRefusal } from '../platform/web-refusal-status.ts';
 import { routeWebInvite } from '../invites/web-invite-routes.ts';
 import { routeWebAdminExport } from '../export/web-export-routes.ts';
+import { routeWebFeedbackAdmin } from '../turns/web-feedback-routes.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
@@ -316,6 +317,7 @@ export class WebProviderHTTP {
       };
       const result =
         (await routeWebPlayerAccounts(path.startsWith(`${API}/account/`) ? app.playerAccounts : null, input)) ??
+        (await routeWebFeedbackAdmin(app.feedbackAdmin, input)) ??
         routeWebAdminExport(app.exporter, input) ??
         (await routeWebAccountAdmin(
           app.inviteAdmin,
