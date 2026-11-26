@@ -23,7 +23,7 @@ export class InviteAdminApi {
   }
   protected async request(path: string, body?: Record<string, unknown>) {
     const wasWrite = !!body && path !== '/session';
-    const interrupted = (reason: 'challenge' | 'network' | 'login', status = 0) => {
+    const interrupted = (reason: 'access' | 'challenge' | 'network' | 'login', status = 0) => {
       // Only a console that had a session can be "interrupted": the first sign-in's own failures are ordinary errors.
       if (this.signedIn) adminConnection.interrupt(reason, wasWrite);
       return new AdminInterruptedError(reason, status);
@@ -57,14 +57,15 @@ export class InviteAdminApi {
     } finally {
       if (timer) clearTimeout(timer);
     }
-    if (response.type === 'opaqueredirect') throw interrupted('challenge');
+    if (response.type === 'opaqueredirect' || /cloudflareaccess\.com/.test(response.url ?? ''))
+      throw interrupted('access');
     let value: unknown;
     try {
       value = await response.json();
     } catch {
       // Not the API's JSON (an HTML challenge page, a gateway error page): the answer did not come from the console's own API.
       if (response.status === 401) this.csrf = null;
-      throw interrupted('challenge', response.status);
+      throw interrupted(/cloudflareaccess\.com/.test(response.url ?? '') ? 'access' : 'challenge', response.status);
     }
     const error = value && typeof value === 'object' ? (value as { error?: { code?: unknown } }).error?.code : null;
     if (!response.ok) {

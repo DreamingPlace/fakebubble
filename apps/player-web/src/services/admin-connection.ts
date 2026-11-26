@@ -8,7 +8,7 @@ import { InviteLocalApiError } from './invite-local-api.ts';
  *
  * Module state only (no storage, no tokens): `state`, the listeners, and the retry callbacks the editors registered.
  */
-export type InterruptReason = 'challenge' | 'network' | 'login';
+export type InterruptReason = 'access' | 'challenge' | 'network' | 'login';
 
 export class AdminInterruptedError extends InviteLocalApiError {
   readonly interrupted = true as const;
@@ -23,6 +23,8 @@ export const isInterrupted = (error: unknown): error is AdminInterruptedError =>
   error instanceof AdminInterruptedError || (error as { interrupted?: unknown } | null)?.interrupted === true;
 
 /** The line the owner reads while edits wait (ADMIN_COPY: 保存 / 验证 / 重新登录). */
+/** Cloudflare Access (Zero Trust) session expired: every admin POST answers a 302 to *.cloudflareaccess.com (an opaque redirect). */
+export const ACCESS_EXPIRED_LINE = '登录验证过期了，修改都还在，验证后会自动保存';
 export const INTERRUPTED_LINE = '保存没完成，修改都还在，验证或重新登录后会自动再存一次';
 export const INTERRUPTED_LINE_READ = '连接中断，修改都还在，验证或重新登录后会自动继续';
 
@@ -82,5 +84,6 @@ export const adminConnection = new Connection();
 
 /** Where the verification / sign-in popup opens: the console itself, so Cloudflare's challenge and the console's own login both happen there. */
 export function reauthUrl(location: { origin: string; pathname: string }) {
-  return `${location.origin}${location.pathname}#/reauth`;
+  // A top-level navigation to the console lets Access renew its cookie (and shows its login when needed).
+  return `${location.origin}/?mode=provider-admin`;
 }

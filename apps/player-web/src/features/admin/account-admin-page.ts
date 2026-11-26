@@ -65,6 +65,7 @@ import {
 import { InviteLocalApiError } from '../../services/invite-local-api.ts';
 import {
   adminConnection,
+  ACCESS_EXPIRED_LINE,
   INTERRUPTED_LINE,
   INTERRUPTED_LINE_READ,
   isInterrupted,
@@ -238,7 +239,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     </nav>
     <div class="admin-content" tabindex="-1">
     <section class="admin-conn" id="admin-conn" role="alert" hidden><p id="admin-conn-line"></p>
-      <button type="button" id="admin-conn-open" class="admin-primary">验证 / 重新登录</button></section>
+      <button type="button" id="admin-conn-open" class="admin-primary">验证 / 重新登录</button>
+      <a id="admin-conn-link" href="/?mode=provider-admin" target="_blank" rel="noopener" hidden>重新验证</a></section>
     <section class="admin-access-notice" id="admin-access" role="alert" hidden><p>需要先通过 Cloudflare Access 验证身份。</p>
       <button type="button" id="admin-access-enter">前往验证</button></section>
     <section class="invite-admin-result" id="admin-secret" hidden><span id="admin-secret-label"></span><strong class="invite-admin-code" id="admin-secret-value"></strong>
@@ -316,7 +318,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     // Part 59: an interruption of a console that is signed in is not a failure: the connection line says it (edits are kept).
     if (isInterrupted(error) && session) {
       accessNotice.hidden = true;
-      statusLine.textContent = adminConnection.writePending ? INTERRUPTED_LINE : INTERRUPTED_LINE_READ;
+      statusLine.textContent =
+        adminConnection.reason === 'access'
+          ? ACCESS_EXPIRED_LINE
+          : adminConnection.writePending
+            ? INTERRUPTED_LINE
+            : INTERRUPTED_LINE_READ;
       return;
     }
     const needsAccess = error instanceof InviteLocalApiError && error.code === 'ACCESS_REQUIRED';
@@ -1395,23 +1402,42 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     if (probe) clearInterval(probe);
     probe = null;
   };
-  const paintConnection = (state: 'ok' | 'interrupted') => {
+  let reauthPopup: Window | null = null;
+  const openReauth = () => {
+    const url = reauthUrl(window.location);
+    reauthPopup = window.open(url, 'fb-admin-reauth', 'popup=yes,width=560,height=720');
+    // Blocked: the 重新验证 link does the same in a new tab.
+    q<HTMLElement>('#admin-conn-link').hidden = !!reauthPopup;
+  };
+  const paintConnection = (state: 'ok' | 'interrupted', reason?: string | null) => {
     connBox.hidden = state === 'ok' || !session;
-    connLine.textContent = adminConnection.writePending ? INTERRUPTED_LINE : INTERRUPTED_LINE_READ;
+    connLine.textContent =
+      adminConnection.reason === 'access' || reason === 'access'
+        ? ACCESS_EXPIRED_LINE
+        : adminConnection.writePending
+          ? INTERRUPTED_LINE
+          : INTERRUPTED_LINE_READ;
+    if (state === 'interrupted' && (reason ?? adminConnection.reason) === 'access' && !reauthPopup?.closed)
+      openReauth();
     if (state === 'ok') {
+      // The API answers JSON again: the popup did its job.
+      try {
+        reauthPopup?.close();
+      } catch {
+        /* already gone */
+      }
+      reauthPopup = null;
+      q<HTMLElement>('#admin-conn-link').hidden = true;
       stopProbe();
-      if (!disposed && statusLine.textContent === INTERRUPTED_LINE) statusLine.textContent = '';
+      if (!disposed && [INTERRUPTED_LINE, ACCESS_EXPIRED_LINE].includes(statusLine.textContent))
+        statusLine.textContent = '';
     } else if (!probe) {
       probe = setInterval(refresh, 4000);
       (probe as { unref?: () => void }).unref?.();
     }
   };
   cleanups.push(adminConnection.on(paintConnection), stopProbe);
-  listen(q('#admin-conn-open'), 'click', () => {
-    const url = reauthUrl(window.location);
-    const popup = window.open(url, 'fb-admin-reauth', 'popup=yes,width=560,height=720');
-    if (!popup) window.open(url, '_blank');
-  });
+  listen(q('#admin-conn-open'), 'click', openReauth);
   q<HTMLElement>('#admin-env').textContent = environmentLabel(window.location?.hostname);
   render();
   void port

@@ -183,3 +183,46 @@ test('59: restoring onto a draft that moved on lays over only what the owner cha
   // nothing changed by the owner: the draft as it is now
   assert.deepEqual(overlayEdits(current, base, structuredClone(base)), current);
 });
+
+test('59: Cloudflare Access expiry (admin routes answer an opaque redirect until renewed): edits survive, the save goes through after renewal', async () => {
+  let renewed = false;
+  const saves: string[] = [];
+  const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input).replace('/api/web/provider/admin', '');
+    if (!renewed && path !== '/session-first')
+      return { type: 'opaqueredirect', status: 0, ok: false, url: '' } as unknown as Response;
+    if (path === '/session') return json(200, session);
+    saves.push(`${path}:${String(init?.body)}`);
+    return json(200, { saved: true });
+  }) as typeof fetch;
+  const map = storage();
+  adminConnection.reset();
+  const api = new AccountAdminApi(fetcher);
+  renewed = true;
+  await api.restore();
+  renewed = false;
+  const keeper = editKeeper<{ text: string }>({ page: 'characters', character: 'jojo', revision: 2 });
+  keeper.put({ text: '我刚写的设定' }, 1);
+  const reasons: (string | null)[] = [];
+  adminConnection.on((state, reason) => reasons.push(state === 'ok' ? 'ok' : reason));
+  const save = () => api.characters.save('jojo', 2, { template: {}, presentation: {} } as never);
+  await assert.rejects(save, (e: unknown) => isInterrupted(e) && (e as { reason?: string }).reason === 'access');
+  adminConnection.retryAfterReauth('workbench-save:jojo', async () => {
+    // (the fake's answer is not a real save result; only the request matters here)
+    await save().catch(() => undefined);
+    keeper.clear();
+  });
+  assert.equal(map.size, 1, 'the edit is still kept');
+  assert.deepEqual(keeper.find()?.value, { text: '我刚写的设定' });
+  await assert.rejects(
+    () => api.restore(),
+    (e: unknown) => isInterrupted(e),
+    'the probe is still redirected',
+  );
+  renewed = true;
+  await api.restore();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(saves.filter((x) => x.includes('/save')).length, 1, 'saved once, automatically');
+  assert.equal(map.size, 0, 'and the kept edit is cleared');
+  assert.deepEqual(reasons, ['access', 'ok']);
+});
