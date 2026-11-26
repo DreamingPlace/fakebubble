@@ -140,7 +140,8 @@ type Port = Pick<
   cocreation?: Pick<CocreationAdminClient, 'counts' | 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'> &
     Partial<Pick<CocreationAdminClient, 'unadopt' | 'addToCastStory' | 'adoptAnswers'>>;
   /** Part 39: relation notes and 玩家眼中的关系 (optional; without it the inbox has neither). */
-  cocreationRelations?: Pick<CocreationRelationsClient, 'detail' | 'stats' | 'adopt' | 'reject' | 'exclude' | 'tidy'>;
+  cocreationRelations?: Pick<CocreationRelationsClient, 'detail' | 'stats' | 'adopt' | 'reject' | 'exclude' | 'tidy'> &
+    Partial<Pick<CocreationRelationsClient, 'adoptReason'>>;
   /** Part 39b: 题目, the wording pool of the co-creation themes. */
   cocreationWordings?: Pick<
     CocreationWordingsClient,
