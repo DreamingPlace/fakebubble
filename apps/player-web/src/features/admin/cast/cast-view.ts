@@ -14,6 +14,8 @@ import {
   type CastVersion,
 } from '../../../services/cast-admin-api.ts';
 import { InviteLocalApiError } from '../../../services/invite-local-api.ts';
+import { adminConnection, INTERRUPTED_LINE, isInterrupted } from '../../../services/admin-connection.ts';
+import { editKeeper, keepWhileEditing, plainEl, restoreBar } from '../ui/edit-keeper.ts';
 import { mergeCastDocs } from '../../../../../../packages/contracts/cast-merge.ts';
 import { browserDownload } from '../invite-tiers-view.ts';
 import { h } from '../../cocreation/h.ts';
@@ -147,6 +149,15 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   };
   let disposed = false;
   const gone = () => disposed || host.disposed();
+  // Part 59: the unsaved working copy is kept in this browser (with the draft it started from, for a field-by-field restore).
+  const castKeeper = () =>
+    editKeeper<{ doc: CastDoc; base: CastDoc }>({ page: 'cast', character: 'doc', revision: state.revision });
+  const keepNow = () => {
+    if (!state.doc || !state.base) return;
+    if (!state.dirty) return castKeeper().clear();
+    castKeeper().put({ doc: state.doc, base: state.base }, Math.max(changeCount(state.base, state.doc), 1));
+  };
+  const writer = keepWhileEditing(keepNow, 400);
   const canEdit = () => host.can('cast.edit');
   const canPublish = () => host.can('cast.publish');
 
@@ -219,6 +230,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     edited: (soft = false) => {
       state.dirty = true;
       state.saveIssues = [];
+      writer.schedule();
       paint.bar();
       paint.notice();
       if (!soft) return;
@@ -483,8 +495,10 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     }
     if (state.versions.length) frame.versions.append(history.root);
   }
+  let restoreNode: HTMLElement | null = null;
   function paintNotice() {
     frame.notice.replaceChildren();
+    if (restoreNode) frame.notice.append(restoreNode);
     if (state.conflict) {
       const keep = h('button', { class: 'cs-danger', text: '用我的内容覆盖', attrs: { type: 'button' } });
       keep.addEventListener('click', () => {
@@ -605,10 +619,49 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     state.latest = versions.latest;
     state.publishIssues = validation.validation.errors;
     state.warnings = validation.validation.warnings.length;
-    if (!state.doc || !state.dirty) adopt(draft.doc, draft.revision);
+    const fresh = !state.doc || !state.dirty;
+    if (fresh) adopt(draft.doc, draft.revision);
     else if (draft.revision !== state.revision) rebaseOnto(draft.revision, draft.doc);
     paintAll();
+    if (fresh) offerRestore();
     void refreshSees();
+  }
+  /** Part 59: 「恢复未保存的修改」 - a working copy kept in this browser (a reload, a logout, a failed save) is offered once. */
+  function offerRestore() {
+    restoreNode = null;
+    frame.notice.querySelector('.wb-restore')?.remove();
+    const kept = castKeeper().find();
+    if (!kept || !state.doc || !state.base || !canEdit()) return;
+    // The same draft: the copy as it was. A draft that moved on: the owner's own changes laid over it, field by field (Part 55).
+    const merged =
+      kept.revision === state.revision
+        ? ({ ok: true, doc: kept.value.doc } as const)
+        : mergeCastDocs(kept.value.base, kept.value.doc, state.doc);
+    restoreNode = restoreBar(
+      kept,
+      {
+        restore: () => {
+          restoreNode = null;
+          if (!merged.ok) {
+            host.status(
+              `有 ${merged.conflicts.length} 处在别处也改过，没能自动恢复：${merged.conflicts.slice(0, 3).join('、')}`,
+            );
+            return;
+          }
+          state.doc = structuredClone(merged.doc);
+          ensureEntries(state.doc);
+          state.dirty = true;
+          writer.schedule();
+          paintAll();
+        },
+        discard: () => {
+          restoreNode = null;
+          castKeeper().clear();
+        },
+      },
+      plainEl,
+    );
+    frame.notice.prepend(restoreNode);
   }
   async function afterChange() {
     const { draft, versions, validation } = await readAll();
@@ -708,9 +761,18 @@ export function castView(root: HTMLElement, host: CastViewHost) {
             host.status('有些内容不符合要求，没有保存。');
             return;
           }
+          // Part 59: not a failed save but an interruption: the edits stay and are kept in this browser; saved again after re-auth.
+          if (isInterrupted(error)) {
+            keepNow();
+            writer.flush();
+            host.status(INTERRUPTED_LINE);
+            adminConnection.retryAfterReauth('cast-save', () => saveDraft(false));
+          }
           throw error;
         }
       }
+      castKeeper().clear();
+      adminConnection.forget('cast-save');
       await afterChange();
       if (!gone()) host.toast(`草稿 ${state.revision} 已保存`, 'ok');
     });
@@ -917,6 +979,8 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     /** Unsaved edits block leaving the page the same way an unsaved character does. */
     canLeave: () => !state.dirty,
     dispose() {
+      writer.flush();
+      writer.stop();
       disposed = true;
       root.replaceChildren();
     },

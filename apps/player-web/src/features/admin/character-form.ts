@@ -373,6 +373,11 @@ export function characterForm(
   voiceHint?: { referenceId: string; profileId: string; version: number; speed: number } | null,
   /** Part 31 (25e): where a picture is uploaded and read; absent = no upload is offered. */
   avatarHost?: AvatarHost | null,
+  /**
+   * Part 59: the form is opened on RESTORED edits (`base`), while "unchanged" still means the draft the edits started from: the
+   * sections then show as changed and 保存草稿 saves them. Absent: `base` is both.
+   */
+  initialFrom?: CharacterProfile | null,
 ) {
   const form = el('form');
   form.className = 'character-profile-form';
@@ -521,7 +526,18 @@ export function characterForm(
     controlsOf(node).map((control) =>
       control.type === 'checkbox' ? String((control as HTMLInputElement).checked) : control.value,
     );
-  const initial = new Map(panes.map((pane) => [pane.id, valuesOf(pane.node).join('\u0000')]));
+  const initial: Map<string, string> = initialFrom
+    ? characterForm(
+        globalThis.document.createElement('div'),
+        initialFrom,
+        isNew,
+        () => {},
+        () => {},
+        undefined,
+        voiceHint,
+        null,
+      ).initialValues()
+    : new Map(panes.map((pane) => [pane.id, valuesOf(pane.node).join('\u0000')]));
   const assembled = () => {
     try {
       return JSON.stringify(parts.assemble(canon.value));
@@ -552,6 +568,38 @@ export function characterForm(
       referenceId: typed,
     };
   };
+  const build = (lenient: boolean) => {
+    const attempt = <V>(work: () => V, fallback: V): V => {
+      if (!lenient) return work();
+      try {
+        return work();
+      } catch {
+        return fallback;
+      }
+    };
+    return editedCharacter(base, {
+      id: id.value,
+      name: name.value,
+      birthDate: birthDate.value,
+      persona: persona.value,
+      displayName: displayName.value,
+      publicDescription: publicDescription.value,
+      welcomes: welcomes.read(),
+      // (the 主色 is read first: its own refusal is the one to show)
+      color: attempt(() => colour.read(), (base.presentation.color ?? '') as string),
+      palette: attempt(() => {
+        try {
+          return colours.read();
+        } catch {
+          throw new AdminFormError('点缀请填 #RRGGBB（如 #E8561E）或 r, g, b（0–255）。');
+        }
+      }, base.presentation.palette ?? null),
+      canon: attempt(assembled, JSON.stringify(base.template.authorCanon ?? null)),
+      seed: seed.checked,
+      voice: attempt(readVoice, base.template.voice ?? null),
+      avatar: avatar.read() ?? null,
+    });
+  };
   const read = () => {
     // A control in a section that is not showing cannot take the browser's bubble: show that section first.
     const bad = panes.find((pane) => controlsOf(pane.node).some((c) => c.willValidate && c.validity?.valid === false));
@@ -562,32 +610,21 @@ export function characterForm(
       onInvalid?.('welcome');
       throw new AdminFormError(problem.message);
     }
-    return editedCharacter(base, {
-      id: id.value,
-      name: name.value,
-      birthDate: birthDate.value,
-      persona: persona.value,
-      displayName: displayName.value,
-      publicDescription: publicDescription.value,
-      welcomes: welcomes.read(),
-      // (the 主色 is read first: its own refusal is the one to show)
-      color: colour.read(),
-      palette: (() => {
-        try {
-          return colours.read();
-        } catch {
-          throw new AdminFormError('点缀请填 #RRGGBB（如 #E8561E）或 r, g, b（0–255）。');
-        }
-      })(),
-      canon: assembled(),
-      seed: seed.checked,
-      voice: readVoice(),
-      avatar: avatar.read() ?? null,
-    });
+    return build(false);
+  };
+  /** Part 59: what is typed right now, WITHOUT the checks of 保存 (a half-typed field must not stop it being kept). Null: unreadable. */
+  const snapshot = () => {
+    try {
+      return build(true);
+    } catch {
+      return null;
+    }
   };
   return {
     form,
     read,
+    snapshot,
+    initialValues: (): Map<string, string> => initial,
     panes,
     seed: () => seed.checked,
     /** The sections whose fields differ from what was loaded (a field typed back to its old value no longer counts). */

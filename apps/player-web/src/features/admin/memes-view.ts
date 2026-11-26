@@ -11,6 +11,8 @@ import { errorLine } from './ui/error-line.ts';
 import { hoverValue } from './ui/hover-value.ts';
 import type { MakeExport } from './export/export-dialog.ts';
 import { pageHead, statusLine } from './ui/page-head.ts';
+import { adminConnection, INTERRUPTED_LINE, isInterrupted } from '../../services/admin-connection.ts';
+import { editKeeper, plainEl, restoreBar } from './ui/edit-keeper.ts';
 
 type Deps = {
   api: Pick<CastAdminClient, 'memesList' | 'memesSet'>;
@@ -37,6 +39,11 @@ export function memesView(root: HTMLElement, deps: Deps) {
   let ticket = 0;
   /** A switch whose answer was never seen is retried under the SAME request id, so it can never apply twice. */
   const pending = new Map<string, string>();
+  // Part 59: a switch that could not be sent (a challenge page, a lost connection, an expired session) is kept in this browser
+  // with its request id, offered again as 「恢复未保存的修改」 after a reload, and sent again by itself after re-authentication.
+  type Kept = { keys: string[]; enabled: boolean; requestId: string };
+  const keeper = editKeeper<Kept>({ page: 'memes', character: 'library', revision: null });
+  let restoreOffer: HTMLElement | null = null;
 
   const status = statusLine();
   const error = h('p', { class: 'mm-error', attrs: { role: 'alert' }, hidden: true });
@@ -195,11 +202,21 @@ export function memesView(root: HTMLElement, deps: Deps) {
     try {
       await deps.api.memesSet(pending.get(sig)!, keys, enabled);
       pending.delete(sig);
+      keeper.clear();
+      adminConnection.forget('memes-set');
+      restoreOffer?.remove();
       table.clearSelection();
       await fetchList();
       deps.toast(enabled ? '已开启' : '已关闭');
     } catch (caught) {
       if (deps.disposed()) return;
+      if (isInterrupted(caught)) {
+        keeper.put({ keys: [...keys], enabled, requestId: pending.get(sig)! }, keys.length);
+        error.replaceChildren(INTERRUPTED_LINE);
+        error.hidden = false;
+        adminConnection.retryAfterReauth('memes-set', () => apply(keys, enabled));
+        return;
+      }
       showError(caught);
     }
   }
@@ -247,7 +264,23 @@ export function memesView(root: HTMLElement, deps: Deps) {
   root.replaceChildren(pageHead('网络梗', status, exportButton), bar, error, table.root, pager);
   return {
     // (the shell's own `run` already wraps a page load: a nested one would be skipped as busy)
-    load: () => fetchList(),
+    load: async () => {
+      await fetchList();
+      const kept = keeper.find();
+      if (!kept || !deps.canEdit() || restoreOffer?.isConnected) return;
+      restoreOffer = restoreBar(
+        kept,
+        {
+          restore: () => {
+            pending.set(`${kept.value.enabled ? 1 : 0}:${[...kept.value.keys].sort().join('|')}`, kept.value.requestId);
+            void apply(kept.value.keys, kept.value.enabled);
+          },
+          discard: () => keeper.clear(),
+        },
+        plainEl,
+      );
+      error.before(restoreOffer);
+    },
     clear() {
       if (timer) clearTimeout(timer);
       ticket++;

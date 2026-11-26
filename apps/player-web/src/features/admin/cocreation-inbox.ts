@@ -53,6 +53,8 @@ import { fillStatus, pageHead } from './ui/page-head.ts';
 import { dot } from './cast/cast-ui.ts';
 import { rosterColours } from './ui/character-colour.ts';
 import { consoleOrder } from './ui/console-order.ts';
+import { panelKeeper, plainEl } from './ui/edit-keeper.ts';
+import { adminConnection, INTERRUPTED_LINE, isInterrupted } from '../../services/admin-connection.ts';
 import { segmented } from './ui/segmented.ts';
 import { relationPanel } from './cocreation-relation-panel.ts';
 import { relationsView } from './cocreation-relations-view.ts';
@@ -739,6 +741,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         return;
       }
       holder.replaceChildren(box.root);
+      const offer = entry.keep?.bar();
+      if (offer) holder.prepend(offer);
       const sync = () => {
         const off = !mayEdit || !box.dirty();
         lock(cancel, off);
@@ -772,7 +776,14 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   };
 
   // ---- the draft box: one per (note, answer, field), kept while the detail re-renders so that nothing typed is lost ----
-  type BoxEntry = { ready: Promise<Mounted | null>; box: Mounted | null; inserted: boolean; onEdit: () => void };
+  type BoxEntry = {
+    ready: Promise<Mounted | null>;
+    box: Mounted | null;
+    inserted: boolean;
+    onEdit: () => void;
+    /** Part 59: what is typed in this box is kept in this browser until it is saved. */
+    keep?: ReturnType<typeof panelKeeper>;
+  };
   const boxes = new Map<string, BoxEntry>();
   const chosen = new Map<string, AdoptField>();
   const boxKey = (id: string, ordinal: number, field: AdoptTarget) => `${id}:${ordinal}:${field}`;
@@ -794,6 +805,22 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           readOnly: !deps.canManage() || (deps.canEditCharacter ? !deps.canEditCharacter(current.characterId) : false),
           onEdit: () => made.onEdit(),
         });
+        made.keep = panelKeeper(
+          made.box.root,
+          {
+            page: 'cocreation',
+            character: current.characterId,
+            section: `${current.id}:${answer.ordinal}:${field}`,
+            revision: target.revision === null ? `v${target.publishedVersion ?? 0}` : target.revision,
+          },
+          plainEl,
+          () => {
+            // The kept text already holds the note: 加入草稿 must not put it in a second time.
+            made.inserted = true;
+            inserted.add(`${current.id}:${answer.ordinal}`);
+            made.onEdit();
+          },
+        );
         return made.box;
       });
       boxes.set(key, made);
@@ -803,7 +830,12 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   }
   /** Drops every box of one note (撤回, a saved draft, another note opened): the next paint reads the draft again. */
   function discardBoxes(id: string) {
-    for (const key of [...boxes.keys()]) if (key.startsWith(`${id}:`)) boxes.delete(key);
+    for (const key of [...boxes.keys()])
+      if (key.startsWith(`${id}:`)) {
+        boxes.get(key)?.keep?.saved();
+        boxes.get(key)?.keep?.stop();
+        boxes.delete(key);
+      }
     for (const key of [...chosen.keys()]) if (key.startsWith(`${id}:`)) chosen.delete(key);
     for (const key of [...inserted]) if (key.startsWith(`${id}:`)) inserted.delete(key);
     const target = detail?.characterId;
@@ -956,6 +988,16 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
             : `草稿 ${saved_.revision} 已保存。尚未发布。`,
         );
       } catch (caught) {
+        // Part 59: a challenge page / lost connection / expired session: what was typed stays (and is kept in this browser); saved
+        // again by itself after re-authentication.
+        if (isInterrupted(caught)) {
+          entry.keep?.keepNow();
+          fail(INTERRUPTED_LINE);
+          adminConnection.retryAfterReauth(`cocreation-adopt:${current.id}:${answer.ordinal}`, () =>
+            saveField(current, answer, field),
+          );
+          return;
+        }
         fail(characterAdminError(caught) ?? '保存草稿没有成功，请核对后重试；本次没有标记为已采用。');
       }
     });

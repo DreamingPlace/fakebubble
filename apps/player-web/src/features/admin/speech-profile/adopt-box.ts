@@ -15,6 +15,7 @@ import {
 import type { CharacterAdminClient } from '../../../services/character-admin-api.ts';
 import { h } from '../../cocreation/h.ts';
 import { drawer } from '../ui/drawer.ts';
+import { adminConnection, INTERRUPTED_LINE, isInterrupted } from '../../../services/admin-connection.ts';
 import { hoverValue } from '../ui/hover-value.ts';
 import { segmented } from '../ui/segmented.ts';
 import {
@@ -266,6 +267,12 @@ export function adoptBox(deps: AdoptBoxDeps) {
             deps.toast(`已加入草稿 ${saved.revision}。发布前玩家看不到。`, 'ok');
             close();
           } catch (caught) {
+            // Part 59: not a failed save but an interruption: the box stays as typed and saves again after re-authentication.
+            if (isInterrupted(caught)) {
+              showError(INTERRUPTED_LINE);
+              adminConnection.retryAfterReauth(`adopt-box:${source.characterId}`, () => save.click());
+              return;
+            }
             showError(profileErrorText(caught) ?? deps.errorText(caught) ?? NOT_SAVED_TEXT);
           }
         }),

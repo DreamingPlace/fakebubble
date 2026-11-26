@@ -32,6 +32,8 @@ import { hoverValue } from './ui/hover-value.ts';
 import { diffSideBySide, type Piece } from './preview/diff.ts';
 import { ERROR_SENTENCES } from './error-sentences.ts';
 import { unsavedText } from './ui/unsaved.ts';
+import { editKeeper, keepWhileEditing, overlayEdits, restoreBar } from './ui/edit-keeper.ts';
+import { adminConnection, isInterrupted } from '../../services/admin-connection.ts';
 import { leaveDialog } from './ui/leave-dialog.ts';
 import { sentenceOf } from './ui/error-line.ts';
 import { formatRoute } from './shell/admin-router.ts';
@@ -170,6 +172,19 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
   // The console shows one section of the editor at a time; the one showing is kept across a save of the same role.
   let lastSection: { id: string; section: string } = { id: '', section: '' };
   let paintDirty: (() => void) | null = null;
+  // Part 59: the unsaved edits of the open role are also kept in this browser (see ui/edit-keeper.ts).
+  let keeper: ReturnType<typeof editKeeper<{ edited: CharacterProfile; base: CharacterProfile }>> | null = null;
+  let keptBase: CharacterProfile | null = null;
+  let writer: ReturnType<typeof keepWhileEditing> | null = null;
+  let initialProfile: CharacterProfile | null = null;
+  let offerRestore: () => void = () => {};
+  let restoredNow = false;
+  const keepNow = () => {
+    if (!keeper || !editor) return;
+    if (!dirty) return keeper.clear();
+    const snap = editor.snapshot();
+    if (snap && keptBase) keeper.put({ edited: snap, base: keptBase }, Math.max(editor.changed().length, 1));
+  };
   let saveCurrent: (() => Promise<boolean>) | null = null;
   let zones: Array<{ paint: () => void }> = [];
   /** The 发布 tab's summary of each slot's 选用 take follows the 声音 tab whenever it reads the slots. */
@@ -248,6 +263,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     if (!editor || editor.changed().length === 0) {
       if (dirty) {
         dirty = false;
+        keeper?.clear();
         sync();
         paintDirty?.();
       }
@@ -255,6 +271,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     }
     const was = dirty;
     dirty = true;
+    writer?.schedule();
     // In the console the save bar and the rail's dots say it; the message is for the first change only.
     if (!embedded || !was) host.status('有未保存修改。');
     sync();
@@ -296,10 +313,11 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
   }
   const historyViews: { dispose: () => void }[] = [];
   // Part 37b: the open 说话档案 section (its read-only state follows the form's unsaved changes) and the cache of the other roles.
-  const speechPanels: { refresh: () => void }[] = [];
+  const speechPanels: { refresh: () => void; dispose?: () => void }[] = [];
   const otherRoles = othersReader(host.api);
   const clearView = () => {
     view++;
+    for (const panel of speechPanels) panel.dispose?.();
     speechPanels.length = 0;
     for (const panel of historyViews.splice(0)) panel.dispose();
     revokeAudio();
@@ -481,15 +499,41 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     renderDetail();
     host.status('请填写空白角色工作台；保存后仍须预演与批准才能发布。');
   }
-  function renderDetail() {
+  function renderDetail(restored?: CharacterProfile) {
     clearView();
     dirty = false;
     const snapshot = detail,
       target = id!;
-    const profile = snapshot
+    const original = snapshot
       ? structuredClone(snapshot.draft?.profile ?? snapshot.published!.profile)
       : emptyCharacter();
-    if (snapshot && !snapshot.draft) profile.template.version = snapshot.published!.version + 1;
+    if (snapshot && !snapshot.draft) original.template.version = snapshot.published!.version + 1;
+    // Part 59: kept edits of this role (any earlier revision of its draft), offered once; restoring opens the form on them.
+    writer?.stop();
+    keptBase = structuredClone(original);
+    keeper = editKeeper<{ edited: CharacterProfile; base: CharacterProfile }>({
+      page: 'characters',
+      character: target || 'new',
+      revision: snapshot?.draft?.revision ?? (snapshot ? `v${snapshot.published?.version ?? 0}` : null),
+    });
+    writer = keepWhileEditing(keepNow);
+    const profile = restored ?? structuredClone(original);
+    initialProfile = restored ? original : null;
+    restoredNow = !!restored;
+    offerRestore = () => {
+      const kept = restored || !keeper ? null : keeper.find();
+      if (!kept) return;
+      root.prepend(
+        restoreBar(
+          kept,
+          {
+            restore: () => renderDetail(overlayEdits(structuredClone(original), kept.value.base, kept.value.edited)),
+            discard: () => keeper?.clear(),
+          },
+          el,
+        ),
+      );
+    };
     const canEdit = () => (snapshot ? can('edit', target) : canCreate());
     /** Reads the form and saves it as a new draft revision. Resolves true only when the draft was saved (the page then shows it). */
     const saveDraft = async (): Promise<boolean> => {
@@ -519,10 +563,19 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
             showConflict(role, error);
             return;
           }
+          // Part 59: a challenge page, a lost connection or an expired session is not a failed save: the edits stay (and are kept in
+          // this browser), and the save is sent again by itself once the owner has verified or signed in again.
+          if (isInterrupted(error)) {
+            keepNow();
+            writer?.flush();
+            adminConnection.retryAfterReauth(`workbench-save:${role}`, () => saveDraft());
+          }
           throw error;
         }
         if (gone()) return;
         dirty = false;
+        keeper?.clear();
+        adminConnection.forget(`workbench-save:${role}`);
         await open(saved.characterId);
         host.status(`草稿 ${saved.revision} 已保存；尚未发布。`);
         saved_ = true;
@@ -534,6 +587,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     };
     saveCurrent = saveDraft;
     const discardLocal = () => {
+      keeper?.clear();
       renderDetail();
       host.status('已放弃本页修改；草稿和正式版本不变。');
     };
@@ -575,7 +629,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         () => profile.presentation.color ?? null,
         () => profile.presentation.displayName || profile.template.name,
       ),
+      initialProfile,
     );
+    offerRestore();
+    if (restored) setDirty();
     // A new ID must be enterable before its scoped edit permission can be evaluated.
     const actions = el('div');
     actions.className = 'admin-toolbar';
@@ -767,7 +824,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         () => profile.presentation.color ?? null,
         () => profile.presentation.displayName || profile.template.name,
       ),
+      initialProfile,
     );
+    offerRestore();
+    if (restoredNow) setDirty();
     const form = editor.form;
     form.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -1579,6 +1639,9 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       clearView();
     },
     dispose: () => {
+      // Part 59: whatever is still unsaved is kept in this browser before the page goes away.
+      writer?.flush();
+      writer?.stop();
       disposed = true;
       revokeAudio();
       pending.clear();
