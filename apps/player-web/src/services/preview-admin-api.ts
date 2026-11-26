@@ -50,6 +50,8 @@ export type PreviewRow = {
     mode: string | null;
     endsSession: boolean;
     reviewChanged: boolean;
+    /** Part 58: the writer's hidden plan (what she read, her purpose); owner-only, null when none. */
+    plan: { read: string; aim: string; aims: string[] } | null;
     /** The reviewer said reject but gave publishable bubbles; they were published as an accept. */
     reviewDecisionNormalized?: boolean;
     coverage: { messageId: string; status: 'answered' | 'later' | 'needs_player' }[];
@@ -128,6 +130,11 @@ const string = (v: unknown) => {
   return v;
 };
 const nstring = (v: unknown) => (v === null ? null : string(v));
+const planOf = (v: unknown) => {
+  if (v === null || v === undefined) return null;
+  const x = object(v);
+  return { read: string(x.read), aim: string(x.aim), aims: Array.isArray(x.aims) ? x.aims.map(string) : [] };
+};
 const int = (v: unknown) => {
   if (!Number.isSafeInteger(v) || (v as number) < 0) throw invalid();
   return v as number;
@@ -225,6 +232,7 @@ export function previewRow(v: unknown): PreviewRow {
       mode: nstring(f.mode),
       endsSession: f.endsSession === true,
       reviewChanged: f.reviewChanged === true,
+      plan: planOf(f.plan),
       reviewDecisionNormalized: f.reviewDecisionNormalized === true,
       coverage: rows(f.coverage).map((c) => {
         const x = object(c);

@@ -4,6 +4,7 @@ import { NEW_PLAYER_RELATIONSHIP } from '../../../packages/contracts/relationshi
 import { ensure } from '../../../packages/domain/errors.ts';
 import { promptMessages } from '../generation/accepted-text-prompt.ts';
 import { writerDraftMessages } from '../generation/writer-v8.ts';
+import { MAX_RECENT_AIMS } from '../generation/writer-plan.ts';
 import { openingForWriter } from '../generation/opening-line.ts';
 import { parseRehearsalColumn } from '../../../packages/contracts/web-rehearsal.ts';
 import { MEME_TURNS, readMemeUse, withoutMemeUse } from '../../../packages/contracts/web-memes.ts';
@@ -54,6 +55,7 @@ export function rehearsalRequest(
   turn: number,
   players: readonly string[],
   replies: readonly (readonly string[])[],
+  aims: readonly string[] = [],
 ): TextGenerationRequest {
   ensure(turn >= 1 && turn <= players.length && replies.length >= turn - 1, 'REHEARSAL_REQUEST_INVALID');
   const column = parseRehearsalColumn(model) ?? {
@@ -147,6 +149,8 @@ export function rehearsalRequest(
       : {}),
     ...(v8 && frozen.roster ? { roster: structuredClone(frozen.roster) } : {}),
     ...(v8 && frozen.ownNames?.length ? { ownNames: structuredClone(frozen.ownNames) } : {}),
+    // Part 58: her last few purposes in this run (a 新 column only; none = no key).
+    ...(v8 && aims.length ? { recentAims: aims.slice(-MAX_RECENT_AIMS) } : {}),
     messages,
   };
   if (v8) writerDraftMessages(request);

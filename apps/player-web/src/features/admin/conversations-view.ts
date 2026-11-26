@@ -30,6 +30,7 @@ export const conversationsCopy = {
   exportOne: '导出此对话 CSV',
   exportCharacter: '导出该角色全部对话 CSV',
   changed: '审核改动',
+  plan: '她的想法（只有你看得到）',
   failedReply: '这条回复没有成功',
   speaker: { player: '玩家', character: '角色', proactive: '角色（主动）' } as const,
   prev: '上一页',
@@ -406,6 +407,14 @@ export function conversationsView(
         : h('span', { class: 'review-text', text: line.text }),
       line.reviewChanged ? h('span', { class: 'review-changed', text: conversationsCopy.changed }) : null,
       star,
+      // Part 58: under the reply, small: what she read and what she aimed for. Never in a player's page.
+      line.plan
+        ? h('span', {
+            class: 'review-plan',
+            text: `读到：${line.plan.read}　目的：${line.plan.aim}`,
+            attrs: { title: conversationsCopy.plan, 'data-plan': '1' },
+          })
+        : null,
     );
   };
   function renderDetail(detail: Awaited<ReturnType<typeof deps.api.detail>>) {

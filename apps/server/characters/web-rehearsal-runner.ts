@@ -589,6 +589,7 @@ export class WebRehearsalRunner {
     const index = turns.findIndex((t) => t.turn === row.turn);
     ensure(index >= 0, 'REHEARSAL_REQUEST_INVALID');
     const replies: string[][] = [];
+    const aims: string[] = [];
     for (const earlier of turns.slice(0, index)) {
       const unit = this.store.get<{ result_json: string | null; status: string }>(
         "SELECT result_json,status FROM web_rehearsal_units WHERE run_id=? AND kind='cell' AND model_key=? AND turn=?",
@@ -597,7 +598,11 @@ export class WebRehearsalRunner {
         earlier.turn,
       );
       ensure(unit?.status === 'done' && unit.result_json, 'REHEARSAL_REPLY_MISSING');
-      replies.push((JSON.parse(unit.result_json) as { bubbles: string[] }).bubbles);
+      const earlierResult = JSON.parse(unit.result_json) as { bubbles: string[]; plan?: { aims?: string[] } | null };
+      replies.push(earlierResult.bubbles);
+      // Part 58: the first purpose of each earlier reply that had a plan (rehearsalRequest keeps the last few).
+      const aim = earlierResult.plan?.aims?.[0];
+      if (aim) aims.push(aim);
     }
     const request = rehearsalRequest(
       this.frozenOf(row),
@@ -606,6 +611,7 @@ export class WebRehearsalRunner {
       index + 1,
       turns.map((t) => t.text!),
       replies,
+      aims,
     );
     const json = JSON.stringify(request);
     this.store.run(
@@ -847,6 +853,8 @@ export class WebRehearsalRunner {
           request.writer === 'v8'
             ? null
             : reply.coveredMessageIds.includes(required) && reply.deferredMessageIds.length === 0,
+        // Part 58: the hidden plan, kept on the unit (JSON, no schema change) for the owner's lines and counts.
+        ...(reply.plan ? { plan: reply.plan } : {}),
       });
     });
   }
