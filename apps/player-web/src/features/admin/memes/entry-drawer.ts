@@ -1,9 +1,16 @@
 import { MEME_MEANING_MAX, MEME_TERM_MAX, type MemeEntryView } from '../../../../../../packages/contracts/web-memes.ts';
 import { h, length } from '../../cocreation/h.ts';
-import { drawer } from '../ui/drawer.ts';
 import { errorLine } from '../ui/error-line.ts';
 import { hoverValue } from '../ui/hover-value.ts';
-import { categorySelect, codeOf, detailOf, requestIds, sourceLabel, type MemesDeps } from './memes-shared.ts';
+import {
+  categorySelect,
+  codeOf,
+  detailOf,
+  lazyDrawer,
+  requestIds,
+  sourceLabel,
+  type MemesDeps,
+} from './memes-shared.ts';
 
 type Hooks = {
   /** After a save: the page reloads its list (and shows the toast). */
@@ -18,15 +25,13 @@ type Hooks = {
  * A duplicate term is refused with a link to the entry that is already there. No explanation lines: hover tips only.
  */
 export function entryDrawer(parent: HTMLElement, deps: MemesDeps, hooks: Hooks) {
-  const panel = drawer(parent, { title: '添加词条' });
+  const panel = lazyDrawer(parent);
   const ids = requestIds(deps.newRequestId);
   let busy = false;
 
   function open(title: string, build: () => HTMLElement) {
     ids.clear();
-    panel.setTitle(title);
-    panel.body.replaceChildren(build());
-    panel.open();
+    panel.open(title, build());
   }
   const counter = (input: HTMLInputElement | HTMLTextAreaElement, max: number) => {
     const note = h('span', { class: 'mm-count' });

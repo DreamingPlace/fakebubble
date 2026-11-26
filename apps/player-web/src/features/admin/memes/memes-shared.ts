@@ -7,6 +7,7 @@ import {
 } from '../../../../../../packages/contracts/web-memes.ts';
 import type { CastAdminClient } from '../../../services/cast-admin-api.ts';
 import { h } from '../../cocreation/h.ts';
+import { drawer } from '../ui/drawer.ts';
 
 /** What the 网络梗 page's parts need of the page (the api, who may edit, request ids, the toast and the in-place confirm). */
 export type MemesDeps = {
@@ -97,3 +98,31 @@ export function fnv(text: string): string {
 
 /** 「心情（98）」 in the category filter. */
 export const categoryOrderLabel = (category: string, n: number) => `${category}（${count(n)}）`;
+
+/**
+ * A drawer that exists only while it is open (its nodes leave the page on close), so a closed 网络梗 page leaves no hidden dialog
+ * behind for the other pages to trip over.
+ */
+export function lazyDrawer(parent: HTMLElement, options: { wide?: boolean } = {}) {
+  let current: ReturnType<typeof drawer> | null = null;
+  const api = {
+    open(title: string, content: Node) {
+      api.dispose();
+      const panel = drawer(parent, {
+        title,
+        ...(options.wide ? { wide: true } : {}),
+        onClose: () => queueMicrotask(api.dispose),
+      });
+      panel.body.replaceChildren(content);
+      current = panel;
+      panel.open();
+    },
+    close: () => current?.close(),
+    isOpen: () => current?.isOpen() ?? false,
+    dispose() {
+      current?.dispose();
+      current = null;
+    },
+  };
+  return api;
+}

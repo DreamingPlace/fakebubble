@@ -17,7 +17,8 @@ import { quietWait } from './console-quiet.ts';
  *  4  系统 → 模型与价格 → 回复写法: four choices, 新+档案+梗 selectable (and put back to 旧).
  *  5  the credit line (the exact notice and the link) is on the terms page and nowhere else.
  *
- * Part 37c-1b NAMED EXCEPTION: the counts below follow the re-curated default (1,806 entries, 546 ship ON, 1,260 ship OFF), the head line is
+ * Part 37c-1b NAMED EXCEPTION: the select-all checkbox is looked up in the VISIBLE table (the page now holds a 已删除 table and a 待审 table
+ * as well, hidden); the counts below follow the re-curated default (1,806 entries, 546 ship ON, 1,260 ship OFF), the head line is
  * 共 N 条 · 已开启 N 条 · 待审 N 条 and the 默认关闭 count moved into the 状态 filter's label. Everything the script checks is the same.
  *
  * usage: node scripts/check-web-memes-37c1-browser.ts [screenshot-dir]   (run `pnpm web:player:build` first)
@@ -168,7 +169,7 @@ try {
   await page.locator('#admin-memes .mm-pager button', { hasText: '下一页' }).click();
   await wait(700);
   check(/第 2 \//.test(await page.locator('#admin-memes .mm-page').innerText()), 'the next page');
-  await page.locator('#admin-memes .admin-table thead input[type="checkbox"]').check();
+  await page.locator('#admin-memes .admin-table:visible thead input[type="checkbox"]').check();
   await page.locator('#admin-memes .admin-bulk-bar button', { hasText: '关闭所选' }).click();
   await page.waitForFunction(
     () => /已开启 [45]\d\d 条/.test(document.querySelector('#admin-memes .head-status')?.textContent ?? ''),
@@ -180,7 +181,7 @@ try {
   await shot('memes-bulk-off');
   await page.locator('#admin-memes select[aria-label="状态"]').selectOption('off');
   await wait(700);
-  await page.locator('#admin-memes .admin-table thead input[type="checkbox"]').check();
+  await page.locator('#admin-memes .admin-table:visible thead input[type="checkbox"]').check();
   await page.locator('#admin-memes .admin-bulk-bar button', { hasText: '开启所选' }).click();
   await wait(900);
   await page.locator('#admin-memes select[aria-label="状态"]').selectOption('all');

@@ -5,10 +5,18 @@ import {
 } from '../../../../../../packages/contracts/web-memes.ts';
 import type { MemeUploadPayload } from '../../../services/cast-admin-api.ts';
 import { h } from '../../cocreation/h.ts';
-import { drawer } from '../ui/drawer.ts';
 import { errorLine } from '../ui/error-line.ts';
 import { hoverValue } from '../ui/hover-value.ts';
-import { ROW_PROBLEM_TEXT, ROW_STATUS_TEXT, codeOf, count, fnv, requestIds, type MemesDeps } from './memes-shared.ts';
+import {
+  ROW_PROBLEM_TEXT,
+  ROW_STATUS_TEXT,
+  codeOf,
+  count,
+  fnv,
+  lazyDrawer,
+  requestIds,
+  type MemesDeps,
+} from './memes-shared.ts';
 
 type Hooks = {
   /** The rows that passed are in the 待审 queue now: the page switches to it. */
@@ -38,7 +46,7 @@ function toBase64(bytes: ArrayBuffer) {
  * term exists shows the current entry and the new version side by side; a row whose term the owner deleted says 曾删除.
  */
 export function importDrawer(parent: HTMLElement, deps: MemesDeps, hooks: Hooks) {
-  const panel = drawer(parent, { title: '上传导入', wide: true });
+  const panel = lazyDrawer(parent, { wide: true });
   const ids = requestIds(deps.newRequestId);
   let upload: MemeUploadPayload | null = null;
   let preview: MemeImportPreview | null = null;
@@ -218,7 +226,6 @@ export function importDrawer(parent: HTMLElement, deps: MemesDeps, hooks: Hooks)
     summary,
     result,
   );
-  panel.body.replaceChildren(body);
   setUpload(null);
 
   return {
@@ -229,7 +236,7 @@ export function importDrawer(parent: HTMLElement, deps: MemesDeps, hooks: Hooks)
       fileName.textContent = '';
       error.hidden = true;
       setUpload(null);
-      panel.open();
+      panel.open('上传导入', body);
     },
     close: () => panel.close(),
     dispose: () => panel.dispose(),
