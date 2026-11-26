@@ -23126,34 +23126,13 @@ body,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card-slot.is-active:not(.is-chat) .face-sheen,
-  .page-shell .card-slot.is-active:not(.is-chat),
-  .card-slot.is-active .face-name,
-  .card-slot[data-skin].is-active:not(.is-chat) .face-name,
-  .page-shell .avatar-choice-mark,
-  .page-shell .message-row,
-  .card-slot.is-chat :is(.chat-head, .chat-body, .composer),
-  .acct-sheet,
-  .acct-sheet:not(.mp-sheet),
-  .mi-sheet,
-  .mi-section,
-  .mi-fill,
-  .invite-dialog[open],
-  .invite-dialog::backdrop,
-  .mp-sheet,
-  .mp-panel,
-  .mp-brain,
-  .mp-brain:hover,
-  .mp-confirm-box:not(:empty),
-  .bl-tables,
-  .bl-row,
-  .cc-sheet,
-  .cc-sheet .cc-editor,
-  .share-sticker,
-  .share-cta,
-  .share-sheet,
-  .share-pop,
-  .share-scrim {
+  .msg-scrim,
+  .msg-menu,
+  .msg-lift,
+  .quote-strip,
+  .rating-mark.is-new,
+  .page-shell .message-row.is-flash .text-bubble,
+  .page-shell .message-row.is-flash .voice-bubble {
     animation: none;
   }
 }
@@ -23444,14 +23423,36 @@ body,
     transform: scale(1);
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
-  .msg-scrim,
-  .msg-menu,
-  .msg-lift,
-  .quote-strip,
-  .rating-mark.is-new,
-  .page-shell .message-row.is-flash .text-bubble,
-  .page-shell .message-row.is-flash .voice-bubble {
-    animation-duration: 1ms;
+  .card-slot.is-active:not(.is-chat) .face-sheen,
+  .page-shell .card-slot.is-active:not(.is-chat),
+  .card-slot.is-active .face-name,
+  .card-slot[data-skin].is-active:not(.is-chat) .face-name,
+  .page-shell .avatar-choice-mark,
+  .page-shell .message-row,
+  .card-slot.is-chat :is(.chat-head, .chat-body, .composer),
+  .acct-sheet,
+  .acct-sheet:not(.mp-sheet),
+  .mi-sheet,
+  .mi-section,
+  .mi-fill,
+  .invite-dialog[open],
+  .invite-dialog::backdrop,
+  .mp-sheet,
+  .mp-panel,
+  .mp-brain,
+  .mp-brain:hover,
+  .mp-confirm-box:not(:empty),
+  .bl-tables,
+  .bl-row,
+  .cc-sheet,
+  .cc-sheet .cc-editor,
+  .share-sticker,
+  .share-cta,
+  .share-sheet,
+  .share-pop,
+  .share-scrim {
+    animation: none;
   }
 }

@@ -1,4 +1,5 @@
 import { turnMemberIds } from '../turns/web-turns.ts';
+import { webTurnsInstalled } from '../turns/web-turn-schema.ts';
 import { isBroadcastMessage } from '../broadcast/web-broadcast-read.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { createHash, randomUUID } from 'node:crypto';
@@ -643,6 +644,7 @@ export class WebVerticalPublisher {
       const { request, row } = readWebV7Request(this.store, claim.operationId);
       // Part 36: the turn's bubbles (a single message is its own turn).
       const members = turnMemberIds(this.store, claim.operationId, claim.inputMessageId);
+      const turnsInstalled = webTurnsInstalled(this.store);
       for (const message of request.messages) {
         const current = this.store.get<{
           body: string;
@@ -693,11 +695,15 @@ export class WebVerticalPublisher {
                   )
               : this.store.get(
                   `SELECT 1 FROM web_publications p
-            WHERE (p.input_message_id=? OR EXISTS (SELECT 1 FROM web_turn_bubbles b WHERE b.message_id=?
-              AND b.state='turn' AND b.operation_id=p.operation_id)) AND p.principal_id=? AND p.player_id=? AND p.world_id=?
+            WHERE (p.input_message_id=?${
+              turnsInstalled
+                ? ' OR EXISTS (SELECT 1 FROM web_turn_bubbles b WHERE b.message_id=? AND' +
+                  " b.state='turn' AND b.operation_id=p.operation_id)"
+                : ''
+            }) AND p.principal_id=? AND p.player_id=? AND p.world_id=?
               AND p.conversation_id=? AND p.character_id=?`,
                   message.id,
-                  message.id,
+                  ...(turnsInstalled ? [message.id] : []),
                   claim.principalId,
                   claim.playerId,
                   claim.worldId,
