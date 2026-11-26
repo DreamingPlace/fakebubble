@@ -101,7 +101,6 @@ function cloneKeepingStyles(row: HTMLElement): HTMLElement {
 }
 
 let closeCurrent: (() => void) | null = null;
-export const closeMessageMenu = () => closeCurrent?.();
 
 /**
  * Lifts `row` (a copy of it, drawn in a copy of the page's own ancestors so every selector still applies) and shows `items` beside its
