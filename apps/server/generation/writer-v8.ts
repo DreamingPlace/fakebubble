@@ -32,6 +32,8 @@ import {
 } from './writer-profile.ts';
 import { memesBlock, writerMemesHash } from './writer-memes.ts';
 import { ownNamesValid } from './writer-own-names.ts';
+import { AIMS, MAX_RECENT_AIMS, splitWriterOutput } from './writer-plan.ts';
+import type { WriterPlan } from './writer-plan.ts';
 
 /**
  * Part 37a: the v8 writer ("回复写法：新"). One plain-text draft (no tool call, no coverage, no schema around the words), then one
@@ -49,7 +51,7 @@ export const WRITER_V8_TEMPERATURE = { deepseek: 1.3, xai: 1.0, gemini: 1.0 } as
 /** Visible-reply limit of the plain draft (the draft limits below hold 1,200 characters at most). */
 export const WRITER_V8_MAX_TOKENS = 2048;
 
-/** The fourteen reasons the guard may replace a bubble for. Content-free: they are what the reply record keeps. */
+/** The eighteen reasons the guard may replace a bubble for. Content-free: they are what the reply record keeps. */
 export const GUARD_REASONS = [
   'distress',
   'hidden_setting',
@@ -67,6 +69,12 @@ export const GUARD_REASONS = [
   'confused_own_name',
   'denied_own_words',
   'incoherent_reply',
+  // Part 58: no dismissive filler (行 / 行吧 / 行行行 ...), not impatient or lecturing, no commentary on the player's words, and a
+  // reply that gives something when the player showed care, affection or a feeling (or that contradicts its own plan).
+  'dismissive_filler',
+  'impatient_or_lecturing',
+  'meta_commentary',
+  'no_emotional_value',
 ] as const;
 type GuardReason = (typeof GUARD_REASONS)[number];
 
@@ -101,7 +109,7 @@ const sortedPrompts = () => Object.entries(PROMPTS_V8).sort(([a], [b]) => (a < b
 /** sha256 of every prompts/v8 file (name and text). Pinned below and documented in docs/STATUS.md. */
 export const writerPromptBytesHash = () => createHash('sha256').update(JSON.stringify(sortedPrompts())).digest('hex');
 /** The pin: the generation Worker refuses the v8 route when its bundled files do not hash to exactly this. */
-export const WRITER_V8_PROMPT_SHA256 = '4f53da3f850005fed1c5686d16abda9bdcf7ccf7e43d3596f198ed8b4fce922a';
+export const WRITER_V8_PROMPT_SHA256 = '73d6855c6a5edcfa6b89684ec5f2824e888f39413cbb0d70741e93045fd1315d';
 
 const guardReasonSchema = { type: 'string', enum: [...GUARD_REASONS] };
 /** The second pass's output tool: the v7 review schema's bookkeeping fields, without decision, replacement bubbles or coverage. */
@@ -134,7 +142,7 @@ export function writerGuardTool(request: TextGenerationRequest) {
     type: 'function' as const,
     function: {
       name: 'submit_reply_check',
-      description: '第二道检查：只在十四种情况下替换出问题的那一条，并提交记录；不执行操作。',
+      description: '第二道检查：只在十八种情况下替换出问题的那一条，并提交记录；不执行操作。',
       strict: true,
       parameters: { type: 'object', properties, required: Object.keys(properties), additionalProperties: false },
     },
@@ -310,6 +318,13 @@ export function writerDraftMessages(request: TextGenerationRequest, provider?: W
   );
   ensure(request.ownNames === undefined || ownNamesValid(request.ownNames), 'INVALID_TEXT_REQUEST');
   ensure(
+    request.recentAims === undefined ||
+      (Array.isArray(request.recentAims) &&
+        request.recentAims.length <= MAX_RECENT_AIMS &&
+        request.recentAims.every((aim) => (AIMS as readonly string[]).includes(aim))),
+    'INVALID_TEXT_REQUEST',
+  );
+  ensure(
     request.opening?.context === undefined ||
       (typeof request.opening.context === 'string' && [...request.opening.context].length <= 200),
     'INVALID_TEXT_REQUEST',
@@ -346,7 +361,11 @@ export function writerDraftMessages(request: TextGenerationRequest, provider?: W
     (picked ? `\n\n${picked}` : '') +
     (memes ? `\n\n${memes}` : '') +
     batchBlock(request);
-  const content = JSON.stringify(context(request, false));
+  // Part 58: her last few purposes in this conversation (absent when there are none, so such a request is what it was).
+  const content = JSON.stringify({
+    ...context(request, false),
+    ...(request.recentAims?.length ? { recentAims: request.recentAims } : {}),
+  });
   ensure(content.length <= 200_000, 'TEXT_CONTEXT_TOO_LARGE');
   return [
     { role: 'system' as const, content: system },
@@ -362,6 +381,8 @@ export function writerGuardMessages(request: TextGenerationRequest, draft: Write
     ...(request.ownNames?.length ? { ownNames: request.ownNames } : {}),
     mustClose: request.mustClose,
     delivery: request.deliveryMode ?? 'text',
+    // Part 58: the writer's own plan (what she read, what she aimed for); the guard flags a reply that contradicts it.
+    ...(draft.plan ? { plan: { read: draft.plan.read, aim: draft.plan.aim } } : {}),
     draft: draft.bubbles.map((bubble, index) => ({ index, text: bubble.text })),
   });
   ensure(content.length <= 210_000, 'TEXT_CONTEXT_TOO_LARGE');
@@ -374,6 +395,8 @@ export function writerGuardMessages(request: TextGenerationRequest, draft: Write
 /** The plain draft with the voice markup each line carries (null = none). `bubbles[i].text` never contains markup. */
 export interface WriterDraft extends TextDraft {
   markups: (string | null)[];
+  /** Part 58: the hidden plan the output carried (null = none or unusable). Never part of `bubbles`. */
+  plan: WriterPlan | null;
 }
 
 const GROUP = /\[[^[\]<>\n]{1,80}\] ?/gu;
@@ -452,7 +475,9 @@ export function parseWriterDraft(value: unknown, request: TextGenerationRequest)
     'INVALID_DRAFT_SCHEMA',
   );
   const voice = request.deliveryMode === 'voice';
-  const lines = (value as { text: string }).text
+  // Part 58: the plan (and every marker) is separated first; only the reply part is ever cleaned, capped and published.
+  const { reply, plan } = splitWriterOutput((value as { text: string }).text);
+  const lines = reply
     .split(/\r\n|\r|\n/u)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -465,14 +490,14 @@ export function parseWriterDraft(value: unknown, request: TextGenerationRequest)
     capped.map((line) => bubbleOf(line.text)),
     DRAFT_BUBBLE_LIMITS,
   );
-  return { mode: 'casual', bubbles, endsSession: false, markups: capped.map((line) => line.markup) };
+  return { mode: 'casual', bubbles, endsSession: false, markups: capped.map((line) => line.markup), plan };
 }
 
 const isPlain = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /**
- * The second pass. `fixes` replace single bubbles for one of the fourteen reasons; everything else is published exactly as written.
+ * The second pass. `fixes` replace single bubbles for one of the eighteen reasons; everything else is published exactly as written.
  * Coverage is not asked of the model: the request carries exactly one input message and the reply answers it by being published, so
  * the shared v7 validation (topics, facts, scene, relationship events) is fed that one id as covered by this code, and nothing is
  * ever deferred or awaiting the player (no follow-up is scheduled for a v8 reply).
@@ -521,11 +546,9 @@ export function applyWriterGuard(
     );
     seen.add(fix.index);
     // A replacement is one plain line in the character's voice; its markup, like the draft line's, is gone.
-    const text = (
-      voice
-        ? cleanSpokenLine(fix.text.replace(/[\r\n]+/gu, ' '), false)
-        : { text: fix.text.replace(/[\r\n]+/gu, ' ').trim() }
-    ).text;
+    // Part 58: a marker never survives in a replacement either.
+    const fixText = splitWriterOutput(fix.text).reply.replace(/[\r\n]+/gu, ' ');
+    const text = (voice ? cleanSpokenLine(fixText, false) : { text: fixText.trim() }).text;
     ensure(text.length > 0, 'INVALID_GUARD_FIX');
     lines[fix.index] = { text, markup: null };
     reasons.push(fix.reason as GuardReason);
@@ -560,6 +583,7 @@ export function applyWriterGuard(
   );
   candidate.reviewChanged = reasons.length > 0;
   candidate.guardReasons = reasons;
+  if (writerDraft.plan) candidate.plan = { ...writerDraft.plan };
   if (capped.some((line) => line.markup !== null)) candidate.bubbleMarkup = capped.map((line) => line.markup);
   return candidate;
 }

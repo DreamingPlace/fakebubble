@@ -27,6 +27,8 @@ export type ReviewLine = {
   status: 'ok' | 'failed';
   errorCode: string | null;
   reviewChanged: boolean;
+  /** Part 58: the writer's hidden plan (what she read, what she aimed for). Owner-only; null when there is none. */
+  plan?: { read: string; aim: string } | null;
 };
 export type ReviewDetail = {
   label: string;
@@ -91,6 +93,10 @@ const line = (v: unknown): ReviewLine => {
     status: status as ReviewLine['status'],
     errorCode: nullable(r.errorCode),
     reviewChanged: flag(r.reviewChanged),
+    plan:
+      r.plan === null || r.plan === undefined
+        ? null
+        : { read: string(object(r.plan).read), aim: string(object(r.plan).aim) },
   };
 };
 

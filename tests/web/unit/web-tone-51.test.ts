@@ -46,9 +46,9 @@ test('51 rule 6 in writer.md: proportion, only big moments are strong (and short
 
 test('51 the guard has a ninth reason for it, and the 37a-2 direction filter for voice is unchanged', () => {
   const g = PROMPTS_V8.guard;
-  assert.equal(GUARD_REASONS.length, 14); // NAMED EXCEPTION (Part 56): five more reasons
+  assert.equal(GUARD_REASONS.length, 18); // NAMED EXCEPTION (Part 56): five more reasons; (Part 58): four more
   assert.ok(GUARD_REASONS.includes('over_intense' as never));
-  assert.ok(g.includes('只有下面十四种情况') && g.includes('没有这十四种问题'));
+  assert.ok(g.includes('只有下面十八种情况') && g.includes('没有这十八种问题'));
   for (const phrase of [
     'over_intense：情绪强度和对方这条消息明显不相称',
     '小事（吃的、忙了一天、小抱怨）却哭、哽咽、突然剖白深情、叠一串感叹号问号省略号、过度担心或夸奖（如“我好心疼你！！”）',

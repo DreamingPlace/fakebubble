@@ -102,6 +102,16 @@ const bubblesOf = (value: unknown) =>
           : [],
       )
     : [];
+const planOf = (value: unknown) => {
+  const plan = value && typeof value === 'object' ? (value as Json) : null;
+  return plan && typeof plan.read === 'string' && typeof plan.aim === 'string'
+    ? {
+        read: plan.read,
+        aim: plan.aim,
+        aims: Array.isArray(plan.aims) ? plan.aims.filter((x) => typeof x === 'string') : [],
+      }
+    : null;
+};
 function finalOf(resultJson: string | null) {
   if (!resultJson) return null;
   const reply = (JSON.parse(resultJson) as { reply?: Json }).reply;
@@ -115,6 +125,8 @@ function finalOf(resultJson: string | null) {
     mode: reply.mode ?? null,
     endsSession: reply.endsSession === true,
     reviewChanged: reply.reviewChanged === true,
+    // Part 58: the writer's hidden plan, for the owner's run page and export only (null on v7 and when there was none).
+    plan: planOf(reply.plan),
     reviewDecisionNormalized: reply.reviewDecisionNormalized === true,
     coverage: [
       ...covered.map((messageId) => ({ messageId, status: 'answered' })),

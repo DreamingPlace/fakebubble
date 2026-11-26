@@ -518,7 +518,13 @@ export class WebRehearsal {
       );
     const v8Guard = Buffer.byteLength(
       JSON.stringify(
-        writerGuardMessages(v8First, { mode: 'casual', bubbles: [], endsSession: false, markups: [] } as WriterDraft),
+        writerGuardMessages(v8First, {
+          mode: 'casual',
+          bubbles: [],
+          endsSession: false,
+          markups: [],
+          plan: null,
+        } as WriterDraft),
       ),
       'utf8',
     );
@@ -533,7 +539,8 @@ export class WebRehearsal {
         if (column.writer === 'v8') {
           total += listPriceMicros(ref.provider, ref.model, {
             inputTokens: Math.ceil((v8Draft(ref.provider, column.profile, column.memes) + growth) / 2),
-            outputTokens: 120 + thinking,
+            // Part 58: the hidden plan (read + aim) is about 80 more output tokens.
+            outputTokens: 200 + thinking,
           });
           total += listPriceMicros('deepseek', reviewer, {
             inputTokens: Math.ceil((v8Guard + growth) / 2) + 150,
@@ -777,13 +784,18 @@ export class WebRehearsal {
       const cells: RehearsalCell[] = turnRows.map((turn) => {
         const unit = units.find((u) => u.kind === 'cell' && u.model_key === key && u.turn === turn.turn);
         const result = unit?.result_json
-          ? (JSON.parse(unit.result_json) as { bubbles: string[]; answered: boolean | null })
+          ? (JSON.parse(unit.result_json) as {
+              bubbles: string[];
+              answered: boolean | null;
+              plan?: { read: string; aim: string; aims: string[] } | null;
+            })
           : null;
         return {
           state: unit ? cellState(unit.status) : 'pending',
           errorCode: unit?.error_code ?? null,
           bubbles: unit?.status === 'done' && result ? result.bubbles : null,
           answered: unit?.status === 'done' && result ? result.answered : null,
+          plan: unit?.status === 'done' && result?.plan ? result.plan : null,
         };
       });
       const analysed: AnalysedReply[] = [];
@@ -793,6 +805,7 @@ export class WebRehearsal {
             player: turnRows[index]!.text ?? '',
             bubbles: cell.bubbles,
             answered: column.writer === 'v8' ? null : cell.answered === true,
+            ...(cell.plan ? { aims: cell.plan.aims } : {}),
           });
         }
       });

@@ -102,7 +102,7 @@ test('56 旧 (v7) is byte-identical (the same hashes as Part 51, taken on main)'
 
 test('56 the guard text and the schema: five new reasons, presumptuous_address relaxed, names recorded as facts', () => {
   const text = PROMPTS_V8.guard;
-  assert.equal(GUARD_REASONS.length, 14);
+  assert.equal(GUARD_REASONS.length, 18); // NAMED EXCEPTION (Part 58): four more reasons
   for (const reason of [
     'cold_to_feeling',
     'argued_name',
@@ -113,7 +113,7 @@ test('56 the guard text and the schema: five new reasons, presumptuous_address r
     assert.ok(GUARD_REASONS.includes(reason as never), reason);
     assert.ok(text.includes(`- ${reason}：`), reason);
   }
-  assert.ok(text.includes('十四种'));
+  assert.ok(text.includes('十八种')); // NAMED EXCEPTION (Part 58)
   assert.ok(!text.includes('九种'));
   assert.ok(text.includes('对方用过、要求过、已同意的叫法，永远不算，不要改'));
   assert.ok(text.includes('不通就整条回复每一条都替换'));
@@ -243,7 +243,7 @@ test('56 role names reach the writer from 其余设定 (profileFacts), and the g
 test('56 「v8 规则 56」: one fixed script from the samples, in a known order', () => {
   assert.equal(REHEARSAL_RULES_56_SET, 'rules-56');
   assert.equal(REHEARSAL_SET_LABELS[REHEARSAL_RULES_56_SET], 'v8 规则 56');
-  assert.equal(REHEARSAL_SETS.at(-1), 'rules-56');
+  assert.ok(REHEARSAL_SETS.includes('rules-56')); // NAMED EXCEPTION (Part 58): 「v8 规则 58」 is listed after it
   assert.equal(rehearsalTurnsMin('rules-56'), 6);
   const turns = builtinSet(REHEARSAL_RULES_56_SET);
   assert.ok(turns.length >= 6 && turns.every((t) => t.length > 0 && t.length <= 200));
