@@ -29,8 +29,8 @@ export type InboxItem = {
   answerCount: number;
   adoptedCount: number;
   /** Part 59: the items of the note (its answers, and the reason of a two-person relation note) and how many are handled. */
-  itemCount: number;
-  handledCount: number;
+  itemCount?: number;
+  handledCount?: number;
   firstLine: string;
   status: InboxStatus;
   starred: boolean;

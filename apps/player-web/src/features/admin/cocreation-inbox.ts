@@ -435,8 +435,13 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           item.kind === 'pair' && item.excluded ? h('span', { class: 'cc-chip', text: '不计入' }) : null,
           h('span', { class: 'cc-count', text: `${item.answerCount} 条` }),
           // Part 59: the note stays in 新 until every item is handled; the chip says how far it is.
-          item.status !== 'processed' && item.handledCount > 0 && item.handledCount < item.itemCount
-            ? h('span', { class: 'cc-chip cc-chip-progress', text: `已处理 ${item.handledCount}/${item.itemCount}` })
+          item.status !== 'processed' &&
+            (item.handledCount ?? item.adoptedCount) > 0 &&
+            (item.handledCount ?? item.adoptedCount) < (item.itemCount ?? item.answerCount)
+            ? h('span', {
+                class: 'cc-chip cc-chip-progress',
+                text: `已处理 ${item.handledCount ?? item.adoptedCount}/${item.itemCount ?? item.answerCount}`,
+              })
             : null,
           h('span', { class: 'cc-spacer' }),
           item.starred
