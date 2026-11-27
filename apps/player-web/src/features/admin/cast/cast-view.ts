@@ -30,6 +30,7 @@ import { nameCard, seesPanel } from './cast-character.ts';
 import { ISSUE_LABEL, blankCharacter, changeCount, humanIssue, issueSentence, nameOf } from './cast-model.ts';
 import { groupsPanel, storyPanel, worldPanel, type StoryState } from './cast-stories.ts';
 import { lock, svgNode, type CastCtx, type Region } from './cast-ui.ts';
+import { disclosureChevron } from '../ui/disclosure.ts';
 import { hoverValue } from '../ui/hover-value.ts';
 import { fillStatus, pageHead } from '../ui/page-head.ts';
 import { unsavedText } from '../ui/unsaved.ts';
@@ -196,6 +197,8 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     versionsPop.hidden = !open;
     versionsButton.setAttribute('aria-expanded', String(open));
   };
+  versionsButton.classList.add('dc');
+  versionsButton.append(disclosureChevron());
   versionsButton.addEventListener('click', () => setVersionsOpen(versionsPop.hidden));
   const closeVersionsOutside = (event: Event) => {
     if (!versionsPop.hidden && !versionsWrap.contains(event.target as Node)) setVersionsOpen(false);

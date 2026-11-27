@@ -78,14 +78,26 @@ try {
       if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);
     });
   };
-  const open = async (context: typeof f.context, route: string, width = 1440, height = 900) => {
+  const open = async (context: typeof f.context, route: string, width = 1440, height = 900, showAll = true) => {
     const page: Page = await context.newPage();
     watch(page);
     await page.setViewportSize({ width, height });
     await page.goto(`${f.origin}/?mode=provider-admin#/${route}`);
     await page.locator('.wb-roster .admin-pick-row').first().waitFor({ timeout: 20_000 });
     await page.waitForTimeout(700);
+    // Part 59 (named exception): the rail lists live characters only until 「显示未上线」 is on; this script is about the other groups.
+    if (showAll && (await page.locator('.admin-pick-toggle[aria-pressed="false"]').count())) {
+      await page.locator('.admin-pick-toggle').click();
+      await page.waitForTimeout(300);
+    }
     return page;
+  };
+  /** Part 59 (named exception): 「显示未上线」 on, for the sections about the draft / offline groups. */
+  const showOffline = async (page: Page) => {
+    if (await page.locator('.admin-pick-toggle[aria-pressed="false"]').count()) {
+      await page.locator('.admin-pick-toggle').click();
+      await page.waitForTimeout(300);
+    }
   };
   const snap = async (page: Page, name: string) => {
     await page.waitForTimeout(450);
@@ -149,7 +161,8 @@ try {
   }
 
   // =============== 2. drag reorder: motion, saved, survives a reload, differs between two admins ===============
-  const owner = await open(f.context, 'characters/jojo');
+  // Part 59 (named exception): the drag section runs on the default list (live characters); the later sections turn 「显示未上线」 on.
+  const owner = await open(f.context, 'characters/jojo', 1440, 900, false);
   const before = await idsIn(owner, 'live');
   await expand(owner);
   const row = (id: string) => owner.locator(`.wb-roster .admin-pick-row:has([data-character="${id}"])`);
@@ -195,6 +208,8 @@ try {
   );
   assert.equal(owner.url().includes(first), false, 'a drag does not open the row');
   await owner.reload();
+  await owner.waitForTimeout(900);
+  await showOffline(owner);
   await owner.locator('.wb-roster .admin-pick-row').first().waitFor();
   assert.deepEqual(await idsIn(owner, 'live'), after, 'the order survives a reload');
   await expand(owner);
@@ -220,9 +235,13 @@ try {
   const otherAfter = await idsIn(other, 'live');
   assert.deepEqual(otherAfter.slice(0, 2), [otherFirst, before[0]], 'the second admin ordered differently');
   await other.reload();
+  await owner.waitForTimeout(900);
+  await showOffline(other);
   await other.locator('.wb-roster .admin-pick-row').first().waitFor();
   assert.deepEqual(await idsIn(other, 'live'), otherAfter);
   await owner.reload();
+  await owner.waitForTimeout(900);
+  await showOffline(owner);
   await owner.locator('.wb-roster .admin-pick-row').first().waitFor();
   assert.deepEqual(await idsIn(owner, 'live'), after, 'and the owner’s order is untouched by it');
   assert.notDeepEqual(otherAfter, after);
@@ -235,6 +254,8 @@ try {
     await owner.setViewportSize({ width, height });
     await owner.goto(`${f.origin}/?mode=provider-admin#/characters/jojo`);
     await owner.reload();
+    await owner.waitForTimeout(900);
+    await showOffline(owner);
     await tab(owner, '发布').first().waitFor({ timeout: 20_000 });
     await tab(owner, '发布').click();
     await owner.waitForTimeout(500);
@@ -296,6 +317,8 @@ try {
   await okPost('characters/jojo/save', { expectedRevision: detail.draft?.revision ?? null, profile: draftOf });
   await owner.goto(`${f.origin}/?mode=provider-admin#/characters/jojo`);
   await owner.reload();
+  await owner.waitForTimeout(900);
+  await showOffline(owner);
   await tab(owner, '发布').first().waitFor({ timeout: 20_000 });
   await tab(owner, '发布').click();
   await owner.waitForTimeout(500);
