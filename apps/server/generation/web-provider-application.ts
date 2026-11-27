@@ -12,6 +12,7 @@ import { installWebOwnerOps } from '../admin/web-owner-ops-schema.ts';
 import { WebBroadcast } from '../broadcast/web-broadcast.ts';
 import { installWebBroadcast } from '../broadcast/web-broadcast-schema.ts';
 import { installMemeStore } from '../memes/web-meme-store.ts';
+import { installMemeLibrary } from '../memes/web-meme-library.ts';
 import { installCastDocs } from '../cast/cast-doc-store.ts';
 import { WebTurns } from '../turns/web-turns.ts';
 import { WebFeedback } from '../turns/web-feedback.ts';
@@ -299,6 +300,8 @@ export class WebProviderApplication {
     });
     // Part 37c-1: the dictionary's on/off table (digest-checked runtime step; no numbered migration; STOP WEB_MEME_SCHEMA_MISMATCH).
     installMemeStore(store);
+    // Part 37c-1b: the owner's own entries, edits, deletions, the 待审 queue and the dismissed list (STOP WEB_MEMELIB_SCHEMA_MISMATCH).
+    installMemeLibrary(store);
     // Part 37c-1: where a cast document over its row's 300,000-character check lives (STOP WEB_CAST_DOC_SCHEMA_MISMATCH).
     if (castTablesExist(store)) installCastDocs(store);
     this.cast = castTablesExist(store) ? new WebCastAdmin(store, clock, this.inviteAdmin) : null;

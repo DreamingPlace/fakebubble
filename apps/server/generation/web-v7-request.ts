@@ -31,7 +31,7 @@ import { requireWebContent } from '../admission/web-retention.ts';
 import { castDigest, castRequestContext, readPublication } from '../cast/cast-store.ts';
 import { compileFullView } from '../cast/cast-compile.ts';
 import { selectCastView } from '../cast/cast-select.ts';
-import { readMemesOff } from '../memes/web-meme-store.ts';
+import { readMemeLibrary } from '../memes/web-meme-library.ts';
 import { matchMemes } from '../memes/meme-match.ts';
 import { MEME_TURNS, readMemeUse, withoutMemeUse } from '../../../packages/contracts/web-memes.ts';
 import { castPromptHash } from './cast-prompt.ts';
@@ -409,7 +409,11 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
         .reverse()
         .slice(0, MEME_TURNS)
     : [];
-  const memeHits = memes ? matchMemes(playerTexts, readMemesOff(store), readMemeUse(template)) : [];
+  // Part 37c-1b: the EFFECTIVE library (shipped + the owner's own entries, with his edits, switches and deletions), read live per reply.
+  const effective = memes ? readMemeLibrary(store) : null;
+  const memeHits = effective
+    ? matchMemes(playerTexts, effective.off, readMemeUse(template), undefined, effective.library)
+    : [];
   // The cast the snapshot froze stays the cast of this reply (its publication version); 新+档案+梗 keeps only what this reply needs.
   const cast =
     memes && snapshotCast

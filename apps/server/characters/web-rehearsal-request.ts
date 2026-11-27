@@ -11,6 +11,7 @@ import { MEME_TURNS, readMemeUse, withoutMemeUse } from '../../../packages/contr
 import { castDigest } from '../cast/cast-store.ts';
 import { selectCastView } from '../cast/cast-select.ts';
 import { matchMemes } from '../memes/meme-match.ts';
+import { matchLibraryOf } from '../memes/web-meme-library.ts';
 
 /**
  * Part 35: the request one model gets for one turn of a script. Every 预演 starts like a NEW player: the relationship the chat
@@ -39,10 +40,34 @@ export interface RehearsalFrozen {
   castPool?: CastRequestContext;
   /** Part 37c-1 (a 新+档案+梗 column only): the dictionary entries switched off when the run was queued. */
   memeOff?: string[];
+  /** Part 37c-1b: the owner's own entries and his edited meanings, frozen with the run beside `memeOff` (absent = the shipped library). */
+  memeOwn?: { term: string; meaning: string }[];
+  memeMeanings?: Record<string, string>;
   /** The clock of the first turn. */
   baseAt: number;
   /** Part 31b: set when the run used the LIVE published version of the character (no draft); the version it ran on. */
   liveVersion?: number;
+}
+
+/**
+ * Part 37c-1 / 37c-1b: the dictionary's matches in a run, by code from its player turns and what the run froze (the same on every read):
+ * the effective library AT THE START of the run - the keys off, the owner's own entries and his edited meanings - never today's.
+ */
+export function memeCountsOf(frozen: RehearsalFrozen, players: readonly string[]) {
+  const off = new Set(frozen.memeOff ?? []);
+  // a run that froze no owner layer (an older run) counts against the shipped library, as before
+  const library = matchLibraryOf({ own: frozen.memeOwn ?? [], meanings: frozen.memeMeanings ?? {} });
+  const use = readMemeUse(frozen.template);
+  const counts = { matched: 0, given: 0, use: 0, know: 0, avoid: 0 };
+  players.forEach((_, at) => {
+    const window = players.slice(Math.max(0, at - MEME_TURNS + 1), at + 1).reverse();
+    counts.matched += matchMemes(window, off, use, Number.MAX_SAFE_INTEGER, library).length;
+    for (const hit of matchMemes(window, off, use, undefined, library)) {
+      counts.given++;
+      counts[hit.level]++;
+    }
+  });
+  return counts;
 }
 
 export const rehearsalJobId = (runId: string, model: string, turn: number) => `${runId}-${model}-${turn}`;
@@ -111,7 +136,13 @@ export function rehearsalRequest(
         .slice(0, MEME_TURNS)
     : [];
   const memeHits = column.memes
-    ? matchMemes(playerTexts, new Set(frozen.memeOff ?? []), readMemeUse(frozen.template))
+    ? matchMemes(
+        playerTexts,
+        new Set(frozen.memeOff ?? []),
+        readMemeUse(frozen.template),
+        undefined,
+        matchLibraryOf({ own: frozen.memeOwn ?? [], meanings: frozen.memeMeanings ?? {} }),
+      )
     : [];
   const memeCast =
     column.memes && frozen.castPool

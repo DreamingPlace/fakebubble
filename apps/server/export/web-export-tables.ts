@@ -1,9 +1,16 @@
 import { ensure } from '../../../packages/domain/errors.ts';
 import { STATS_RANGES, type StatsRange } from '../../../packages/contracts/web-stats.ts';
-import type { MemeListInput } from '../../../packages/contracts/web-memes.ts';
+import {
+  MEME_SOURCE_LABELS,
+  MEME_STATES,
+  isMemeCategory,
+  isMemeSource,
+  type MemeListInput,
+  type MemeSource,
+} from '../../../packages/contracts/web-memes.ts';
 import type { RehearsalRunDetail, RehearsalRunInfo } from '../../../packages/contracts/web-rehearsal.ts';
 import { readCosts, readPlayerStats, readSpend } from '../admin/web-stats-admin.ts';
-import { listMemes } from '../memes/web-meme-store.ts';
+import { listMemes } from '../memes/web-meme-library.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { statsExtrasExist, statsTablesExist } from '../stats/web-stats.ts';
 import { MASKED_CODE } from '../invites/web-invite-export.ts';
@@ -208,8 +215,20 @@ export function parseMemeFilters(input: unknown): Omit<MemeListInput, 'page'> {
   const tag = body.tag ?? null;
   ensure(tag === null || (typeof tag === 'string' && [...tag].length <= 40), 'INVALID_REQUEST');
   const state = body.state ?? 'all';
-  ensure(state === 'all' || state === 'on' || state === 'off' || state === 'default-off', 'INVALID_REQUEST');
-  return { query, year: year as number | null, tag: tag as string | null, state };
+  ensure((MEME_STATES as readonly unknown[]).includes(state), 'INVALID_REQUEST');
+  // Part 37c-1b: the page's category and source filters (absent = none).
+  const category = body.category ?? null;
+  ensure(category === null || isMemeCategory(category), 'INVALID_REQUEST');
+  const source = body.source ?? null;
+  ensure(source === null || isMemeSource(source), 'INVALID_REQUEST');
+  return {
+    query,
+    year: year as number | null,
+    tag: tag as string | null,
+    state: state as MemeListInput['state'],
+    category: category as string | null,
+    source: source as MemeSource | null,
+  };
 }
 export function memeSheets(store: Reader, filters: Omit<MemeListInput, 'page'>): Sheet[] {
   const rows: Cell[][] = [];
@@ -223,10 +242,16 @@ export function memeSheets(store: Reader, filters: Omit<MemeListInput, 'page'>):
         entry.tags.join('、'),
         entry.enabled ? '已开启' : '已关闭',
         entry.defaultOff ? '是' : '否',
+        entry.category,
+        MEME_SOURCE_LABELS[entry.source],
+        entry.deleted ? '是' : '否',
       ]);
     if (page >= view.pages) break;
   }
-  return [{ name: '网络梗', header: ['词', '释义', '年份', '标签', '状态', '默认关闭'], rows }];
+  // Part 37c-1b: 分类, 来源 (自带 / 手动 / 上传, later 梗雷达 / 玩家聊天) and 已删除 are appended; the columns before them keep their place.
+  return [
+    { name: '网络梗', header: ['词', '释义', '年份', '标签', '状态', '默认关闭', '分类', '来源', '已删除'], rows },
+  ];
 }
 
 // ---- 邀请与额度 -------------------------------------------------------------------------------------------------------------------

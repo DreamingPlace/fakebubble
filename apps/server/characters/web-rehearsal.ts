@@ -40,7 +40,7 @@ import type { CastView } from '../../../packages/contracts/web-cast.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { castForPreview, castPoolForPreview } from '../cast/cast-store.ts';
-import { readMemesOff } from '../memes/web-meme-store.ts';
+import { matchLibraryOf, readMemeLibraryState } from '../memes/web-meme-library.ts';
 import { MEME_TURNS, readMemeUse } from '../../../packages/contracts/web-memes.ts';
 import { matchMemes } from '../memes/meme-match.ts';
 import { currentReviewModel } from '../admission/web-review-model.ts';
@@ -57,7 +57,7 @@ import { characterProfileHash, upgradedProfile, type StoredWebCharacterProfile }
 import { requirePreviewActor } from './web-character-preview.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { cleanPhrases, countReplies, DEFAULT_PHRASES, type AnalysedReply } from './web-rehearsal-analysis.ts';
-import { rehearsalRequest, type RehearsalFrozen } from './web-rehearsal-request.ts';
+import { memeCountsOf, rehearsalRequest, type RehearsalFrozen } from './web-rehearsal-request.ts';
 import { installRehearsal } from './web-rehearsal-schema.ts';
 import { installRehearsalErase, rehearsalNotErased } from './web-rehearsal-erase.ts';
 import { builtinSet, builtinSets, itemSpec, memeItems, memeItemsAllowed, memeTurnPlan } from './web-rehearsal-sets.ts';
@@ -449,7 +449,12 @@ export class WebRehearsal {
       ...(models.some((key) => parseRehearsalColumn(key)?.writer === 'v8') && ownNames.length ? { ownNames } : {}),
       ...(cast ? { cast } : {}),
       // Part 37c-1: what a 新+档案+梗 column needs of the dictionary and the cast, frozen with the run.
-      ...(memesColumn ? { memeOff: [...readMemesOff(this.store)].sort() } : {}),
+      // Part 37c-1b: the effective library at the start of the run (the keys off, the owner's own entries, his edited meanings).
+      ...(memesColumn
+        ? (({ off, own, meanings }) => ({ memeOff: off, memeOwn: own, memeMeanings: meanings }))(
+            readMemeLibraryState(this.store),
+          )
+        : {}),
       ...(memesColumn && cast
         ? {
             castPool: castPoolForPreview(this.store, characterId, [
@@ -736,18 +741,7 @@ export class WebRehearsal {
       this.store.get<{ frozen_json: string }>('SELECT frozen_json FROM web_rehearsal_runs WHERE id=?', runId)!
         .frozen_json,
     ) as RehearsalFrozen;
-    const off = new Set(frozen.memeOff ?? []);
-    const use = readMemeUse(frozen.template);
-    const counts = { matched: 0, given: 0, use: 0, know: 0, avoid: 0 };
-    players.forEach((_, at) => {
-      const window = players.slice(Math.max(0, at - MEME_TURNS + 1), at + 1).reverse();
-      counts.matched += matchMemes(window, off, use, Number.MAX_SAFE_INTEGER).length;
-      for (const hit of matchMemes(window, off, use)) {
-        counts.given++;
-        counts[hit.level]++;
-      }
-    });
-    return counts;
+    return memeCountsOf(frozen, players);
   }
 
   /** The whole run, computed from what is stored. `characterId` must be the run's: another character's run is not found. */
