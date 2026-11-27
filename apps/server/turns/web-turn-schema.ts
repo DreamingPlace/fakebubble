@@ -42,7 +42,7 @@ export function installWebTurns(store: BusinessStore) {
   const digest = createHash('sha256').update(statements.join(';\n')).digest('hex');
   store.transaction(() => {
     if (!store.get("SELECT 1 FROM sqlite_master WHERE name='web_turn_schema'")) {
-      ensure(!store.get("SELECT 1 FROM sqlite_master WHERE name GLOB 'web_turn*'"), 'WEB_TURN_SCHEMA_MISMATCH');
+      ensure(!store.get("SELECT 1 FROM sqlite_master WHERE name GLOB 'web_turn_*'"), 'WEB_TURN_SCHEMA_MISMATCH');
       for (const sql of statements) store.all(sql);
       store.all(
         'CREATE TABLE web_turn_schema(version INTEGER PRIMARY KEY CHECK(version=1),sha256 TEXT NOT NULL) STRICT',
@@ -51,7 +51,7 @@ export function installWebTurns(store: BusinessStore) {
     }
     const rows = store.all<{ version: number; sha256: string }>('SELECT * FROM web_turn_schema');
     const guards = store.get<{ n: number }>(
-      "SELECT count(*) n FROM sqlite_master WHERE type='trigger' AND name GLOB 'web_turn*'",
+      "SELECT count(*) n FROM sqlite_master WHERE type='trigger' AND name GLOB 'web_turn_*'",
     )!.n;
     ensure(
       rows.length === 1 && rows[0]!.version === 1 && rows[0]!.sha256 === digest && guards === 1,
