@@ -13,6 +13,7 @@ export const EXPORT_KINDS = [
   'broadcast',
   'shares',
   'rehearsal',
+  'feedback',
 ] as const;
 export type ExportKind = (typeof EXPORT_KINDS)[number];
 export type ExportFormat = 'csv' | 'xlsx';

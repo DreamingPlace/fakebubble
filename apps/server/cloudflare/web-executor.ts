@@ -12,6 +12,7 @@ import { DomainError } from '../../../packages/domain/errors.ts';
 import { CloudQueueAlarm, type AlarmStorage } from './queue-alarm.ts';
 import { webEmbedNextDue } from '../generation/web-embed-ledger.ts';
 import type { WebBroadcast } from '../broadcast/web-broadcast.ts';
+import type { WebTurns } from '../turns/web-turns.ts';
 
 /** A deadline for uncertain work is a classification wake, never a permission to resend it. */
 export function webProviderNextDue(store: WebRuntimeStore, now: number, ownsCoordinator = false): number | null {
@@ -104,6 +105,8 @@ export class WebCloudExecutor {
     broadcast?: WebBroadcast,
     /** Part 54: runs each stage in its own request context (see WebProviderExecutor.dispatch). */
     dispatch?: (launchId: string) => Promise<unknown>,
+    /** Part 36: a batch of bubbles is closed (and its reply started) by this alarm once the player has been quiet for 4 s. */
+    turns?: WebTurns,
   ) {
     this.executor = new WebProviderExecutor(
       store,
@@ -136,6 +139,14 @@ export class WebCloudExecutor {
             JSON.stringify({ event: 'web_broadcast_pass_failed', code: (error as { code?: string }).code ?? 'ERROR' }),
           );
         }
+        // Part 36: close the batches whose quiet period is over before the pass that starts queued replies.
+        try {
+          turns?.pass();
+        } catch (error) {
+          console.error(
+            JSON.stringify({ event: 'web_turn_pass_failed', code: (error as { code?: string }).code ?? 'ERROR' }),
+          );
+        }
         this.previews?.kick();
         try {
           this.executor.managedPass(`web-cloud-${store.instanceId}`);
@@ -155,6 +166,7 @@ export class WebCloudExecutor {
           this.previews?.nextDue() ?? Infinity,
           deletion?.nextDue() ?? Infinity,
           broadcast?.nextDue(clock.now()) ?? Infinity,
+          turns?.nextDue(clock.now()) ?? Infinity,
         );
         return Number.isFinite(next) ? next : null;
       },

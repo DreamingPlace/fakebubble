@@ -59,6 +59,16 @@ interface OperationRow {
   deadline_at: number;
 }
 type Terminal = 'cancelled' | 'failed';
+interface AdmitInput {
+  principalId: string;
+  requestId: string;
+  characterId: string;
+  text: string;
+  ipHash: string;
+  /** Part 36: admit the turn on an existing message (the last bubble of a batch) instead of storing a new one. */
+  anchor?: { messageId: string; conversationId: string };
+  dryRun?: boolean;
+}
 
 /** Trusted internal service. HTTP must authenticate the principal and derive ipHash at a trusted boundary. */
 export class WebAdmission {
@@ -102,7 +112,20 @@ export class WebAdmission {
     });
   }
 
-  admit(input: { principalId: string; requestId: string; characterId: string; text: string; ipHash: string }) {
+  admit(input: AdmitInput) {
+    return this.run(input) as Extract<ReturnType<WebAdmission['run']>, { operationId: string }>;
+  }
+
+  /**
+   * Part 36: the same decisions as admit() (principal, content gate, character, entitlement, points, trial counters, queue
+   * limits) without writing anything but the idempotent registered-player bonus row. A bubble is accepted only when the turn it
+   * will belong to could be admitted; the turn itself is admitted (and charged) once, when the batch closes.
+   */
+  canAdmit(input: Omit<AdmitInput, 'requestId' | 'anchor'>) {
+    this.run({ ...input, requestId: 'dry-run', dryRun: true });
+  }
+
+  private run(input: AdmitInput) {
     ensure(/^[A-Za-z0-9_.-]{1,128}$/.test(input.requestId), 'INVALID_REQUEST_ID');
     ensure(typeof input.text === 'string' && typeof input.characterId === 'string', 'INVALID_TEXT');
     ensure(/^[a-f0-9]{64}$/.test(input.ipHash), 'WEB_TRUSTED_IP_REQUIRED');
@@ -124,7 +147,7 @@ export class WebAdmission {
         input.principalId,
         input.requestId,
       );
-      if (prior) {
+      if (prior && !input.dryRun) {
         ensure(prior.payload_hash === payloadHash, 'IDEMPOTENCY_CONFLICT');
         return {
           operationId: prior.id,
@@ -238,6 +261,8 @@ export class WebAdmission {
         WHERE status NOT IN ('published','cancelled','failed')`)!.count;
       ensure(global < webConcurrency(this.store).maxGlobalReservedOperations, 'QUEUE_FULL');
 
+      // Part 36: a dry run stops here, after every read-only decision and before the first write.
+      if (input.dryRun) return { dryRun: true as const };
       const now = this.clock.now();
       ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
       if (lifecycle) ensure(now <= Number.MAX_SAFE_INTEGER - trialWindowMs, 'INVALID_TIME');
@@ -277,55 +302,39 @@ export class WebAdmission {
         ensure(window.used + window.reserved < WEB_LIMITS.trialReplies, 'TRIAL_EXHAUSTED');
       }
 
-      let conversation = this.store.get<{ id: string }>(
-        `SELECT id FROM conversations
+      let conversation = input.anchor
+        ? { id: input.anchor.conversationId }
+        : this.store.get<{ id: string }>(
+            `SELECT id FROM conversations
         WHERE world_id=? AND private_character_id=? AND kind='private'`,
-        principal.world_id,
-        input.characterId,
-      );
-      if (!conversation) {
-        conversation = { id: this.nextId() };
+            principal.world_id,
+            input.characterId,
+          );
+      if (!conversation) conversation = this.createConversation(principal.world_id, input.characterId);
+      // Part 36: with an anchor the message already exists (a bubble stored when it was sent); the turn is admitted on its last one.
+      const messageId = input.anchor ? input.anchor.messageId : this.nextId(),
+        operationId = this.nextId();
+      if (!input.anchor) {
         this.store.run(
-          "INSERT INTO conversations(world_id,id,kind,private_character_id) VALUES (?,?,'private',?)",
+          `INSERT INTO messages(id,world_id,conversation_id,author_kind,author_id,body,created_at,delivery,request_id,request_hash)
+        VALUES (?,?,?,'player',?,?,?,'text',?,?)`,
+          messageId,
           principal.world_id,
           conversation.id,
-          input.characterId,
+          principal.player_id,
+          input.text,
+          now,
+          input.requestId,
+          payloadHash,
         );
         this.store.run(
-          'INSERT INTO participants VALUES (?,?,?)',
+          'INSERT INTO outbox(world_id,conversation_id,message_id,created_at) VALUES (?,?,?,?)',
           principal.world_id,
           conversation.id,
-          input.characterId,
-        );
-        this.store.run(
-          'INSERT INTO contacts VALUES (?,?,?,?)',
-          principal.world_id,
-          conversation.id,
-          input.characterId,
-          JSON.stringify(emptySession()),
+          messageId,
+          now,
         );
       }
-      const messageId = this.nextId(),
-        operationId = this.nextId();
-      this.store.run(
-        `INSERT INTO messages(id,world_id,conversation_id,author_kind,author_id,body,created_at,delivery,request_id,request_hash)
-        VALUES (?,?,?,'player',?,?,?,'text',?,?)`,
-        messageId,
-        principal.world_id,
-        conversation.id,
-        principal.player_id,
-        input.text,
-        now,
-        input.requestId,
-        payloadHash,
-      );
-      this.store.run(
-        'INSERT INTO outbox(world_id,conversation_id,message_id,created_at) VALUES (?,?,?,?)',
-        principal.world_id,
-        conversation.id,
-        messageId,
-        now,
-      );
       if (extra && lifecycle) {
         // The first reply of a guest may already be an extra one (its IP's counters are spent): the trial window starts now.
         ensure(retention?.state === 'unstarted' || retention?.state === 'active', 'TRIAL_EXPIRED');
@@ -481,6 +490,26 @@ export class WebAdmission {
         duplicate: false as const,
       };
     });
+  }
+
+  /** The private conversation of a world with a character, with its participant and contact rows. */
+  createConversation(worldId: string, characterId: string) {
+    const conversation = { id: this.nextId() };
+    this.store.run(
+      "INSERT INTO conversations(world_id,id,kind,private_character_id) VALUES (?,?,'private',?)",
+      worldId,
+      conversation.id,
+      characterId,
+    );
+    this.store.run('INSERT INTO participants VALUES (?,?,?)', worldId, conversation.id, characterId);
+    this.store.run(
+      'INSERT INTO contacts VALUES (?,?,?,?)',
+      worldId,
+      conversation.id,
+      characterId,
+      JSON.stringify(emptySession()),
+    );
+    return conversation;
   }
 
   /**

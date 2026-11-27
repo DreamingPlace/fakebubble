@@ -186,6 +186,9 @@ export function auditCharacterDeletionScope(
       'web_broadcast_messages',
       // Part 45: the share links of the conversation and the character are purged with it (purgeShareConversation / purgeShareCharacter).
       'web_shares',
+      // Part 36: the turn rows and the ratings of the conversation and the character are purged with it.
+      'web_turn_bubbles',
+      'web_feedback',
     ])
       allowed.add(name);
   for (const { name } of store.all<{ name: string }>(

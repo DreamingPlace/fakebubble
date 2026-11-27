@@ -1,8 +1,8 @@
 /**
  * Part 45: the share sheet of one of a character's voice messages (design board approved by the owner, night mode).
  *
- * The entry is a 分享 icon beside the voice bubble (only a character's voice message that has audio gets one). Tapping it opens, on a
- * phone, a sheet from the bottom, and on a wider screen a small card beside the icon. It shows the character's small card (avatar,
+ * The entry is 分享为卡片 in the long-press menu of a character's voice message that has audio (Part 36 removed the 分享 icon that sat
+ * beside the bubble). It opens, on a phone, a sheet from the bottom, and on a wider screen a small card beside the icon. It shows the character's small card (avatar,
  * name, number, length), the link, 复制链接 and, where the browser has a share sheet, 分享. There is no explanatory text.
  *
  * The sheet is an overlay on the page: it never touches the audio, so a voice message that is playing keeps playing while the sheet
@@ -55,15 +55,6 @@ const element = (tag: string, className: string, html = '') => {
   if (html) node.innerHTML = html;
   return node;
 };
-
-/** The 分享 icon button that goes beside a voice bubble. */
-export function shareButton() {
-  const button = element('button', 'share-btn', ICON_SHARE) as HTMLButtonElement;
-  button.type = 'button';
-  button.setAttribute('aria-label', shareCopy.open);
-  button.setAttribute('aria-haspopup', 'dialog');
-  return button;
-}
 
 /** Shortens the address for display only: the full one is what is copied and shared. */
 export const shortLink = (url: string) => {

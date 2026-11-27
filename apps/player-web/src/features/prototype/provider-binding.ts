@@ -22,7 +22,9 @@ import { renderSignedOut, type SignedOutApi } from '../account/signed-out-page.t
 import { playerPrefs } from '../prefs/player-prefs.ts';
 import { lookCopy, openLookSheet } from './chat-look.ts';
 import { clearVoiceProgress, setVoiceProgress } from './voice-progress.ts';
-import { openShareSheet, shareButton, shareCopy } from '../share/share-sheet.ts';
+import { openShareSheet, shareCopy } from '../share/share-sheet.ts';
+import { attachLongPress, MENU_ICONS, openMessageMenu, type MenuSet } from '../chat/message-menu.ts';
+import { quoteBlock, quoteStrip, type QuoteDraft } from '../chat/quote.ts';
 
 export type Shell = {
   say(message: string): void;
@@ -115,9 +117,22 @@ export class LiveBinding {
   private generation = 0;
   private readonly loaded = new Set<string>();
   private readonly shown = new Set<string>();
-  private busy = false;
+  /** Part 36: a reply (a turn) is being waited for. The composer is never blocked by it: new bubbles wait for the next turn. */
+  private get busy() {
+    return this.watching.size > 0;
+  }
+  /** Characters whose turn this page is following. */
+  private readonly watching = new Set<WebProviderCharacterId>();
+  private readonly watches = new Set<Promise<void>>();
+  /** The messages this page shows, by id (the long-press menu reads what a bubble is from here). */
+  private readonly messageById = new Map<string, WebProviderMessage>();
+  /** The player's own 👍 / 👎 on character replies. */
+  private readonly ratings = new Map<string, NonNullable<WebProviderMessage['rating']>>();
+  /** The bubble each character's composer is quoting. */
+  private readonly quotes = new Map<WebProviderCharacterId, QuoteDraft>();
+  /** Bubbles are sent one after another, in the order they were typed. */
+  private readonly sendChain = new Map<WebProviderCharacterId, Promise<void>>();
   private viewRevision = 0;
-  private sendingCharacter: WebProviderCharacterId | null = null;
   private readonly wait: (ms: number) => Promise<void>;
   private accessKnown = true;
   private refreshing: Promise<void> | null = null;
@@ -643,7 +658,6 @@ export class LiveBinding {
       'available';
     if (button)
       button.disabled =
-        this.busy ||
         this.invitation.locked ||
         !this.accessKnown ||
         this.catalogChanged ||
@@ -1026,12 +1040,19 @@ export class LiveBinding {
     const shell = this.shell!;
     const row = document.createElement('div');
     row.dataset.messageId = message.messageId;
+    this.messageById.set(message.messageId, message);
+    if (message.rating) this.ratings.set(message.messageId, message.rating);
+    const quote = (bubble: HTMLElement) => {
+      if (message.quote) bubble.prepend(quoteBlock({ ...message.quote }, shell.name(characterId)));
+    };
     if (message.author === 'player') {
       row.className = 'message-row outgoing';
       const bubble = document.createElement('p');
       bubble.className = 'text-bubble';
       bubble.textContent = message.text;
+      quote(bubble);
       row.append(bubble);
+      this.attachMenu(characterId, row, '.text-bubble');
       return row;
     }
     if (message.deliveryFallback === 'text') {
@@ -1052,6 +1073,8 @@ export class LiveBinding {
         stack.append(bubble, backupNote(message.viaBackup, this.modelChoice?.metered !== false));
         row.append(avatar, stack);
       } else row.append(avatar, bubble);
+      this.showRating(row, message.messageId, false);
+      this.attachMenu(characterId, row, '.text-bubble');
       return row;
     }
     row.className = 'message-row incoming';
@@ -1080,34 +1103,204 @@ export class LiveBinding {
       toggle.textContent = visible ? '收起文字' : '转文字';
       toggle.setAttribute('aria-expanded', String(visible));
     });
-    // Part 45: every character voice message that has audio (a reply's voice, a broadcast's) can be shared as a link. The trial
-    // footer, the welcome clip and a reply delivered as text have no icon: they are not the character's voice message.
-    if (message.author === 'character' && message.origin === 'narrative' && message.audio?.mediaId) {
-      const button = shareButton();
-      button.addEventListener('click', () => {
-        const target = {
-          name: shell.name(characterId),
-          mark: shell.mark(characterId),
-          portrait: shell.portrait?.(characterId) ?? null,
-          no: shell.cardNo?.(characterId) ?? '',
-          durationMs: message.audio?.durationMs ?? null,
-        };
-        try {
-          openShareSheet(button, target, {
-            say: (text) => shell.say(text),
-            create: (requestId) =>
-              this.api.share({ requestId, conversationId: message.conversationId, messageId: message.messageId }),
-          });
-        } catch {
-          shell.say(shareCopy.failed); // never silent: a sheet that could not be built is said
-        }
-      });
-      row.append(button);
-    }
     // Part 21b: a reply the backup model wrote says so, once, under its first voice bubble.
     if (message.viaBackup && message.replyOrdinal === 0)
       row.querySelector('.voice-stack')?.append(backupNote(message.viaBackup, this.modelChoice?.metered !== false));
+    this.showRating(row, message.messageId, false);
+    this.attachMenu(characterId, row, '.voice-bubble');
     return row;
+  }
+
+  /**
+   * Part 36: the one long-press menu. 引用 for any bubble (the welcome clip is not a stored message, so it has none); a character's voice
+   * message that has audio also offers 分享为卡片 (the share sheet of Part 45; sharing lives only here); her replies offer 👍 / 👎.
+   */
+  private attachMenu(characterId: WebProviderCharacterId, row: HTMLElement, bubbleSelector: string) {
+    attachLongPress(row, () => this.openMenu(characterId, row, bubbleSelector));
+  }
+
+  private openMenu(characterId: WebProviderCharacterId, row: HTMLElement, bubbleSelector: string) {
+    const id = row.dataset.messageId;
+    const message = id ? this.messageById.get(id) : undefined;
+    const shell = this.shell;
+    if (!id || !message || !shell) return;
+    const card = shell.card(characterId);
+    const items = (): MenuSet => {
+      const set: MenuSet = [
+        {
+          key: 'quote',
+          icon: MENU_ICONS.quote,
+          label: '引用',
+          name: '引用',
+          run: () =>
+            this.setQuote(characterId, card, {
+              messageId: id,
+              author: message.author === 'player' ? 'player' : 'character',
+              text: message.text,
+            }),
+        },
+      ];
+      const voice = message.author === 'character' && message.origin === 'narrative' && !!message.audio?.mediaId;
+      if (voice)
+        set.push({
+          key: 'share',
+          icon: MENU_ICONS.card,
+          label: '分享为卡片',
+          name: '分享为卡片',
+          run: () => this.openShare(characterId, row, bubbleSelector, message),
+        });
+      // her replies: a voice message or a text-fallback reply published by a turn (a broadcast, the footer and the welcome clip are not rated)
+      if (message.author === 'character' && message.origin === 'narrative' && message.operationId) {
+        const current = this.ratings.get(id)?.value ?? null;
+        set.push(
+          'separator',
+          {
+            key: 'up',
+            icon: MENU_ICONS.up,
+            name: '赞',
+            on: current === 'up',
+            run: () => void this.rate(characterId, message, current === 'up' ? 'none' : 'up'),
+          },
+          {
+            key: 'down',
+            icon: MENU_ICONS.down,
+            name: '踩',
+            on: current === 'down',
+            run: () => {
+              if (current === 'down') {
+                void this.rate(characterId, message, 'none');
+                return;
+              }
+              // A voice message asks what is rated down; a reply that came as text is its content.
+              if (!message.audio?.mediaId) {
+                void this.rate(characterId, message, 'down', 'content');
+                return;
+              }
+              menu.render([
+                { key: 'down', icon: MENU_ICONS.down, name: '踩', on: true, run: () => 'stay' },
+                'separator',
+                {
+                  key: 'voice',
+                  icon: MENU_ICONS.voice,
+                  label: '语音',
+                  name: '语音',
+                  run: () => void this.rate(characterId, message, 'down', 'voice'),
+                },
+                {
+                  key: 'content',
+                  icon: MENU_ICONS.content,
+                  label: '内容',
+                  name: '内容',
+                  run: () => void this.rate(characterId, message, 'down', 'content'),
+                },
+              ]);
+              return 'stay';
+            },
+          },
+        );
+      }
+      return set;
+    };
+    const menu = openMessageMenu(row, bubbleSelector, items());
+  }
+
+  private openShare(
+    characterId: WebProviderCharacterId,
+    row: HTMLElement,
+    bubbleSelector: string,
+    message: WebProviderMessage,
+  ) {
+    const shell = this.shell!;
+    const anchor = row.querySelector<HTMLElement>(bubbleSelector) ?? row;
+    const target = {
+      name: shell.name(characterId),
+      mark: shell.mark(characterId),
+      portrait: shell.portrait?.(characterId) ?? null,
+      no: shell.cardNo?.(characterId) ?? '',
+      durationMs: message.audio?.durationMs ?? null,
+    };
+    try {
+      openShareSheet(anchor, target, {
+        say: (text) => shell.say(text),
+        create: (requestId) =>
+          this.api.share({ requestId, conversationId: message.conversationId, messageId: message.messageId }),
+      });
+    } catch {
+      shell.say(shareCopy.failed); // never silent: a sheet that could not be built is said
+    }
+  }
+
+  /** The rated mark: outside the bubble at its bottom-right corner, bottom on the bubble's bottom edge. Replaced, never stacked. */
+  private showRating(row: HTMLElement, messageId: string, animate: boolean) {
+    row.querySelector('.rating-mark')?.remove();
+    const rating = this.ratings.get(messageId);
+    if (!rating) return;
+    const host = row.querySelector<HTMLElement>('.voice-bubble') ?? row.querySelector<HTMLElement>('.text-bubble');
+    if (!host) return;
+    const mark = document.createElement('span');
+    mark.className = `rating-mark${animate ? ' is-new' : ''}`;
+    mark.dataset.rating = rating.value;
+    if (rating.target) mark.dataset.target = rating.target;
+    mark.setAttribute('role', 'img');
+    mark.setAttribute('aria-label', rating.value === 'up' ? '已赞' : '已踩');
+    mark.innerHTML = rating.value === 'up' ? MENU_ICONS.up : MENU_ICONS.down;
+    host.append(mark);
+  }
+
+  private async rate(
+    characterId: WebProviderCharacterId,
+    message: WebProviderMessage,
+    rating: 'up' | 'down' | 'none',
+    target?: 'voice' | 'content',
+  ) {
+    const before = this.ratings.get(message.messageId) ?? null;
+    const row = this.shell
+      ?.card(characterId)
+      .querySelector<HTMLElement>(`[data-message-id="${CSS.escape(message.messageId)}"]`);
+    // The mark answers at once; a refused request puts it back.
+    if (rating === 'none') this.ratings.delete(message.messageId);
+    else this.ratings.set(message.messageId, { value: rating, target: target ?? null });
+    if (row) this.showRating(row, message.messageId, rating !== 'none');
+    try {
+      await this.api.rate({
+        requestId: crypto.randomUUID(),
+        conversationId: message.conversationId,
+        messageId: message.messageId,
+        rating,
+        ...(target ? { target } : {}),
+      });
+    } catch (error) {
+      if (before) this.ratings.set(message.messageId, before);
+      else this.ratings.delete(message.messageId);
+      if (row) this.showRating(row, message.messageId, false);
+      this.fail(error);
+    }
+  }
+
+  /** The composer quotes one bubble (a strip with ✕ above the field); a second 引用 replaces the first. */
+  private setQuote(characterId: WebProviderCharacterId, card: HTMLElement, quote: QuoteDraft) {
+    this.quotes.set(characterId, quote);
+    const composer = card.querySelector<HTMLElement>('.composer');
+    if (!composer) return;
+    composer.querySelector('.quote-strip')?.remove();
+    const strip = quoteStrip(quote, this.shell!.name(characterId), () => this.clearQuote(characterId, card));
+    composer.classList.add('has-quote');
+    composer.prepend(strip);
+    card.querySelector<HTMLTextAreaElement>('textarea')?.focus({ preventScroll: true });
+  }
+
+  private clearQuote(characterId: WebProviderCharacterId, card: HTMLElement) {
+    this.quotes.delete(characterId);
+    const composer = card.querySelector<HTMLElement>('.composer');
+    const strip = composer?.querySelector<HTMLElement>('.quote-strip');
+    composer?.classList.remove('has-quote');
+    if (!strip) return;
+    if (typeof strip.animate !== 'function' || globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+      strip.remove();
+    else {
+      strip.classList.add('is-leaving');
+      window.setTimeout(() => strip.remove(), 160);
+    }
   }
 
   private append(characterId: WebProviderCharacterId, card: HTMLElement, messages: WebProviderMessage[]) {
@@ -1157,14 +1350,14 @@ export class LiveBinding {
 
   async open(characterId: WebProviderCharacterId, card: HTMLElement) {
     if (card.classList.contains('is-chat')) this.guides.get(characterId)?.show();
-    if (this.catalogChanged || this.sendingCharacter === characterId) return;
+    if (this.catalogChanged) return;
     const revision = this.viewRevision;
     const conversationId = this.conversation(characterId);
     if (!conversationId || this.loaded.has(conversationId)) return;
     this.loaded.add(conversationId);
     try {
       const page = await this.api.history({ characterId, conversationId, before: null });
-      if (this.catalogChanged || revision !== this.viewRevision || this.sendingCharacter === characterId) return;
+      if (this.catalogChanged || revision !== this.viewRevision) return;
       this.append(characterId, card, page.messages);
     } catch (error) {
       this.loaded.delete(conversationId);
@@ -1172,6 +1365,11 @@ export class LiveBinding {
     }
   }
 
+  /**
+   * Part 36: sends ONE bubble. Bubbles in a row are stored one by one, in the order they were typed (the composer is never blocked
+   * by a reply); the character answers the whole batch once, after 4 s of quiet or at five bubbles. This page follows that turn
+   * (`watchTurn`): it shows her reply when it lands, and says "正在讲话中" only while she is replying.
+   */
   async send(characterId: WebProviderCharacterId, text: string, card: HTMLElement, onAccepted?: () => void) {
     // Part 26a: nothing is sent and the draft stays; the page says why, and 注册 opens the signup sheet.
     if (this.guestLocked(characterId)) {
@@ -1182,114 +1380,217 @@ export class LiveBinding {
       this.shell?.say('请先核对邀请兑换结果，未发送消息');
       return;
     }
-    if (this.busy) {
-      this.shell?.say('上一条还在回复中');
-      return;
-    }
-    // Part 38a: sending never stops playback; a reply's clips wait behind whatever is playing.
-    this.busy = true;
-    this.sendingCharacter = characterId;
     const revision = this.viewRevision;
-    this.renderAccess();
     const list = card.querySelector<HTMLElement>('.sent-messages')!;
     const echo = document.createElement('div');
     echo.className = 'message-row outgoing';
     const bubble = document.createElement('p');
     bubble.className = 'text-bubble';
     bubble.textContent = text;
+    const quote = this.quotes.get(characterId) ?? null;
+    if (quote) bubble.prepend(quoteBlock({ ...quote }, this.shell!.name(characterId)));
     echo.append(bubble);
     const requestId = crypto.randomUUID();
-    let accepted = false,
-      uncertain = false;
-    try {
-      // IP quota can be consumed by another tab/session after this page was opened.
-      await this.refreshAccess();
-      if (
-        this.view.characters.find((character) => character.characterId === characterId)?.availability.state !==
-        'available'
-      )
-        throw new ProviderApiError(409, 'CHARACTER_UNAVAILABLE');
-      const access = this.view.access;
-      if (!access.canSend)
-        throw new ProviderApiError(
-          403,
-          access.kind === 'guest'
-            ? access.remainingReplies === 0
-              ? 'TRIAL_EXHAUSTED'
-              : 'TRIAL_EXPIRED'
-            : 'ACCESS_UNAVAILABLE',
-        );
-      if (access.kind === 'guest' && access.lockedCharacterId !== null && access.lockedCharacterId !== characterId)
-        throw new ProviderApiError(403, 'TRIAL_CHARACTER_LOCKED');
-      // The page was stale: the refresh above brought the guest's list, which no longer includes this character.
-      if (this.guestLocked(characterId)) throw new ProviderApiError(403, 'GUEST_CHARACTER_LOCKED');
-      list.append(echo);
-      this.speaking(characterId, card, true);
-      card.querySelector<HTMLElement>('.chat-body')!.scrollTop =
-        card.querySelector<HTMLElement>('.chat-body')!.scrollHeight;
-      let operation;
+    const previous = this.sendChain.get(characterId) ?? Promise.resolve();
+    const turn = (async () => {
+      await previous;
+      let accepted = false,
+        uncertain = false;
       try {
-        operation = (await this.api.submit({ requestId, characterId, text, delivery: 'voice' })).operation;
-      } catch (error) {
-        // Uncertain receipt: the same requestId tells us whether the server accepted it.
+        // IP quota can be consumed by another tab/session after this page was opened.
+        await this.refreshAccess();
         if (
-          error instanceof ProviderApiError &&
-          error.status >= 400 &&
-          error.status < 500 &&
-          error.status !== 408 &&
-          error.code !== 'PROTOCOL_INVALID'
+          this.view.characters.find((character) => character.characterId === characterId)?.availability.state !==
+          'available'
         )
-          throw error;
-        uncertain = true;
+          throw new ProviderApiError(409, 'CHARACTER_UNAVAILABLE');
+        const access = this.view.access;
+        if (!access.canSend)
+          throw new ProviderApiError(
+            403,
+            access.kind === 'guest'
+              ? access.remainingReplies === 0
+                ? 'TRIAL_EXHAUSTED'
+                : 'TRIAL_EXPIRED'
+              : 'ACCESS_UNAVAILABLE',
+          );
+        if (access.kind === 'guest' && access.lockedCharacterId !== null && access.lockedCharacterId !== characterId)
+          throw new ProviderApiError(403, 'TRIAL_CHARACTER_LOCKED');
+        // The page was stale: the refresh above brought the guest's list, which no longer includes this character.
+        if (this.guestLocked(characterId)) throw new ProviderApiError(403, 'GUEST_CHARACTER_LOCKED');
+        list.append(echo);
+        const body = card.querySelector<HTMLElement>('.chat-body')!;
+        body.scrollTop = body.scrollHeight;
+        let receipt;
         try {
-          operation = await this.api.byRequest(requestId);
-        } catch {
-          throw new ProviderApiError(0, 'SEND_UNKNOWN');
+          receipt = await this.api.sendBubble({
+            requestId,
+            characterId,
+            text,
+            ...(quote ? { quoteMessageId: quote.messageId } : {}),
+          });
+        } catch (error) {
+          if (
+            error instanceof ProviderApiError &&
+            error.status >= 400 &&
+            error.status < 500 &&
+            error.status !== 408 &&
+            error.code !== 'PROTOCOL_INVALID'
+          )
+            throw error;
+          // Uncertain receipt: the SAME request id is sent once more. A bubble is idempotent per request id, so this either finds the
+          // stored one (duplicate) or stores it once; it can never make a second bubble. Still no answer: nothing more is sent.
+          uncertain = true;
+          try {
+            receipt = await this.api.sendBubble({
+              requestId,
+              characterId,
+              text,
+              ...(quote ? { quoteMessageId: quote.messageId } : {}),
+            });
+            uncertain = false;
+          } catch {
+            throw new ProviderApiError(0, 'SEND_UNKNOWN');
+          }
         }
+        accepted = true;
+        // The echo IS the stored bubble now: a later history read skips it.
+        echo.dataset.messageId = receipt.messageId;
+        this.shown.add(receipt.messageId);
+        this.loaded.add(receipt.conversationId);
+        this.messageById.set(receipt.messageId, {
+          messageId: receipt.messageId,
+          conversationId: receipt.conversationId,
+          characterId,
+          operationId: null,
+          replyOrdinal: null,
+          author: 'player',
+          origin: 'input',
+          text,
+          createdAt: Date.now(),
+          audio: null,
+        });
+        this.attachMenu(characterId, echo, '.text-bubble');
+        if (quote) this.clearQuote(characterId, card);
+        onAccepted?.();
+        const watch = this.watchTurn(characterId, card);
+        this.watches.add(watch);
+        void watch.finally(() => this.watches.delete(watch));
+      } catch (error) {
+        if (revision !== this.viewRevision) {
+          this.fail(error);
+          return;
+        }
+        // A definite rejection is not an accepted bubble, nor an uncertain receipt.
+        if (echo.isConnected) {
+          echo.classList.add(accepted || uncertain ? 'delivery-unconfirmed' : 'not-sent');
+          const state = document.createElement('span');
+          state.className = 'message-send-state';
+          state.setAttribute('role', 'status');
+          state.textContent = uncertain ? '发送结果待确认，请勿重复发送' : '未发送 · 草稿已保留';
+          echo.append(state);
+          // Never retain the old "3" after the server has rejected quota/access.
+          await this.refreshAccess().catch(() => {});
+        }
+        // A stale page: the server answered that this guest's character is another one. Same prompt, never a toast.
+        if (error instanceof ProviderApiError && error.code === 'GUEST_CHARACTER_LOCKED')
+          this.lockPrompt(characterId, card);
+        else this.fail(error);
       }
-      accepted = true;
-      uncertain = false;
-      onAccepted?.();
-      operation = await this.api.waitForOperation(operation);
-      await this.refreshAccess();
-      if (operation.status === 'unknown') throw new ProviderApiError(409, 'REPLY_UNKNOWN');
-      if (operation.status !== 'published') throw new ProviderApiError(409, 'REPLY_NOT_DELIVERED');
-      const page = await this.api.history({ characterId, conversationId: operation.conversationId, before: null });
-      if (revision !== this.viewRevision || this.catalogChanged) return;
-      this.loaded.add(operation.conversationId);
-      echo.remove();
-      await this.present(characterId, card, page.messages, operation.operationId, revision);
-      if (revision !== this.viewRevision || this.catalogChanged) return;
-      if (!document.hidden && card.classList.contains('is-chat')) this.queueReply(operation.operationId);
+    })();
+    this.sendChain.set(characterId, turn);
+    await turn;
+  }
+
+  /** Resolves when no turn is being followed any more (every reply shown or failed). */
+  async settled() {
+    while (this.watches.size) await Promise.all([...this.watches]);
+  }
+
+  /**
+   * Follows the turn of one character's chat until nothing is waiting: collecting (the quiet period; the header stays the nickname),
+   * her reply running (「正在讲话中」), her reply landed (shown one bubble after the other, the clips queued behind whatever is
+   * playing), then the next turn if bubbles were sent meanwhile. A reply that failed or whose result is unknown marks the bubbles it
+   * answered; nothing is ever sent again from here.
+   */
+  private async watchTurn(characterId: WebProviderCharacterId, card: HTMLElement) {
+    if (this.watching.has(characterId)) return;
+    this.watching.add(characterId);
+    this.renderAccess();
+    const revision = this.viewRevision;
+    try {
+      for (;;) {
+        if (revision !== this.viewRevision || this.catalogChanged) return;
+        const turn = await this.api.turn(characterId);
+        if (turn.state === 'idle') return;
+        if (turn.state === 'refused') {
+          this.markUnanswered(card, null, 'not-sent', '未发送');
+          await this.refreshAccess().catch(() => {});
+          this.fail(new ProviderApiError(403, turn.errorCode ?? 'ACCESS_UNAVAILABLE'));
+          return;
+        }
+        if (turn.state === 'collecting' || !turn.operationId) {
+          await this.wait(600);
+          continue;
+        }
+        this.speaking(characterId, card, true);
+        let operation = await this.api.operation(turn.operationId);
+        operation = await this.api.waitForOperation(operation);
+        await this.refreshAccess();
+        const page = await this.api.history({ characterId, conversationId: operation.conversationId, before: null });
+        if (revision !== this.viewRevision || this.catalogChanged) return;
+        this.loaded.add(operation.conversationId);
+        // The bubbles this turn answered (the history names the turn of every stored bubble).
+        const answered = new Set<string>();
+        for (const message of page.messages)
+          if (message.author === 'player' && message.operationId === operation.operationId) {
+            answered.add(message.messageId);
+            const known = this.messageById.get(message.messageId);
+            if (known) known.operationId = operation.operationId;
+          }
+        if (operation.status !== 'published') {
+          this.markUnanswered(card, answered, 'delivery-unconfirmed', '已发送 · 回复未完成，请勿重复发送');
+          this.fail(
+            new ProviderApiError(409, operation.status === 'unknown' ? 'REPLY_UNKNOWN' : 'REPLY_NOT_DELIVERED'),
+          );
+          // The turn is over (never resent); bubbles sent meanwhile get their own turn.
+          this.speaking(characterId, card, false);
+          continue;
+        }
+        await this.present(characterId, card, page.messages, operation.operationId, revision);
+        if (revision !== this.viewRevision || this.catalogChanged) return;
+        if (!document.hidden && card.classList.contains('is-chat')) this.queueReply(operation.operationId);
+        this.speaking(characterId, card, false);
+      }
     } catch (error) {
-      if (revision !== this.viewRevision) {
-        this.fail(error);
-        return;
-      }
-      // A definite rejection is not an accepted operation, nor an uncertain receipt.
-      if (echo.isConnected) {
-        echo.classList.add(accepted || uncertain ? 'delivery-unconfirmed' : 'not-sent');
-        const state = document.createElement('span');
-        state.className = 'message-send-state';
-        state.setAttribute('role', 'status');
-        state.textContent = accepted
-          ? '已发送 · 回复未完成，请勿重复发送'
-          : uncertain
-            ? '发送结果待确认，请勿重复发送'
-            : '未发送 · 草稿已保留';
-        echo.append(state);
-        // Never retain the old "3" after the server has rejected quota/access.
-        await this.refreshAccess().catch(() => {});
-      }
-      // A stale page: the server answered that this guest's character is another one. Same prompt, never a toast.
-      if (error instanceof ProviderApiError && error.code === 'GUEST_CHARACTER_LOCKED')
-        this.lockPrompt(characterId, card);
-      else this.fail(error);
+      this.fail(error);
     } finally {
       this.speaking(characterId, card, false);
-      this.sendingCharacter = null;
-      this.busy = false;
+      this.watching.delete(characterId);
       this.renderAccess();
+    }
+  }
+
+  /**
+   * The bubbles a turn answered but whose reply did not arrive: say so on the rows the page shows, once. `ids` null = every bubble
+   * still waiting for a turn (a refused batch).
+   */
+  private markUnanswered(
+    card: HTMLElement,
+    ids: Set<string> | null,
+    state: 'not-sent' | 'delivery-unconfirmed',
+    text: string,
+  ) {
+    for (const row of card.querySelectorAll<HTMLElement>('.message-row.outgoing[data-message-id]')) {
+      const id = row.dataset.messageId!;
+      if (row.classList.contains('not-sent') || row.classList.contains('delivery-unconfirmed')) continue;
+      if (ids ? !ids.has(id) : this.messageById.get(id)?.operationId) continue;
+      row.classList.add(state);
+      const note = document.createElement('span');
+      note.className = 'message-send-state';
+      note.setAttribute('role', 'status');
+      note.textContent = text;
+      row.append(note);
     }
   }
 }

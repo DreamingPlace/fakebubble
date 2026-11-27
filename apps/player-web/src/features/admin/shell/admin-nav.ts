@@ -21,6 +21,7 @@ export type AdminPage =
   | 'points'
   | 'broadcast'
   | 'conversations'
+  | 'feedback'
   | 'costs'
   | 'models'
   | 'system'
@@ -79,6 +80,8 @@ export const NAV_TREE: readonly NavGroup[] = [
  */
 export const OPTIONAL_NAV: ReadonlyArray<NavItem & { group: string; first?: boolean }> = [
   { group: 'ops', page: 'conversations', label: '测试对话' },
+  // Part 36: 语音反馈 (the owner only: it shows transcripts); exists where the page was given the client.
+  { group: 'ops', page: 'feedback', label: '语音反馈' },
   // Part 42: 广播 exists only where the page was given the client (the owner or broadcast.send sees it).
   { group: 'players', page: 'broadcast', label: '广播' },
   // Part 37c-1: 网络梗 (the dictionary's switches) exists where the page has the cast client; cast.read sees it, cast.edit switches.
@@ -118,6 +121,8 @@ export type NavAccess = {
   system?: boolean;
   /** Part 42: this page was given the 广播 client. Absent = the page does not exist here. */
   broadcast?: boolean;
+  /** Part 36: this page was given the 语音反馈 client. Absent = the page does not exist here. */
+  feedback?: boolean;
 };
 export const PAGES: readonly AdminPage[] = [...navTree().flatMap((g) => groupPages(g).map((i) => i.page)), 'account'];
 export const isAdminPage = (value: string): value is AdminPage => (PAGES as readonly string[]).includes(value);
@@ -149,6 +154,8 @@ export function canSeePage(page: AdminPage, access: NavAccess): boolean {
       return access.system === true && (owner || hasStatsPermission(permissions));
     case 'system':
       return access.system === true && (owner || hasSystemPermission(permissions));
+    case 'feedback':
+      return access.feedback === true && owner;
     case 'conversations':
       return access.conversations === true && (owner || hasConversationsPermission(permissions));
     case 'models':

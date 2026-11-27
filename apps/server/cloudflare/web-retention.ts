@@ -1,5 +1,7 @@
 import { purgeBroadcastWorld } from '../broadcast/web-broadcast-schema.ts';
 import { purgeShareWorld } from '../share/web-share-schema.ts';
+import { purgeTurnsWorld } from '../turns/web-turn-schema.ts';
+import { purgeFeedbackWorld } from '../turns/web-feedback-schema.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { DetailedError, DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { emptySession } from '../../../packages/domain/schedule.ts';
@@ -786,6 +788,9 @@ export class WebCloudRetention {
       purgeBroadcastWorld(this.store, world);
       // Part 45: the world's share links and their requests.
       purgeShareWorld(this.store, world);
+      // Part 36: the world's turn rows, ratings and their request rows.
+      purgeTurnsWorld(this.store, world);
+      purgeFeedbackWorld(this.store, world);
       this.sub = 'messages';
       this.store.run('DELETE FROM messages WHERE world_id=?', world);
       this.sub = 'contacts';

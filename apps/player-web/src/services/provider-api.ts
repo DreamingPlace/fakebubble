@@ -19,7 +19,10 @@ import {
   type WebProviderCharacterId,
   type WebProviderHistory,
   type WebProviderOperation,
+  type WebProviderBubbleSend,
+  type WebProviderRate,
   type WebProviderSend,
+  type WebProviderTurn,
   type WebProviderSync,
 } from '../../../../packages/contracts/web-provider.ts';
 import { parseWebPublicCatalog, type WebPublicCatalog } from '../../../../packages/contracts/web-public-catalog.ts';
@@ -136,6 +139,17 @@ const operation = (value: unknown): WebProviderOperation => {
   )
     throw new ProviderApiError(0, 'PROTOCOL_INVALID');
   return row as unknown as WebProviderOperation;
+};
+
+const turnOf = (value: unknown): WebProviderTurn => {
+  const row = record(value);
+  if (
+    !['idle', 'collecting', 'replying', 'refused'].includes(row.state as string) ||
+    !Number.isSafeInteger(row.pending) ||
+    (row.dueAt !== null && !Number.isSafeInteger(row.dueAt))
+  )
+    throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+  return row as unknown as WebProviderTurn;
 };
 
 /** Part 50: a boolean hint (no id, no content) that a session was made on this device, so a returning visitor starts no early challenge. */
@@ -541,6 +555,50 @@ export class ProviderApi implements WebProviderActions {
       }),
     );
     return { operation: operation(receipt.operation), duplicate: receipt.duplicate === true };
+  }
+  /** Part 36: stores one bubble. The reply is a turn that answers the whole batch once the player has been quiet (or at five). */
+  async sendBubble(input: WebProviderBubbleSend) {
+    const receipt = record(
+      await this.request(`/characters/${encodeURIComponent(input.characterId)}/bubbles`, {
+        method: 'POST',
+        body: JSON.stringify({
+          requestId: input.requestId,
+          text: input.text,
+          ...(input.quoteMessageId ? { quoteMessageId: input.quoteMessageId } : {}),
+        }),
+      }),
+    );
+    if (typeof receipt.messageId !== 'string' || typeof receipt.conversationId !== 'string')
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return {
+      messageId: receipt.messageId,
+      conversationId: receipt.conversationId,
+      duplicate: receipt.duplicate === true,
+      turn: turnOf(receipt.turn),
+    };
+  }
+  async turn(characterId: WebProviderCharacterId) {
+    return turnOf(await this.request(`/characters/${encodeURIComponent(characterId)}/turn`));
+  }
+  /** Part 36: 👍 / 👎 as a desired state; `none` removes the rating. */
+  async rate(input: WebProviderRate) {
+    const answer = record(
+      await this.request('/ratings', {
+        method: 'POST',
+        body: JSON.stringify({
+          requestId: input.requestId,
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          rating: input.rating,
+          ...(input.target ? { target: input.target } : {}),
+        }),
+      }),
+    );
+    const rating: 'up' | 'down' | null = answer.rating === 'up' || answer.rating === 'down' ? answer.rating : null;
+    if (answer.rating !== null && rating === null) throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    const target: 'voice' | 'content' | null =
+      answer.target === 'voice' || answer.target === 'content' ? answer.target : null;
+    return { rating, target };
   }
   /**
    * Part 45: a link to one of the character's voice messages. One request id per sheet opening makes a repeat answer the same link;
