@@ -89,24 +89,74 @@ export function writeMemeUse<T extends object>(template: T, use: MemeUse): T {
   return copy as unknown as T;
 }
 
+// ---- the library (Part 37c-1b) -----------------------------------------------------------------------------------------------------
+/**
+ * The library = the shipped entries (re-curated, each with a category and a default on/off) + the owner's own entries. Nothing new
+ * enters it without the owner's confirmation: uploads and automatic sources only ever fill the 待审 queue.
+ *
+ * The five KEPT categories ship ON (an everyday word still ships OFF); the others are the reason an entry ships OFF.
+ */
+export const MEME_KEPT_CATEGORIES = ['心情', '关系', '日常', '追星娱乐', '句式'] as const;
+export const MEME_DROP_CATEGORIES = ['AI科技', '硬件汽车', '金融', '时政', '真人', '不雅', '非日常'] as const;
+export const MEME_CATEGORIES: readonly string[] = [...MEME_KEPT_CATEGORIES, ...MEME_DROP_CATEGORIES];
+export const isKeptCategory = (category: string) => (MEME_KEPT_CATEGORIES as readonly string[]).includes(category);
+export const isMemeCategory = (category: unknown): category is string =>
+  typeof category === 'string' && MEME_CATEGORIES.includes(category);
+
+/** 自带 = shipped; 手动 = typed in by the owner; 上传 = a file or pasted rows (through 待审); 梗雷达 / 玩家聊天 = Part 37c-2. */
+export const MEME_SOURCES = ['builtin', 'manual', 'upload', 'radar', 'chat'] as const;
+export type MemeSource = (typeof MEME_SOURCES)[number];
+export const MEME_SOURCE_LABELS: Readonly<Record<MemeSource, string>> = Object.freeze({
+  builtin: '自带',
+  manual: '手动',
+  upload: '上传',
+  radar: '梗雷达',
+  chat: '玩家聊天',
+});
+export const isMemeSource = (value: unknown): value is MemeSource =>
+  typeof value === 'string' && (MEME_SOURCES as readonly string[]).includes(value);
+
+export const MEME_TERM_MAX = 40;
+export const MEME_MEANING_MAX = 200;
+/** The whole library (shipped entries that are not deleted + the owner's own). */
+export const MEME_LIBRARY_CAP = 5_000;
+export const MEME_IMPORT_ROWS_MAX = 2_000;
+/** Terms or keys one call may name. */
+export const MEME_BATCH_MAX = 2_000;
+
 // ---- the admin page ----------------------------------------------------------------------------------------------------------------
 export interface MemeEntryView {
+  /** The term (a term is unique across the library, so it is the key). */
   key: string;
   term: string;
+  /** The text in use: the owner's edit when there is one, else the shipped text. */
   meaning: string;
-  year: number;
+  year: number | null;
   tags: string[];
   enabled: boolean;
-  /** A common everyday word: starts switched off (the switch overrides it both ways). */
+  /** Ships switched off (not kept in the re-curation, or an everyday word). The owner's switch overrides it both ways. */
   defaultOff: boolean;
+  category: string;
+  source: MemeSource;
+  /** In the 已删除 list (a shipped entry the owner deleted; it no longer matches or counts). */
+  deleted: boolean;
+  /** The owner edited the meaning or the category of a shipped entry. */
+  edited: boolean;
+  /** The shipped text, for 恢复原文 and for the hover (only when `edited`). */
+  original: { meaning: string; category: string } | null;
 }
+export type MemeState = 'all' | 'on' | 'off' | 'default-off' | 'deleted';
+export const MEME_STATES: readonly MemeState[] = ['all', 'on', 'off', 'default-off', 'deleted'];
 export interface MemeListInput {
   query: string;
   year: number | null;
   tag: string | null;
-  /** 'default-off' lists the entries that ship switched off, whatever their state now. */
-  state: 'all' | 'on' | 'off' | 'default-off';
+  /** 'default-off' lists the entries that ship switched off, whatever their state now; 'deleted' the 已删除 list. */
+  state: MemeState;
   page: number;
+  /** Part 37c-1b filters; absent = no filter. */
+  category?: string | null;
+  source?: MemeSource | null;
 }
 export interface MemeListView {
   entries: MemeEntryView[];
@@ -114,12 +164,66 @@ export interface MemeListView {
   matching: number;
   page: number;
   pages: number;
-  /** The whole dictionary: how many entries there are and how many are on. */
+  /** The library without the deleted entries: how many entries there are and how many are on. */
   total: number;
   on: number;
-  /** How many entries ship switched off. */
+  /** How many entries of it ship switched off. */
   defaultOff: number;
+  /** Entries in the 已删除 list. */
+  deleted: number;
+  /** Items waiting in the 待审 queue. */
+  pending: number;
   years: number[];
   /** The most used tags first (at most 40) - every tag stays searchable by typing. */
   tags: { tag: string; count: number }[];
+  categories: { category: string; count: number }[];
+}
+
+/** One 待审 item: what an upload or an automatic source suggests. `existing` is what the library holds now under the same term. */
+export interface MemeQueueItem {
+  term: string;
+  meaning: string;
+  category: string;
+  source: MemeSource;
+  year: number | null;
+  /** Dates only (UTC, ms). */
+  createdAt: number;
+  /** Part 37c-2 supplies these: links the suggestion came from and how many players said it. Never a player or a message. */
+  links: string[];
+  playerCount: number | null;
+  existing: { meaning: string; category: string; enabled: boolean; source: MemeSource } | null;
+  /** The owner deleted this term once: approving brings the entry back. */
+  wasDeleted: boolean;
+}
+export interface MemeQueueView {
+  items: MemeQueueItem[];
+  pending: number;
+}
+
+/** Why an uploaded row is not accepted (shown with the row, never dropped silently). */
+export const MEME_ROW_PROBLEMS = [
+  'EMPTY_TERM',
+  'EMPTY_MEANING',
+  'TERM_TOO_LONG',
+  'TERM_TOO_SHORT',
+  'MEANING_TOO_LONG',
+  'BAD_CATEGORY',
+  'DUPLICATE_IN_FILE',
+] as const;
+export type MemeRowProblem = (typeof MEME_ROW_PROBLEMS)[number];
+export type MemeImportRow = {
+  /** The row's number in the file (the header is row 1). */
+  row: number;
+  term: string;
+  meaning: string;
+  category: string;
+  /** ok = new term; update = the term exists, the text differs; revive = the owner deleted this term; unchanged = same as now;
+   * queued = already waiting; invalid = see `problem`. */
+  status: 'ok' | 'update' | 'revive' | 'unchanged' | 'queued' | 'invalid';
+  problem: MemeRowProblem | null;
+  existing: { meaning: string; category: string } | null;
+};
+export interface MemeImportPreview {
+  rows: MemeImportRow[];
+  counts: { ok: number; update: number; revive: number; unchanged: number; queued: number; invalid: number };
 }

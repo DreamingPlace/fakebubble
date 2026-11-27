@@ -41,6 +41,7 @@ import { exportButton, type MakeExport } from './export/export-dialog.ts';
 import { adoptBox } from './speech-profile/adopt-box.ts';
 import { othersReader } from './speech-profile/profile-draft.ts';
 import { conversationsView } from './conversations-view.ts';
+import { feedbackView } from './feedback-view.ts';
 import { arcOrderView } from './owner/arc-order-view.ts';
 import type { OwnerAdminClient } from '../../services/owner-admin-api.ts';
 import type { ConversationsAdminClient } from '../../services/conversations-admin-api.ts';
@@ -151,6 +152,8 @@ type Port = Pick<
     Partial<Pick<CocreationWordingsClient, 'setEnabled'>>;
   /** 测试对话 (CHAT_REVIEW_ENABLED; the page only appears when the session says the switch is on). */
   conversations?: Pick<ConversationsAdminClient, 'list' | 'detail' | 'export'>;
+  /** Part 36: 语音反馈 (the owner only). Optional: a page without it has no 语音反馈 in the nav. */
+  feedback?: AccountAdminApi['feedback'];
   /** Part 31: the owner's operations. Optional: a page without it draws none of them. */
   owner?: Pick<
     OwnerAdminClient,
@@ -285,6 +288,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <section data-panel="system" hidden><div id="admin-system"></div></section>
     <section data-panel="costs" hidden><div id="admin-costs"></div></section>
     <section data-panel="conversations" hidden><div id="admin-conversations"></div></section>
+    <section data-panel="feedback" hidden><div id="admin-feedback"></div></section>
     <section data-panel="models" hidden><div id="admin-models"></div></section>
     </div>
     </div>
@@ -349,6 +353,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     models: !!port.modelSettings,
     system: !!port.overview && !!port.systemStatus,
     broadcast: !!port.broadcast,
+    feedback: !!port.feedback,
     conversations: !!port.conversations && session?.features?.chatReview === true,
   });
   const canCreateRole = () =>
@@ -620,6 +625,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       };
     if (page === 'costs' && canSeePage('costs', access())) return () => costs.load();
     if (page === 'conversations' && canSeePage('conversations', access())) return () => reviews.load();
+    if (page === 'feedback' && canSeePage('feedback', access())) return () => feedbackPage.load();
     if (page === 'models' && port.modelSettings) return () => models.load();
     return null;
   };
@@ -1076,6 +1082,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     newRequestId: () => globalThis.crypto.randomUUID(),
     disposed: () => disposed,
     toast: (text) => toasts.show(text, 'ok'),
+    // Part 37c-1b: the permanent delete of his own entries asks in place.
+    confirm: (options, host) => inlineConfirm(host, options),
   });
   const broadcast = broadcastView(q('#admin-broadcast'), {
     api:
@@ -1137,6 +1145,20 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
           toast: (text, tone) => toasts.show(text, tone ?? 'info'),
         }
       : {}),
+  });
+  const feedbackPage = feedbackView(q('#admin-feedback'), {
+    api: port.feedback ?? {
+      counts: () => Promise.reject(new Error('ADMIN_FEEDBACK_UNAVAILABLE')),
+      list: () => Promise.reject(new Error('ADMIN_FEEDBACK_UNAVAILABLE')),
+      heard: () => Promise.reject(new Error('ADMIN_FEEDBACK_UNAVAILABLE')),
+      audio: () => Promise.reject(new Error('ADMIN_FEEDBACK_UNAVAILABLE')),
+    },
+    run,
+    makeExport,
+    status: (text) => {
+      if (!disposed) status.textContent = text;
+    },
+    disposed: () => disposed,
   });
   const members = membersView({
     head: q('#admin-members-head'),

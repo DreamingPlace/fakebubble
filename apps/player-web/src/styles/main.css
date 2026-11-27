@@ -18342,6 +18342,303 @@ button:not(
 }
 .account-admin-page.admin-shell .cs-versions-pop[hidden] {
   display: none;
+/* Part 37c-1b: the editable library (add / edit / delete / 已删除), the upload preview and the 待审 queue. Every transition runs under
+   --ad-motion (0 under prefers-reduced-motion); one control height (36 px) and one gap rhythm (8 / 12 / 16) throughout. */
+.account-admin-page.admin-shell #admin-memes .mm-panel {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.account-admin-page.admin-shell #admin-memes .mm-panel[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-memes .mm-panel-in {
+  animation: mm-in calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+@keyframes mm-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.account-admin-page.admin-shell #admin-memes .mm-bar {
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+.account-admin-page.admin-shell #admin-memes .page-head-actions button,
+.account-admin-page.admin-shell #admin-memes .mm-row-actions button,
+.account-admin-page.admin-shell #admin-memes .mm-q-actions button {
+  min-height: 36px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-confirm-host:empty {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-memes .mm-pending {
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell #admin-memes .mm-row-actions,
+.account-admin-page.admin-shell #admin-memes .mm-q-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-danger {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-memes .mm-edited {
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  border-color: transparent;
+}
+.account-admin-page.admin-shell #admin-memes .mm-category,
+.account-admin-page.admin-shell #admin-memes .mm-source {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-source {
+  background: var(--ad-bg);
+  border: 1px solid var(--ad-border);
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-memes .mm-muted {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-memes .mm-ok {
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-memes .mm-problem {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-memes .admin-table tbody tr {
+  transition: background calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .mm-form {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.account-admin-page.admin-shell .mm-field {
+  display: grid;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .mm-field-label {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .mm-field input,
+.account-admin-page.admin-shell .mm-field select,
+.account-admin-page.admin-shell .mm-field textarea,
+.account-admin-page.admin-shell .mm-file input,
+.account-admin-page.admin-shell .mm-q-content input,
+.account-admin-page.admin-shell .mm-q-content textarea,
+.account-admin-page.admin-shell .mm-q-content select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+  transition: border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .mm-field textarea,
+.account-admin-page.admin-shell .mm-q-content textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+.account-admin-page.admin-shell .mm-q-content select,
+.account-admin-page.admin-shell .mm-field select {
+  min-width: 0;
+}
+.account-admin-page.admin-shell .mm-field input[readonly] {
+  background: var(--ad-bg);
+  color: var(--ad-muted);
+}
+/* the new version of a 待审 item: label row, then term and category side by side, then the meaning */
+.account-admin-page.admin-shell .mm-q-edit {
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .mm-q-edit .mm-compare-head,
+.account-admin-page.admin-shell .mm-q-edit .mm-q-meaning {
+  grid-column: 1 / -1;
+}
+.account-admin-page.admin-shell .mm-compare-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .mm-field input:focus,
+.account-admin-page.admin-shell .mm-field textarea:focus,
+.account-admin-page.admin-shell .mm-q-content input:focus,
+.account-admin-page.admin-shell .mm-q-content textarea:focus {
+  border-color: var(--ad-accent, var(--ad-tint-ink));
+  outline: none;
+}
+.account-admin-page.admin-shell .mm-count {
+  justify-self: end;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .mm-count-over {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .mm-field-meta {
+  margin: 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .mm-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .mm-form-actions button {
+  min-height: 36px;
+}
+.account-admin-page.admin-shell .mm-form .mm-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .mm-form .mm-error[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .mm-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ad-tint-ink);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .mm-import-pick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 16px;
+  align-items: start;
+}
+.account-admin-page.admin-shell .mm-file {
+  display: grid;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .mm-file-name {
+  color: var(--ad-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .mm-import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .mm-import-summary[hidden],
+.account-admin-page.admin-shell .mm-import-result[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .mm-import-result {
+  max-height: 52vh;
+  overflow: auto;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  animation: mm-in calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .mm-import-table td,
+.account-admin-page.admin-shell .mm-import-table th {
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .mm-import-detail {
+  min-width: 260px;
+}
+.account-admin-page.admin-shell .mm-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-bg);
+  border: 1px solid var(--ad-border);
+  color: var(--ad-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .mm-chip-ok {
+  background: var(--ad-ok-soft);
+  border-color: transparent;
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell .mm-chip-update,
+.account-admin-page.admin-shell .mm-chip-revive {
+  background: var(--ad-warn-soft);
+  border-color: transparent;
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell .mm-chip-invalid {
+  background: transparent;
+  border-color: var(--ad-danger);
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .mm-compare {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.account-admin-page.admin-shell .mm-compare-side {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 8px 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-bg);
+}
+.account-admin-page.admin-shell .mm-compare-new {
+  background: var(--ad-surface);
+}
+.account-admin-page.admin-shell .mm-compare-side p {
+  margin: 0;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .mm-compare-side b {
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.account-admin-page.admin-shell .mm-compare-side i {
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-style: normal;
+}
+.account-admin-page.admin-shell #admin-memes .mm-q-content {
+  min-width: 460px;
+  max-width: 760px;
+  white-space: normal;
+}
+.account-admin-page.admin-shell #admin-memes .mm-queue {
+  display: grid;
+  gap: 12px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-date {
+  white-space: nowrap;
+  color: var(--ad-muted);
 }
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
@@ -21945,7 +22242,6 @@ html.theme-fade *::after {
   transform: scale(0.97);
 }
 .share-cta:focus-visible,
-.share-btn:focus-visible,
 .share-act:focus-visible {
   outline: 2px solid var(--accent, #7c4deb);
   outline-offset: 3px;
@@ -22004,41 +22300,7 @@ html.theme-fade *::after {
   }
 }
 
-/* The 分享 icon beside a character's voice message, and its sheet. */
-.share-btn {
-  width: 44px;
-  height: 44px;
-  flex: none;
-  align-self: center;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--bb-sub);
-  opacity: 0.78;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition:
-    opacity 180ms var(--bb-ease),
-    transform 180ms var(--bb-ease),
-    background 200ms var(--bb-ease),
-    color 200ms var(--bb-ease);
-}
-.share-btn svg {
-  width: 20px;
-  height: 20px;
-}
-.share-btn:active {
-  transform: scale(0.9);
-}
-.share-btn[data-on="true"] {
-  opacity: 1;
-  background: rgba(20, 20, 20, 0.08);
-  color: var(--bb-ink);
-}
-:root[data-theme="dark"] .share-btn[data-on="true"] {
-  background: rgba(255, 255, 255, 0.14);
-}
+/* The share sheet (opened from the long-press menu's 分享为卡片). */
 .share-scrim {
   position: fixed;
   inset: 0;
@@ -23255,6 +23517,305 @@ body,
   .face-dur.is-new,
   .preview-note.is-filled {
     animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-scrim,
+  .msg-menu,
+  .msg-lift,
+  .quote-strip,
+  .rating-mark.is-new,
+  .page-shell .message-row.is-flash .text-bubble,
+  .page-shell .message-row.is-flash .voice-bubble {
+    animation: none;
+  }
+}
+
+/* ====================================================================================================================
+   Part 36 (design board approved by the owner): bubbles in a row, avatars on the bubble's top line, the one long-press menu, quotes,
+   the rated mark. Every transition has motion; reduced motion drops it to a fade.
+   ==================================================================================================================== */
+/* both avatars sit on the same line as the top of their bubble */
+.page-shell .message-row,
+.page-shell .message-row.outgoing {
+  align-items: flex-start;
+}
+.page-shell .message-row .message-avatar,
+.page-shell .message-row.outgoing::after {
+  margin-top: 0;
+  align-self: flex-start;
+}
+/* several own bubbles in a row stack close; only the last keeps the full corner */
+.page-shell .message-row.outgoing:has(+ .message-row.outgoing) {
+  margin-bottom: 3px;
+}
+.page-shell .message-row.outgoing:has(+ .message-row.outgoing) .text-bubble {
+  border-bottom-right-radius: 6px;
+}
+/* the bubbles are pressed, not selected; nothing selects or calls out under a long press */
+.page-shell .message-row .text-bubble,
+.page-shell .message-row .voice-bubble {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.page-shell .message-row.is-lifted {
+  visibility: hidden;
+}
+.page-shell .message-row.is-flash .text-bubble,
+.page-shell .message-row.is-flash .voice-bubble {
+  animation: msg-flash 1200ms var(--bb-ease);
+}
+@keyframes msg-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  25% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--n-accent, var(--accent, #7c4deb)) 45%, transparent);
+  }
+}
+.msg-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(12, 11, 16, 0.38);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: msg-fade 180ms ease both;
+}
+.msg-lift-shell,
+.msg-lift-card {
+  display: contents;
+}
+.msg-lift {
+  position: fixed;
+  z-index: 901;
+  margin: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.28));
+  animation: msg-lift 220ms var(--bb-ease) both;
+}
+.msg-menu {
+  position: fixed;
+  z-index: 902;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 22px;
+  background: var(--s-solid, #fff);
+  color: var(--bb-ink, #141414);
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px var(--s-card-line, transparent);
+  transform-origin: var(--ox, 50%) var(--oy, 100%);
+  animation: msg-menu 240ms var(--bb-ease) both;
+}
+:root[data-theme="dark"] .msg-menu {
+  background: #25222d;
+  color: #f5f3f7;
+}
+.msg-scrim.is-closing,
+.msg-menu.is-closing {
+  animation: msg-fade 140ms ease reverse both;
+}
+.msg-menu-item {
+  height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 17px;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 160ms var(--bb-ease),
+    transform 160ms var(--bb-ease);
+}
+.msg-menu-item:active {
+  transform: scale(0.94);
+}
+.msg-menu-item:focus-visible {
+  outline: 2px solid var(--accent, #7c4deb);
+  outline-offset: -2px;
+}
+.msg-menu-item[data-on="true"] {
+  background: color-mix(in srgb, var(--n-accent, var(--accent, #7c4deb)) 18%, transparent);
+}
+.msg-menu-rule {
+  width: 1px;
+  height: 22px;
+  margin: 0 2px;
+  background: rgba(128, 128, 128, 0.3);
+}
+@keyframes msg-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes msg-lift {
+  to {
+    transform: scale(1.035);
+  }
+}
+@keyframes msg-menu {
+  from {
+    opacity: 0;
+    transform: scale(0.86) translateY(6px);
+  }
+}
+/* the quote: inside a sent bubble and in the composer's strip */
+.quote-ref {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  min-width: 0;
+  margin: 0 0 5px;
+  padding: 6px 10px 6px 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  overflow: hidden;
+  text-align: left;
+  cursor: pointer;
+}
+.quote-ref::before {
+  content: "";
+  flex: none;
+  width: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.45;
+}
+.quote-ref[data-from="her"]::before {
+  background: var(--n-accent, var(--accent, #7c4deb));
+  opacity: 1;
+}
+.quote-ref > span {
+  display: block;
+  min-width: 0;
+}
+.quote-ref b {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  opacity: 0.72;
+}
+.quote-ref i {
+  display: block;
+  max-width: 220px;
+  font-style: normal;
+  font-size: 13px;
+  line-height: 1.35;
+  opacity: 0.86;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quote-ref.is-gone {
+  cursor: default;
+  min-height: 30px;
+  opacity: 0.45;
+}
+.quote-ref:focus-visible {
+  outline: 2px solid var(--accent, #7c4deb);
+  outline-offset: 2px;
+}
+.composer.has-quote {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.quote-strip {
+  flex: 0 0 100%;
+  order: -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--bb-ink, inherit);
+  animation: msg-strip 260ms var(--bb-ease) both;
+}
+.quote-strip .quote-ref {
+  flex: 1;
+  margin: 0;
+  cursor: default;
+}
+.quote-strip.is-leaving {
+  animation: msg-strip 160ms var(--bb-ease) reverse both;
+}
+.quote-strip-x {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px -8px 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--bb-sub, inherit);
+  font-size: 18px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+@keyframes msg-strip {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+/* the rated mark: outside the bubble at its bottom-right corner, bottom on the bubble's bottom edge */
+.page-shell .voice-bubble,
+.page-shell .message-row.incoming .incoming-text {
+  position: relative;
+}
+.rating-mark {
+  position: absolute;
+  left: calc(100% + 6px);
+  bottom: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--s-solid, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  color: var(--n-accent, var(--accent, #7c4deb));
+  pointer-events: none;
+}
+.rating-mark svg {
+  width: 14px;
+  height: 14px;
+}
+.rating-mark[data-rating="down"] {
+  color: var(--bb-sub, #4a4a4a);
+}
+:root[data-theme="dark"] .rating-mark {
+  background: #2d2a36;
+}
+.rating-mark.is-new {
+  animation: msg-pop 320ms var(--bb-ease) both;
+}
+@keyframes msg-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
   }
 }
 

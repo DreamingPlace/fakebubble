@@ -99,6 +99,11 @@
       "file": "workers/audio/leading-onset.ts",
       "names": ["SILENCE_MS", "onsetMsOf"],
       "reason": "Part 30: the documented constant and the onset reader, used by the tests and the before/after onset report."
+    },
+    {
+      "file": "apps/server/memes/web-meme-library.ts",
+      "names": ["suggestMeme"],
+      "reason": "Part 37c-1b: the ONE door the automatic sources of Part 37c-2 (梗雷达, 玩家聊天) use to fill the 待审 queue; only tests call it until 37c-2 lands."
     }
   ]
 }

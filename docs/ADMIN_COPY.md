@@ -144,3 +144,15 @@ Player pages: one line on the terms page (the license notice and its link); noth
 | 关系与故事, a pair | 关系注解 (a box under the two directions; it goes into both characters' 名片) |
 | offline characters | **显示未上线** (角色工作台 rail: 未上线 on the narrow rail; 共创收件箱 filter chip; 关系与故事 title row). Off by default. |
 | 关系与故事, versions | one button **版本** in the title row; it opens a panel over the page (draft number, version list with 恢复此版本, 从旧资料导入, 导出文件). Nothing about versions sits above the content. |
+## Part 37c-1b — 网络梗: 词库 and 待审
+| Where | Words |
+|---|---|
+| the head line | 共 N 条 · 已开启 N 条 · 待审 N 条 (the 待审 count is amber when above 0) |
+| the two views | **词库** · **待审** |
+| 状态 filter | 全部 · 已开启 · 已关闭 · 默认关闭（N） · 已删除（N） |
+| the title row | 上传导入 · **添加词条** (the one solid button) · 导出 |
+| a row | 词 (badges 默认关闭, 已改) · 释义 · 年份 · 标签 · 分类 · 来源 (自带 / 手动 / 上传 / 梗雷达 / 玩家聊天) · 开关 · 编辑 · 删除 (in 已删除: 恢复) |
+| the one explaining sentence | 永久删除: 「X」是你自己添加的，删除后无法找回。 / 所选 N 条里有 M 条是你自己添加的，删除后无法找回；其余的会进入「已删除」，可以恢复。 Everything else is a hover tip. |
+| the preview of an upload | 共 N 行 · 可放入待审 N 行 · 不能导入 N 行 · 没有变化 N 行 · 已在待审 N 行; each row: 新词 · 已有，通过后更新 · **曾删除** · 没有变化 · 已在待审 · 不能导入 + the reason (词是空的 · 释义是空的 · 词超过 40 个字 · 词不到 2 个字 · 释义超过 200 个字 · 分类不在可选的五个里 · 这个词在文件里出现了不止一次) |
+| 待审 | 建议 / 新 / 现有 side by side; **通过** (hover: 加入词库并开启) · **不要** (hover: 丢掉它；以后自动来源不会再推荐这个词) · 通过所选 · 不要所选 |
+| toasts | 已添加 · 已保存 · 已恢复原文 · 已删除 · 已恢复 · 已放入待审 N 条 · 已通过 · 已通过 N 条 · 已不要 |

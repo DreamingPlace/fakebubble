@@ -9,7 +9,7 @@ import { syntheticTone } from '../apps/server/platform/web-local-fake.ts';
  * Part 45 in REAL browsers (the console fixture, its OFFLINE provider; no provider call is made by anything here):
  *   share from chat -> open the link in a fresh, signed-out context -> the card renders and the voice plays -> advance the server's clock
  *   past one day -> the expired page.
- *   - the 分享 icon is on every character voice message that has audio (a broadcast's voice here) and on nothing else (not the welcome
+ *   - the 分享为卡片 entry of the long-press menu is on every character voice message that has audio (a broadcast's voice here) and on nothing else (not the welcome
  *     clip, not a player's own message); tapping opens a sheet (phone) or a card beside the icon (desktop); the link is made, 复制链接
  *     copies it (the real clipboard) and says 已复制; a voice message that is PLAYING keeps playing while the sheet opens, is used and
  *     closes;
@@ -223,18 +223,18 @@ try {
         .length,
     }));
     check(rows.voice >= 1, `${name}: the broadcast voice message is in the chat`);
-    check(
-      rows.shareIcons === rows.voice,
-      `${name}: every character voice message has a 分享 icon (${rows.shareIcons}/${rows.voice})`,
-    );
+    // Part 36 NAMED EXCEPTION: the 分享 icon beside voice messages was removed by the owner's decision; sharing now lives only in the
+    // long-press menu (分享为卡片). This assertion was "an icon on every voice message"; it is now "no icon anywhere".
+    check(rows.shareIcons === 0, `${name}: no 分享 icon beside any voice message (${rows.shareIcons})`);
     check(rows.welcomeShare === 0, `${name}: the welcome clip has none`);
     check(rows.ownShare === 0, `${name}: the player's own messages have none`);
     if (shots) await page.screenshot({ path: `${shots}/${name}-1-chat.png` });
-    const icon = page.locator('.card-slot.is-active .message-row.incoming:not(.welcome-row) .share-btn').first();
+    // Part 36 NAMED EXCEPTION: the sheet is opened from the long-press menu of the voice message (a held pointer, then 分享为卡片).
+    const voiceBubble = page
+      .locator('.card-slot.is-active .message-row.incoming:not(.welcome-row) .voice-bubble')
+      .first();
     const mobileView = (await page.viewportSize()).width < 600;
     const bar = page.locator('.card-slot.is-active .message-row.incoming:not(.welcome-row) .play-button').first();
-    const size = await icon.boundingBox();
-    check(size && size.width >= 44 && size.height >= 44, `${name}: the icon is a 44px target`);
     // play the voice, then share while it plays: it must keep playing (a clip is 8 s)
     await bar.click();
     await page.waitForFunction(
@@ -265,8 +265,27 @@ try {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     };
     const lenBefore: number = await page.evaluate(() => history.length);
+    await voiceBubble.evaluate((el: HTMLElement) => {
+      const init = { bubbles: true, cancelable: true, pointerId: 9, pointerType: 'touch', isPrimary: true, button: 0 };
+      el.dispatchEvent(new PointerEvent('pointerdown', init));
+    });
+    await wait(650);
+    await voiceBubble.evaluate((el: HTMLElement) => {
+      el.dispatchEvent(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          cancelable: true,
+          pointerId: 9,
+          pointerType: 'touch',
+          isPrimary: true,
+          button: 0,
+        }),
+      );
+    });
+    await page.locator('.msg-menu [data-key="share"]').waitFor({ timeout: 3_000 });
+    // Part 36 NAMED EXCEPTION: the 1 s budget runs from the tap on 分享为卡片 (it was from the tap on the icon); the 650 ms press is not part of it.
     const tapped = Date.now();
-    await tap(icon);
+    await tap(page.locator('.msg-menu [data-key="share"]'));
     const mobile = mobileView;
     const sheet = page.locator(mobile ? '.share-sheet' : '.share-pop');
     await sheet.waitFor({ timeout: 5_000 });

@@ -518,6 +518,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
           this.env.BUSINESS && this.env.STAGE_DISPATCH !== 'off'
             ? (launchId) => this.env.BUSINESS!.get(this.context.id).startStage(launchId)
             : undefined,
+          app.turns,
         );
         const http = new WebProviderHTTP(
           app,
@@ -608,10 +609,18 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
     } catch (error) {
       console.error(JSON.stringify({ event: 'web_broadcast_pass_failed', ...safeError(error) }));
     }
+    // Part 36: a batch whose quiet period is over is closed here too (an operation is admitted; nothing else needs a provider).
+    const turns = this.application().turns;
+    try {
+      turns.pass();
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'web_turn_pass_failed', ...safeError(error) }));
+    }
     const next = Math.min(
       this.maintenanceDue() ?? Infinity,
       deletion?.nextDue() ?? Infinity,
       broadcast.nextDue() ?? Infinity,
+      turns.nextDue() ?? Infinity,
     );
     const due = Number.isFinite(next) ? next : null;
     if (due === null) await this.context.storage.deleteAlarm();

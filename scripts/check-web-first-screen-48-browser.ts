@@ -395,7 +395,8 @@ try {
       'every write came after the session',
     );
     check(
-      stats.writes.some((w) => /operations/.test(w.call)),
+      // Part 36 NAMED EXCEPTION: a message is sent as a BUBBLE now (POST .../bubbles); it was POST .../operations.
+      stats.writes.some((w) => /operations|bubbles/.test(w.call)),
       'the message was sent',
     );
     await shot(page, 'chat-after-retry-phone');
@@ -511,7 +512,7 @@ try {
     await page.locator('.card-slot.is-chat .send-button').click();
     await page.locator('.card-slot.is-chat .text-bubble', { hasText: '背景验证通过' }).waitFor({ timeout: 20_000 });
     check(
-      stats.writes.some((w) => /operations/.test(w.call) && w.sessionsBefore >= 1),
+      stats.writes.some((w) => /operations|bubbles/.test(w.call) && w.sessionsBefore >= 1),
       'the message was sent, after the session',
     );
     metrics.realTurnstile = { headed, sessionReadyMs: Math.round(t.ready), sheetOpened: t.sheet !== null };

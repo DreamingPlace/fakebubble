@@ -1,3 +1,4 @@
+import { turnMemberIds } from '../turns/web-turns.ts';
 import { isVoiceModelBinding, type VoiceModelBinding } from '../../../packages/contracts/audio.ts';
 import { listPriceMicros, speechListMicrosPerByte } from './model-list-prices.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
@@ -118,6 +119,8 @@ const sameScope = (attempt: Attempt, scope: Scope) =>
   attempt.input_message_id === scope.inputMessageId;
 
 /** Offline provenance and conservative USD upper-bound ledger; not a real provider runner. */
+const sameIds = (a: string[], b: string[]) => a.length === b.length && a.every((id, at) => id === b[at]);
+
 export class WebProviderOffline {
   private readonly store: Store;
   private readonly clock: Clock;
@@ -1561,8 +1564,7 @@ export class WebProviderOffline {
           request.scope.conversationId === scope.conversationId &&
           request.scope.characterId === scope.characterId &&
           request.deliveryMode === 'voice' &&
-          request.requiredMessageIds.length === 1 &&
-          request.requiredMessageIds[0] === scope.inputMessageId,
+          sameIds(request.requiredMessageIds, turnMemberIds(this.store, claim.operationId, scope.inputMessageId)),
         'WEB_V7_REQUEST_INVALID',
       );
       const draft = this.readKnown({ operationId: claim.operationId, phase: 'draft', ordinal: -1 }, scope);
@@ -2052,8 +2054,7 @@ export class WebProviderOffline {
         request.scope.conversationId === scope.conversationId &&
         request.scope.characterId === scope.characterId &&
         request.deliveryMode === 'voice' &&
-        request.requiredMessageIds.length === 1 &&
-        request.requiredMessageIds[0] === scope.inputMessageId,
+        sameIds(request.requiredMessageIds, turnMemberIds(this.store, operationId, scope.inputMessageId)),
       'WEB_PROVIDER_PUBLICATION_INVALID',
     );
     const draftKey = { operationId, phase: 'draft' as const, ordinal: -1 };

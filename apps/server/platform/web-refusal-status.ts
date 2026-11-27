@@ -242,9 +242,30 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   // Part 45: shareable voice-card links. The STOP code is a start-up refusal; the limit answers a player with too many live links.
   WEB_SHARE_SCHEMA_MISMATCH: 503,
   SHARE_LIMIT_REACHED: 429,
+  // Part 36: 连发 and 👍 / 👎.
+  QUOTE_UNAVAILABLE: 404,
+  FEEDBACK_TARGET_INVALID: 400,
+  WEB_TURN_BUBBLES_FULL: 429,
+  WEB_TURN_SCHEMA_MISMATCH: 503,
+  WEB_FEEDBACK_SCHEMA_MISMATCH: 503,
   // Part 37c-1: the internet-meme dictionary's on/off table (a start-up refusal) and a switch for an entry the dictionary does not have.
   WEB_MEME_SCHEMA_MISMATCH: 503,
   MEME_NOT_FOUND: 404,
+  // Part 37c-1b: the owner's library (a start-up refusal, then the refusals of one write or one upload).
+  WEB_MEMELIB_SCHEMA_MISMATCH: 503,
+  MEME_DUPLICATE: 409,
+  MEME_LIBRARY_FULL: 409,
+  MEME_QUEUE_NOT_FOUND: 404,
+  MEME_TERM_EMPTY: 400,
+  MEME_TERM_TOO_LONG: 400,
+  MEME_TERM_TOO_SHORT: 400,
+  MEME_MEANING_EMPTY: 400,
+  MEME_MEANING_TOO_LONG: 400,
+  MEME_CATEGORY_INVALID: 400,
+  MEME_IMPORT_EMPTY: 400,
+  MEME_IMPORT_COLUMNS: 400,
+  MEME_IMPORT_TOO_MANY: 400,
+  MEME_IMPORT_FILE: 400,
   // Part 37c-1: where a cast document over its row's own check lives: a start-up refusal, and the refusal of a save with no such table.
   WEB_CAST_DOC_SCHEMA_MISMATCH: 503,
   CAST_DOC_STORE_UNAVAILABLE: 503,

@@ -61,6 +61,12 @@ class NodeStub {
       this.className += ` ${name}`;
     },
     contains: (name: string) => this.className.split(' ').includes(name),
+    remove: (name: string) => {
+      this.className = this.className
+        .split(' ')
+        .filter((c) => c !== name)
+        .join(' ');
+    },
   };
   get isConnected() {
     return this.parent !== null;
@@ -97,6 +103,21 @@ class NodeStub {
       this.children.find((node) => selector.startsWith('.') && node.classList.contains(selector.slice(1))) ??
       null
     );
+  }
+  querySelectorAll(selector: string): NodeStub[] {
+    const classes = selector.split('[')[0]!.split('.').slice(1).filter(Boolean);
+    // descendants, like the real thing: the children and what was registered by selector
+    const found: NodeStub[] = [];
+    const walk = (node: NodeStub) => {
+      for (const child of [...node.children, ...node.nodes.values()]) {
+        if (!found.includes(child)) {
+          if (classes.every((name) => child.classList.contains(name))) found.push(child);
+          walk(child);
+        }
+      }
+    };
+    walk(this);
+    return found;
   }
   node(selector: string) {
     const node = new NodeStub();
@@ -151,7 +172,10 @@ async function fixture(t: test.TestContext, wait?: (ms: number) => Promise<void>
   const messages: string[] = [];
   let boots = 0,
     submits = 0,
-    lookups = 0;
+    lookups = 0,
+    served = false,
+    openOperation: WebProviderOperation | null = null,
+    lastOperation: WebProviderOperation | null = null;
   const handlers = {
     bootstrap: async () => view(),
     redeem: async (_input: { code: string; requestId: string }) => ({
@@ -161,7 +185,25 @@ async function fixture(t: test.TestContext, wait?: (ms: number) => Promise<void>
     submit: async () => ({ operation: operation(), duplicate: false }),
     lookup: async () => operation(),
     wait: async (op: WebProviderOperation) => op,
-    history: async (): Promise<{ messages: WebProviderMessage[] }> => ({ messages: [] }),
+    history: async (): Promise<{ messages: WebProviderMessage[] }> => ({
+      // Part 36 NAMED EXCEPTION (harness): the stored bubble and the turn it belongs to, as the server's history names them.
+      messages: lastOperation
+        ? ([
+            {
+              messageId: `bubble-${submits}`,
+              conversationId: 'c',
+              characterId: 'wei-guagua',
+              operationId: lastOperation.operationId,
+              replyOrdinal: null,
+              author: 'player',
+              origin: 'input',
+              text: 'x',
+              createdAt: 1,
+              audio: null,
+            },
+          ] as WebProviderMessage[])
+        : [],
+    }),
   };
   const api = {
     bootstrap: async () => {
@@ -172,6 +214,35 @@ async function fixture(t: test.TestContext, wait?: (ms: number) => Promise<void>
       submits++;
       return handlers.submit();
     },
+    // Part 36 NAMED EXCEPTION (harness, not an assertion): the page now sends BUBBLES (`sendBubble`) and follows the turn they
+    // make (`turn`, `operation`). The old handlers (`submit` / `lookup` / `wait` / `history`) keep describing what the server does
+    // for one message: a bubble is accepted through `handlers.submit`, the turn is its operation, and the page waits for it through
+    // `handlers.wait` exactly as before, so every observable assertion below is about the same behaviour.
+    sendBubble: async () => {
+      submits++;
+      const sent = await handlers.submit();
+      lastOperation = sent.operation;
+      // a bubble sent while a turn is open waits for the NEXT turn: it opens none
+      if (!openOperation) {
+        openOperation = sent.operation;
+        served = false;
+      }
+      return {
+        messageId: `bubble-${submits}`,
+        conversationId: sent.operation.conversationId,
+        duplicate: sent.duplicate,
+        turn: { state: 'replying', dueAt: null, pending: 1, operationId: sent.operation.operationId, errorCode: null },
+      };
+    },
+    turn: async () => {
+      if (openOperation && !served) {
+        served = true;
+        return { state: 'replying', dueAt: null, pending: 0, operationId: openOperation.operationId, errorCode: null };
+      }
+      openOperation = null;
+      return { state: 'idle', dueAt: null, pending: 0, operationId: null, errorCode: null };
+    },
+    operation: async () => lastOperation ?? handlers.lookup(),
     byRequest: async () => {
       lookups++;
       return handlers.lookup();
@@ -193,8 +264,12 @@ async function fixture(t: test.TestContext, wait?: (ms: number) => Promise<void>
     mark: () => '合',
     say: (message) => messages.push(message),
   });
-  const send = (accepted?: () => void) =>
-    binding.send('wei-guagua', editor.value, card as unknown as HTMLElement, accepted);
+  // Part 36 NAMED EXCEPTION (harness): `send` resolves when the bubble is accepted and the page follows the turn in the background;
+  // the old tests described a send that returned with the reply, so the harness waits for the turn to settle too.
+  const send = async (accepted?: () => void) => {
+    await binding.send('wei-guagua', editor.value, card as unknown as HTMLElement, accepted);
+    await binding.settled();
+  };
   return {
     head,
     binding,
@@ -328,15 +403,21 @@ test('known accepted operation clears the unchanged draft only on acknowledgemen
   });
   await flush();
   assert.equal(accepted, 1);
-  await f.send(() => {
-    throw Error('busy send must not clear a newer draft');
+  // Part 36 NAMED EXCEPTION: this step was "a second send while the reply runs is refused (上一条还在回复中)". That rule is gone by the
+  // owner's decision: the composer is never blocked, and the new bubble is accepted and waits for the NEXT turn. What the test
+  // protects is unchanged: the draft is cleared only by the bubble's own acknowledgement.
+  let second = 0;
+  await f.binding.send('wei-guagua', '再发一条', f.card as unknown as HTMLElement, () => {
+    second++;
   });
-  assert.equal(f.calls().submits, 1);
+  assert.equal(second, 1, 'the second bubble is accepted while the first reply runs');
+  assert.equal(f.calls().submits, 2);
   f.handlers.bootstrap = async () => view(2);
   resolve(operation());
   await sending;
   assert.match(f.note.textContent, /2/);
-  assert.equal(f.list.children.length, 0);
+  // Part 36 NAMED EXCEPTION: was 0 (the echo was removed when the reply landed); the two own bubbles are the stored messages now.
+  assert.equal(f.list.children.length, 2);
 });
 
 test('accepted UNKNOWN is not described as unsent or refunded and is never retried', async (t) => {
@@ -391,8 +472,10 @@ test('lost submit receipt and lookup 404 remain uncertain, not rejected or autom
   await f.send(() => {
     accepted++;
   });
-  assert.equal(f.calls().submits, 1);
-  assert.equal(f.calls().lookups, 1);
+  // Part 36 NAMED EXCEPTION: there is no lookup any more; the uncertain bubble is asked ONCE more with the SAME request id (a bubble
+  // is idempotent per request id, so that can never make a second bubble). Was: submits 1, lookups 1.
+  assert.equal(f.calls().submits, 2);
+  assert.equal(f.calls().lookups, 0);
   assert.equal(accepted, 0);
   assert.equal(f.list.children[0]!.classList.contains('not-sent'), false);
   assert.match(f.list.children[0]!.querySelector('.message-send-state')!.textContent, /结果待确认/);
@@ -402,16 +485,24 @@ test('lost submit receipt and lookup 404 remain uncertain, not rejected or autom
 test('server 502 after admission is recovered by request lookup without a second submit', async (t) => {
   const f = await fixture(t);
   let accepted = 0;
+  const original = f.handlers.submit;
+  let tries = 0;
   f.handlers.submit = async () => {
-    throw new ProviderApiError(502, 'INTERNAL_ERROR');
+    // Part 36 NAMED EXCEPTION: the first answer is lost (a 502 after the server stored the bubble); the same request id then finds it.
+    if (++tries === 1) throw new ProviderApiError(502, 'INTERNAL_ERROR');
+    return original();
   };
   await f.send(() => {
     accepted++;
   });
-  assert.equal(f.calls().submits, 1);
-  assert.equal(f.calls().lookups, 1);
+  assert.equal(f.calls().submits, 2, 'the same request id, once more: never a second bubble');
+  assert.equal(f.calls().lookups, 0);
   assert.equal(accepted, 1);
-  assert.equal(f.list.children.length, 0);
+  assert.equal(
+    f.list.children.length,
+    1,
+    'the one stored bubble stays on the page (was 0: the echo was replaced by the history copy)',
+  );
 });
 
 test('preflight preserves the first-character lock instead of attempting another provider call', async (t) => {
@@ -578,7 +669,9 @@ test('new reply bubbles are paced in server order without extra submits; ordinar
   await flush();
   assert.deepEqual(
     f.list.children.map((row) => row.dataset.messageId),
-    ['m0', 'm1'],
+    // Part 36 NAMED EXCEPTION (here and below): the player's own bubble stays on the page as the stored message (id bubble-1)
+    // instead of being replaced by the history copy; the order of the character's bubbles is what this test protects.
+    ['bubble-1', 'm0', 'm1'],
   );
   assert.equal(f.title.textContent, '正在讲话中');
   assert.equal(pauses.length, 1);
@@ -586,7 +679,7 @@ test('new reply bubbles are paced in server order without extra submits; ordinar
   await flush();
   assert.deepEqual(
     f.list.children.map((row) => row.dataset.messageId),
-    ['m0', 'm1', 'm2'],
+    ['bubble-1', 'm0', 'm1', 'm2'],
   );
   assert.equal(pauses.length, 2);
   assert.ok(pauses.every((p) => p.ms >= 1200 && p.ms <= 4000));
@@ -594,7 +687,7 @@ test('new reply bubbles are paced in server order without extra submits; ordinar
   await sending;
   assert.deepEqual(
     f.list.children.map((row) => row.dataset.messageId),
-    ['m0', 'm1', 'm2', 'm3'],
+    ['bubble-1', 'm0', 'm1', 'm2', 'm3'],
   );
   assert.equal(f.title.textContent, '合成人物');
   assert.equal(f.calls().submits, 1);
@@ -672,7 +765,7 @@ test('leaving a conversation drains presentation without delays or autoplay from
     ),
   });
   await f.send();
-  assert.equal(f.list.children.length, 4);
+  assert.equal(f.list.children.length, 5); // Part 36 NAMED EXCEPTION: was 4; the player's own bubble stays on the page (+1)
   assert.equal(played, 0);
   assert.equal(f.title.textContent, '合成人物');
 });
@@ -686,7 +779,7 @@ test('incoming presentation does not drag a reader away from earlier messages', 
     return { messages: responseMessages() };
   };
   await f.send();
-  assert.equal(f.list.children.length, 4);
+  assert.equal(f.list.children.length, 5); // Part 36 NAMED EXCEPTION: was 4 (+1: the player's own bubble stays)
   assert.equal(f.body.scrollTop, 40);
 });
 
@@ -726,9 +819,9 @@ test('a voice reply delivered as text fallback renders as an ordinary text bubbl
   const rows = f.list.children;
   assert.deepEqual(
     rows.map((row) => row.dataset.messageId),
-    ['in', 'fb0', 'fb1'],
+    ['bubble-1', 'in', 'fb0', 'fb1'], // Part 36 NAMED EXCEPTION: see above (the own bubble stays; 'in' is the history copy of it)
   );
-  for (const row of rows.slice(1)) {
+  for (const row of rows.slice(2)) {
     assert.equal(row.className, 'message-row incoming');
     assert.equal(row.innerHTML, '', 'no voice stack, play button or transcript toggle');
     const bubble = row.children.find((node) => node.className.includes('text-bubble'))!;
@@ -736,7 +829,8 @@ test('a voice reply delivered as text fallback renders as an ordinary text bubbl
     assert.ok(!bubble.className.includes('error') && !bubble.className.includes('not-sent'));
   }
   assert.deepEqual(
-    rows.slice(1).map((row) => row.children.find((node) => node.className.includes('text-bubble'))!.textContent),
+    // Part 36 NAMED EXCEPTION: the own bubble (the stored message) leads; the replies follow as before.
+    rows.slice(2).map((row) => row.children.find((node) => node.className.includes('text-bubble'))!.textContent),
     ['回复第一段', '回复第二段'],
   );
   assert.deepEqual(f.messages, [], 'nothing was announced as an error');

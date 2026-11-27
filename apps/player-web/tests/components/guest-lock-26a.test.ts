@@ -49,6 +49,11 @@ function chat(t: test.TestContext, first: string[] | undefined, submit?: () => P
       submits++;
       return submit!();
     },
+    // Part 36 NAMED EXCEPTION (harness): the page sends bubbles now; a bubble reaches the server through the same counted handler.
+    sendBubble: async () => {
+      submits++;
+      return submit!();
+    },
     byRequest: async () => {
       throw new Error('not expected');
     },

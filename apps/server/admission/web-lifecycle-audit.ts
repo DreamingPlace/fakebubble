@@ -1,5 +1,7 @@
 import { broadcastResidue, webBroadcastInstalled } from '../broadcast/web-broadcast-schema.ts';
 import { shareResidue } from '../share/web-share-schema.ts';
+import { turnsResidue } from '../turns/web-turn-schema.ts';
+import { feedbackResidue } from '../turns/web-feedback-schema.ts';
 import { DetailedError, ensure } from '../../../packages/domain/errors.ts';
 import { isWorkerdReservedTable } from '../platform/workerd-reserved-tables.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
@@ -50,6 +52,10 @@ const handled = new Set([
   'web_share_requests',
   // Part 45: three counters (created / opened / expired), no world and no identity.
   'web_share_counts',
+  // Part 36: a bubble's turn row and a rating are the player's own; the cleaners delete them with the world.
+  'web_turn_bubbles',
+  'web_feedback',
+  'web_feedback_requests',
   'web_local_events',
   'web_user_events',
   'web_input_snapshots',
@@ -271,6 +277,9 @@ export function auditWebLifecycleWorld(
   if (phase !== 'source') ensureClean(broadcastResidue(store, worldId) === 0, 'web_broadcast_messages');
   // Part 45: after the purge no share link and no share request of the world remains.
   if (phase !== 'source') ensureClean(shareResidue(store, worldId) === 0, 'web_shares');
+  // Part 36: after the purge no turn row, rating or rating request of the world remains.
+  if (phase !== 'source') ensureClean(turnsResidue(store, worldId) === 0, 'web_turn_bubbles');
+  if (phase !== 'source') ensureClean(feedbackResidue(store, worldId) === 0, 'web_feedback');
   ensureClean(!archiveHasIdentityColumn(store), 'archive_identity');
   // Part 31: the 已关闭账号 table holds a 玩家编号, a code and two times: no other column, ever.
   ensureClean(!closedAccountsHaveIdentityColumn(store), 'closed_accounts_identity');

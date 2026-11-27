@@ -120,6 +120,10 @@ export interface WebProviderMessage {
     actual: PlayerModelId /** The cheaper of the two at the operation's own price version (Part 21g). */;
     billed?: PlayerModelId;
   };
+  /** Part 36: the message this player's bubble quotes (same conversation). `text: null` means the original is gone. */
+  quote?: { messageId: string; author: 'player' | 'character'; text: string | null };
+  /** Part 36: the player's own 👍 / 👎 on this reply (a 👎 also says what: the voice or the content). */
+  rating?: { value: 'up' | 'down'; target: 'voice' | 'content' | null };
   audio: {
     revision: number;
     status: WebAudioStatus;
@@ -143,6 +147,27 @@ export interface WebProviderEvent {
   revision: number;
   payload: Record<string, unknown>;
 }
+export interface WebProviderBubbleSend {
+  requestId: string;
+  characterId: WebProviderCharacterId;
+  text: string;
+  quoteMessageId?: string | null;
+}
+export interface WebProviderTurn {
+  state: 'idle' | 'collecting' | 'replying' | 'refused';
+  /** When the quiet period ends (collecting); null otherwise. */
+  dueAt: number | null;
+  pending: number;
+  operationId: string | null;
+  errorCode: string | null;
+}
+export interface WebProviderRate {
+  requestId: string;
+  conversationId: string;
+  messageId: string;
+  rating: 'up' | 'down' | 'none';
+  target?: 'voice' | 'content';
+}
 export interface WebProviderSync {
   events: WebProviderEvent[];
   cursor: string;
@@ -159,6 +184,17 @@ export interface WebProviderActions {
   byRequest(requestId: string): Promise<WebProviderOperation>;
   operation(operationId: string): Promise<WebProviderOperation>;
   submit(input: WebProviderSend): Promise<{ operation: WebProviderOperation; duplicate: boolean }>;
+  /** Part 36: stores one bubble (a quote names a message of this conversation); the reply is a turn answering the whole batch. */
+  sendBubble(input: WebProviderBubbleSend): Promise<{
+    messageId: string;
+    conversationId: string;
+    duplicate: boolean;
+    turn: WebProviderTurn;
+  }>;
+  /** Part 36: where the turn of this character's conversation is (collecting, her reply running, a refused batch). */
+  turn(characterId: WebProviderCharacterId): Promise<WebProviderTurn>;
+  /** Part 36: 👍 / 👎 as a desired state (`none` removes it); a 👎 says what is rated down. */
+  rate(input: WebProviderRate): Promise<{ rating: 'up' | 'down' | null; target: 'voice' | 'content' | null }>;
   history(input: {
     characterId: WebProviderCharacterId;
     conversationId: string;
