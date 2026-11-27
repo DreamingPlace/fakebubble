@@ -111,9 +111,12 @@ try {
     });
 
     await open('memes');
+    // (Part 37c-1b: the library has more filters; wait until its rows are there, then use the 状态 filter by its label)
+    await page.locator('.mm-switch').nth(2).waitFor({ timeout: 20_000 });
+    await quietWait(page, 1500);
     await poke('网络梗 · 开关', 500, click('.mm-switch', 2));
     await poke('网络梗 · 筛选', 500, async () => {
-      await page.locator('select').nth(2).selectOption('on');
+      await page.locator('select[aria-label="状态"]').selectOption('on');
     });
 
     await open('overview');
