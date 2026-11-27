@@ -77,8 +77,11 @@ test('24l Alt+↓ / Alt+↑ moves a row inside its group and reports the whole g
   assert.deepEqual(saved.at(-1), ['live', ['b', 'c', 'a']]);
   key('b', 'ArrowUp'); // already first: nothing
   assert.equal(saved.length, 2);
+  const savedBefore = saved.length;
   key('e', 'ArrowUp');
-  assert.deepEqual(saved.at(-1), ['offline', ['e', 'd']], 'a drag never mixes groups');
+  // Part 59 (named exception): only the live characters have an order (首页顺序); the offline ones shown by 「显示未上线」 are not
+  // draggable, so moving one saves nothing and the saved order is unchanged.
+  assert.equal(saved.length, savedBefore, 'an offline row is not reorderable');
   assert.deepEqual(ids(host, 'live'), ['b', 'c', 'a']);
   // A repaint (another role is picked, the roster is read again) keeps the order the admin made.
   picker.select('a');

@@ -111,6 +111,7 @@ try {
     page
       .locator('.wb-roster .admin-pick-head')
       .evaluateAll((nodes: Element[]) => nodes.map((n) => (n.textContent ?? '').trim()));
+  const check59 = (actual: unknown, expected: unknown, message: string) => assert.equal(actual, expected, message);
   const expand = async (page: Page) => {
     await page.locator('.wb-roster').hover();
     await page.waitForTimeout(500);
@@ -161,11 +162,18 @@ try {
   }
 
   // =============== 2. drag reorder: motion, saved, survives a reload, differs between two admins ===============
-  // Part 59 (named exception): the drag section runs on the default list (live characters); the later sections turn 「显示未上线」 on.
-  const owner = await open(f.context, 'characters/jojo', 1440, 900, false);
+  // Part 59: the drag runs with 「显示未上线」 ON (`open` turns it on): the live order is dragged and saved, offline rows are listed but not draggable.
+  const owner = await open(f.context, 'characters/jojo', 1440, 900, true);
   const before = await idsIn(owner, 'live');
   await expand(owner);
   const row = (id: string) => owner.locator(`.wb-roster .admin-pick-row:has([data-character="${id}"])`);
+  check59(await owner.locator('.admin-pick-toggle[aria-pressed="true"]').count(), 1, '显示未上线 is on while dragging');
+  check59(
+    await owner.locator('.admin-pick-list[data-group="offline"] [data-drag-row]').count(),
+    0,
+    'offline rows are not draggable',
+  );
+  await row(before[0]!).scrollIntoViewIfNeeded();
   const first = before[0]!;
   const at = await row(first).boundingBox();
   const step = at.height + 2;
@@ -221,6 +229,7 @@ try {
   const otherFirst = before[1]!;
   await expand(other);
   const orow = other.locator(`.wb-roster .admin-pick-row:has([data-character="${otherFirst}"])`);
+  await orow.scrollIntoViewIfNeeded();
   const ob = await orow.boundingBox();
   await other.mouse.move(ob.x + 30, ob.y + ob.height / 2);
   await other.mouse.down();

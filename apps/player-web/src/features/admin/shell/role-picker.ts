@@ -78,7 +78,8 @@ export function rolePicker(
   const collapsed = new Set<SidebarGroup>();
   /** Part 59: the list shows the live characters; 「显示未上线」 adds the ones not launched yet or delisted (the open one is always shown). */
   let showOffline = false;
-  const paint = () => {
+  const paint = (keepRail = false) => {
+    const railTop = host.scrollTop;
     for (const stop of drops.splice(0)) stop();
     host.replaceChildren();
     const all = roles;
@@ -118,7 +119,8 @@ export function rolePicker(
       }
     const out = (role: PickerRole, node: HTMLElement) => {
       const list = lists.get(groupOf(role));
-      node.setAttribute('data-drag-row', '');
+      // Part 59: only the live characters have an order (首页顺序); the ones 「显示未上线」 adds are listed, never dragged.
+      if (groupOf(role) === 'live') node.setAttribute('data-drag-row', '');
       if (list) list.append(node);
       else host.append(node);
     };
@@ -236,15 +238,16 @@ export function rolePicker(
       );
       toggle.addEventListener('click', () => {
         showOffline = !showOffline;
-        paint();
+        paint(true);
       });
       host.append(toggle);
     }
     // the rail scrolls inside itself: the open character is in view after every paint
-    keepOpenInView();
+    if (!keepRail) keepOpenInView();
     const reorder = options.onReorder;
     if (reorder)
-      for (const [group, list] of lists)
+      for (const [group, list] of lists) {
+        if (group !== 'live') continue;
         drops.push(
           dragOrder(list, {
             rows: () => Array.from(list.children) as HTMLElement[],
@@ -264,6 +267,9 @@ export function rolePicker(
             },
           }),
         );
+      }
+    // 「显示未上线」 repaints the rail: it must not jump (the open one is not scrolled to).
+    if (keepRail) host.scrollTop = railTop;
   };
   return {
     show(next: readonly PickerRole[]) {
