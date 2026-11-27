@@ -197,7 +197,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     versionsPop.hidden = !open;
     versionsButton.setAttribute('aria-expanded', String(open));
   };
-  versionsButton.classList.add('dc');
+  versionsButton.className = `${versionsButton.className} dc`;
   versionsButton.append(disclosureChevron());
   versionsButton.addEventListener('click', () => setVersionsOpen(versionsPop.hidden));
   const closeVersionsOutside = (event: Event) => {
