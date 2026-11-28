@@ -451,6 +451,9 @@ try {
 
       // the rail: headings readable, never under the open character's row
       await open(`characters/${people.lqy}`);
+      // Named exception (Part 24b-7f round 3): a group's label opens with the 64 px rail, so the headings are read with the pointer on it.
+      await page.locator('.wb-roster').hover();
+      await page.waitForTimeout(600);
       const rail = (await page.evaluate(`(() => {
         const out = [];
         for (const g of document.querySelectorAll('.admin-pick-group')) {

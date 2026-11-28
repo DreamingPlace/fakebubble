@@ -117,6 +117,8 @@ try {
   // =============== 1. 首页顺序 ===============
   for (const [width, height] of SIZES) {
     const page = await open(f.context, 'characters/jojo', width, height);
+    // Named exception (Part 24b-7f round 3): the rail is 64 px at rest and 首页顺序 opens with it, so the pointer goes onto the rail first.
+    await page.locator('.wb-roster').hover();
     await page.locator('#wb-arc').waitFor({ timeout: 15_000 });
     const before = catalog();
     await page.locator('#wb-arc').click();
@@ -177,6 +179,7 @@ try {
   {
     // another administrator with the 角色 category may order the arc; one without it never sees the button
     const page = await open(helper, 'characters/jojo');
+    await page.locator('.wb-roster').hover(); // (named exception, as above: the tool opens with the rail)
     await page.locator('#wb-arc').waitFor({ timeout: 15_000 });
     assert.equal(await page.locator('#wb-arc').isVisible(), true);
     await page.close();
