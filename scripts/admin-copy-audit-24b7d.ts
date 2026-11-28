@@ -19,7 +19,8 @@
 export const COPY_AUDIT_SOURCE = `(() => {
   // Allowlist (named, justified): model and provider names, the units and formats the brief names, and the audio format words a
   // sentence about a WAV file needs. Nothing else English is allowed in visible text.
-  const ALLOWED = new Set(['DeepSeek','Deepseek','deepseek','Fish','Gemini','Grok','xAI','xai','Claude','Cloudflare','Access','Turnstile','24H','UTC','CSV','JSON','ID','WAV','PCM','PCM16','kHz','MB','Drama','HH','mm','DM','Mono','Pro','Flash','IP','ADMIN','JOJO','PNG','JPEG','WebP','WEBP']);
+  const ALLOWED = new Set(['DeepSeek','Deepseek','deepseek','Fish','Gemini','Grok','xAI','xai','Claude','Cloudflare','Access','Turnstile','24H','UTC','CSV','JSON','ID','WAV','PCM','PCM16','kHz','MB','Drama','HH','mm','DM','Mono','Pro','Flash','IP','ADMIN','JOJO','PNG','JPEG','WebP','WEBP','ms']);
+  // ms: the unit of the 技术指标 latencies (a unit like MB and kHz).
   // PNG / JPEG / WebP are file formats (like CSV and JSON), named in the 头像 hint (Part 31).
   // Named, justified: Pro / Flash are model names; IP is an abbreviation Part 29 pins in a browser check; ADMIN is the brand lock-up
   // next to the wordmark; JOJO is a character code (admin-entered data) in the fixture.
@@ -34,7 +35,8 @@ export const COPY_AUDIT_SOURCE = `(() => {
     const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
   };
   // Also exempt: what a player wrote (co-creation notes) and the profile diff (it prints the profile's own values, e.g. an IANA zone).
-  const EXEMPT = '.admin-dev, pre, code, textarea, .pw-raw, .ad-tip, script, style, .cc-first, .cc-answer-text, .pd-add, .pd-del';
+  const EXEMPT = '.admin-dev, pre, code, textarea, .pw-raw, .ad-tip, script, style, .cc-first, .cc-answer-text, .pd-add, .pd-del, .mm-term, .mm-meaning, .mm-category, .mm-tag, .sp-reply';
+  // .mm-*: the 网络梗 dictionary (data the owner ships and reviews); .sp-reply: a 说话样本 an administrator wrote.
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     const text = (n.nodeValue || '').trim();
@@ -64,11 +66,11 @@ export const COPY_AUDIT_SOURCE = `(() => {
     // a label, a button, a heading, a table value: the words of a control or a value, not prose beside it
     'button, a, [role="button"], label, summary, legend, caption, th, td, dt, dd, option, select, h1, h2, h3, h4, h5, h6, .ot-cell, .ot-detail, .ot-head, .cs-label, .cs-lb, .cs-items-label, .cn-lab',
     // a badge, a chip or a status pill: a value, not prose
-    '.cs-tag, .cc-chip, .models-pill, .head-status, .admin-badge, .status-badge, .ov-tile-sub, .ov-tile-label',
+    '.pw-zone, .cs-tag, .cc-chip, .models-pill, .head-status, .admin-badge, .status-badge, .ov-tile-sub, .ov-tile-label',
     // an error or a status the page is telling now, an empty state, and the reason a control is off (a state of the page, not an explanation)
     '[role="alert"], [role="status"], [aria-live], .admin-error-line, .admin-error-text, .error-line, .admin-empty, .ot-empty, .cc-empty, .cc-target-empty, .rh-empty, .ovx-empty, .vh-note, .pw-fail, .pw-reason, .wb-reason, .admin-toast, .toast, .ad-toast, [data-empty], [data-reason]',
     // data an administrator or a player wrote, and what a diff, a transcript or an import's to-do list prints
-    '.cc-first, .cc-answer-text, .cc-text, .text-bubble, .pd-add, .pd-del, .pd-cell, .review-text, .review-lines, .vc-slot, .wl, .pw-line, .pw-bubble, .pw-raw, .cn-field, .cv, .vh-detail, .wb-checklist',
+    '.cc-first, .cc-answer-text, .cc-text, .text-bubble, .pd-add, .pd-del, .pd-cell, .review-text, .review-lines, .sp-reply, .vc-slot, .wl, .pw-line, .pw-bubble, .pw-raw, .cn-field, .cv, .vh-detail, .wb-checklist',
     // irreversible operations: the danger zone and its confirms, 发布 and its row, permanent deletion (data-irreversible marks a line
     // beside one: 立即删除 of a closed account's chat, 确认导入 replacing the whole cast draft), 撤销整批, 下线
     '[data-irreversible], .dz-note, .dz-body, .dz-inner, .danger-zone, .ic-text, .ic-box, .inline-confirm, .confirm-dialog, [role="dialog"], [role="alertdialog"], dialog, .review-confirm, .wb-publish-row',

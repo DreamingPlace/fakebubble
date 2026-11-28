@@ -97,14 +97,14 @@ export function unknownCallsPanel(deps: {
       return h(
         'tr',
         { attrs: { 'data-code': call.code } },
-        h('td', { class: 'is-mono', text: call.code }),
-        h('td', { class: 'is-mono', text: call.provider }),
-        h('td', { class: 'is-mono', text: call.model }),
+        h('td', { class: 'is-mono admin-dev', text: call.code }),
+        h('td', { class: 'is-mono admin-dev', text: call.provider }),
+        h('td', { class: 'is-mono admin-dev', text: call.model }),
         h('td', { text: stageLabel[call.stage] }),
-        h('td', { text: usd(call.heldMicros) }),
+        h('td', { class: 'is-end', text: usd(call.heldMicros) }),
         h('td', { text: ageText(call.ageMs) }),
-        h('td', { class: 'is-mono', text: call.errorCode }),
-        h('td', {}, ...(deps.isOwner() ? [amount, go] : [])),
+        h('td', { class: 'is-mono admin-dev sys-uc-code', text: call.errorCode }),
+        h('td', { class: 'sys-uc-settle' }, ...(deps.isOwner() ? [amount, go] : [])),
       );
     });
     const table = h(
@@ -117,19 +117,27 @@ export function unknownCallsPanel(deps: {
           'tr',
           {},
           ...['编号', '供应商', '模型', '阶段', '预留金额', '已过', '错误码', deps.isOwner() ? '核对' : ''].map(
-            (text) => h('th', { text }),
+            (text) => h('th', { text, class: text === '预留金额' ? 'is-end' : '' }),
           ),
         ),
       ),
       h('tbody', {}, ...rows),
     );
+    // Part 24b-7f round 3: the table scrolls inside its own card (never the page), like the other tables of 系统状态
+    const region = h('div', { class: 'admin-table-region' }, h('div', { class: 'admin-table-wrap' }, table));
     root.replaceChildren(
       head,
-      view.calls.length ? table : h('p', { class: 'admin-hint', text: '没有未确认的调用。' }),
+      view.calls.length ? region : h('p', { class: 'admin-hint', text: '没有未确认的调用。' }),
       ...(view.other.embed > 0
-        ? [h('p', { class: 'admin-hint', text: `另有 ${view.other.embed} 条记忆向量化调用结果未知（不在这里核对）。` })]
+        ? [
+            h('p', {
+              class: 'admin-hint',
+              text: `另有 ${view.other.embed} 条记忆向量化调用结果未知（不在这里核对）。`,
+              attrs: { 'data-reason': 'true' },
+            }),
+          ]
         : []),
-      h('p', { class: 'admin-hint', text: `已核对 ${view.resolved} 条。` }),
+      h('p', { class: 'admin-hint', text: `已核对 ${view.resolved} 条。`, attrs: { 'data-reason': 'true' } }),
       host,
       result,
     );

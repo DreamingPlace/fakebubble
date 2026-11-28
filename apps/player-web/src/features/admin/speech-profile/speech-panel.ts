@@ -486,7 +486,9 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
   );
   paintUse();
 
+  // Part 24b-7f round 3: the choices come first (网络梗's 默认档位 and 单条设置), then the text boxes; the same controls, the same saving.
   root.append(
+    memeSection,
     hoverValue(h('h3', { class: 'sp-title', text: '核心卡' }), '没写的栏目，就用角色现有的设定。'),
     card,
     h('div', { class: 'sp-actions' }, saveCard),
@@ -495,7 +497,6 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
     h('h3', { class: 'sp-title', text: DAILY_LIFE_LABEL }),
     dayCard,
     h('div', { class: 'sp-actions' }, saveDaily),
-    memeSection,
     lockNote,
     warn,
     message,

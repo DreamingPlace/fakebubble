@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 import { startConsoleFixture } from './console-fixture-24b6.ts';
 import { importLongContent } from './console-long-content-24b7b.ts';
 import { COPY_AUDIT_SOURCE } from './admin-copy-audit-24b7d.ts';
+import { BUTTON_TEXT_SOURCE } from './admin-button-audit-24b7g.ts';
+import { mockSystemRows } from './console-system-mock-24b7g.ts';
 
 /**
  * Part 24b-7f (offline provider only; nothing reaches a provider). Layout and wording of the admin console, measured in a real
@@ -78,7 +80,7 @@ try {
 
     // ---------------- A. the role rail ----------------
     await go('characters/jojo', '.wb-tab');
-    const rail = await page.evaluate(() => {
+    const railProbe = () => {
       const box = (e: Element) => {
         const r = e.getBoundingClientRect();
         return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height, cy: (r.top + r.bottom) / 2 };
@@ -136,10 +138,26 @@ try {
         dots,
         unhit,
       };
-    });
+    };
+    await page.mouse.move(900, 500);
+    await page.waitForTimeout(500);
+    const rail = await page.evaluate(railProbe);
+    // at rest the rail is 64 px; a heading is chevron + count in one row
+    check(rail.roster.w <= 72, `${at} rail: ${Math.round(rail.roster.w)} px at rest (64)`);
+    for (const head of rail.heads)
+      if (head)
+        check(
+          Math.abs(head.chev.cy - head.count.cy) <= 2,
+          `${at} rail: at rest the heading 「${head.text}」 is not one row`,
+        );
+    // expanded (the pointer on the rail): chevron | label | count, the three tools, all in ONE row
+    await page.locator('.wb-roster').hover();
+    await page.waitForTimeout(600);
+    const railOpen = await page.evaluate(railProbe);
+    check(railOpen.roster.w >= 200, `${at} rail: ${Math.round(railOpen.roster.w)} px expanded (≈ 212)`);
     // one row per group heading: chevron | label | count, left to right, one centre line
-    check(rail.heads.length >= 2, `${at} rail: ${rail.heads.length} group headings`);
-    for (const head of rail.heads) {
+    check(railOpen.heads.length >= 1, `${at} rail: ${railOpen.heads.length} group headings`);
+    for (const head of railOpen.heads) {
       if (!head) {
         check(false, `${at} rail: a heading lacks its chevron, label or count`);
         continue;
@@ -153,12 +171,12 @@ try {
         head.chev.r <= head.label.l + 1 && head.label.r <= head.count.l + 1,
         `${at} rail: heading 「${head.text}」 is not chevron | label | count left to right`,
       );
-      check(!head.clipped, `${at} rail: the group label 「${head.text}」 is cut off at rest`);
-      check(head.label.w > 8, `${at} rail: the group label is not read at rest (${head.label.w}px)`);
+      check(!head.clipped, `${at} rail: the group label 「${head.text}」 is cut off expanded`);
+      check(head.label.w > 8, `${at} rail: the group label is not read expanded (${head.label.w}px)`);
     }
     // three icon buttons in ONE row, one height, named
-    const tools = rail.tools.filter((t: { hidden: boolean } | null) => t && !t.hidden) as NonNullable<
-      (typeof rail.tools)[number]
+    const tools = railOpen.tools.filter((t: { hidden: boolean } | null) => t && !t.hidden) as NonNullable<
+      (typeof railOpen.tools)[number]
     >[];
     check(tools.length === 3, `${at} rail: ${tools.length} tool buttons (3)`);
     if (tools.length === 3) {
@@ -168,7 +186,7 @@ try {
       );
       check(tools[0]!.r <= tools[1]!.l && tools[1]!.r <= tools[2]!.l, `${at} rail: the tools overlap`);
       check(
-        tools.every((t) => t.l >= rail.roster.l && t.r <= rail.roster.r && t.b <= rail.roster.b + 1),
+        tools.every((t) => t.l >= railOpen.roster.l && t.r <= railOpen.roster.r && t.b <= railOpen.roster.b + 1),
         `${at} rail: a tool is outside the rail`,
       );
       check(
@@ -180,6 +198,8 @@ try {
         const button = page.locator(id);
         const name = (await button.getAttribute('aria-label')) ?? '';
         await page.mouse.move(900, 500);
+        await page.locator('.wb-roster').hover(); // the tools open with the rail
+        await page.waitForTimeout(450);
         await button.hover();
         await page.waitForTimeout(250);
         const tipNode = button.locator('.ad-tip');
@@ -329,6 +349,21 @@ try {
       }
     }
 
+    // ---------------- B2. 说话档案: the choices (网络梗 默认档位 and 单条设置) come first, then the text boxes ----------------
+    await go('characters/jojo', '.wb-tab');
+    await page.locator('button.wb-tab:has(span:text-is("说话档案"))').first().click();
+    await page.waitForTimeout(700);
+    const order = await page.evaluate(() => {
+      const choices = document.querySelector('.wb-speech .mm-use');
+      const firstBox = document.querySelector('.wb-speech textarea, .wb-speech input[type="text"]:not(.mm-use *)');
+      if (!choices || !firstBox) return { ok: false, why: `choices ${!!choices}, first text box ${!!firstBox}` };
+      return {
+        ok: !!(choices.compareDocumentPosition(firstBox) & Node.DOCUMENT_POSITION_FOLLOWING),
+        why: 'a text box comes before the choices',
+      };
+    });
+    check(order.ok, `${at} 说话档案: ${order.why}`);
+
     // ---------------- C. 测试对话 ----------------
     await go('conversations', '.review-list');
     await page.locator('.review-list .admin-table tbody tr').first().waitFor({ timeout: 15_000 });
@@ -436,6 +471,115 @@ try {
     );
     await press('指标', '活跃');
     check(!(await pie.isDisabled()), `${at} 总览: 活跃 lost its pie`);
+
+    // ---------------- F. 系统状态: every table fits its content; what does not fit scrolls inside its own card ----------------
+    if (!(page as unknown as { __sysMock?: boolean }).__sysMock) {
+      await mockSystemRows(page);
+      (page as unknown as { __sysMock?: boolean }).__sysMock = true;
+    }
+    await go('system');
+    await page.waitForTimeout(800);
+    const tables = await page.evaluate(() => {
+      const out: string[] = [];
+      const page = document.documentElement;
+      if (page.scrollWidth - page.clientWidth > 1)
+        out.push(`the page scrolls sideways by ${page.scrollWidth - page.clientWidth}`);
+      const cards = [...document.querySelectorAll('.system-section')].filter((c) => c.querySelector('table, .ot'));
+      if (cards.length < 4) out.push(`only ${cards.length} cards with tables`);
+      const overlapIn = (cells: Element[], name: string) => {
+        // the text of neighbouring cells never overlaps, and no text leaves the card's visible box unless a scroller holds it
+        const boxes = cells
+          .map((c) => {
+            const range = document.createRange();
+            range.selectNodeContents(c);
+            const r = range.getBoundingClientRect();
+            return { r, text: (c.textContent ?? '').trim().slice(0, 16) };
+          })
+          .filter((b) => b.r.width > 0);
+        for (let i = 1; i < boxes.length; i++)
+          if (boxes[i - 1]!.r.right > boxes[i]!.r.left + 1 && Math.abs(boxes[i - 1]!.r.top - boxes[i]!.r.top) < 6)
+            out.push(`${name}: 「${boxes[i - 1]!.text}」 overlaps 「${boxes[i]!.text}」`);
+      };
+      for (const card of cards) {
+        const name = card.querySelector('h3')?.textContent ?? '?';
+        for (const row of card.querySelectorAll('tr, .ot-head, .ot-row')) overlapIn([...row.children], name);
+        // a numeric column is right-aligned in its header and in its cells
+        for (const head of card.querySelectorAll('th.is-end, .ot-head .is-end')) {
+          const align = getComputedStyle(head).textAlign;
+          if (align !== 'right' && align !== 'end') out.push(`${name}: header 「${head.textContent}」 is ${align}`);
+        }
+        for (const cell of card.querySelectorAll('td.is-end, .ot-row .is-end')) {
+          const align = getComputedStyle(cell).textAlign;
+          if (align !== 'right' && align !== 'end')
+            out.push(`${name}: number 「${(cell.textContent ?? '').slice(0, 12)}」 is ${align}`);
+        }
+        // a card holds its tables: either they fit, or an inner scroller (overflow auto) carries the excess
+        const cr = card.getBoundingClientRect();
+        for (const t of card.querySelectorAll('table, .ot')) {
+          const tr = t.getBoundingClientRect();
+          let scroller: Element | null = t;
+          while (scroller && scroller !== card && !['auto', 'scroll'].includes(getComputedStyle(scroller).overflowX))
+            scroller = scroller.parentElement;
+          const inScroller = scroller && scroller !== card;
+          if (!inScroller && tr.right > cr.right + 1)
+            out.push(`${name}: a table runs ${Math.round(tr.right - cr.right)}px out of its card`);
+        }
+      }
+      return out;
+    });
+    for (const t of tables) check(false, `${at} 系统状态: ${t}`);
+    if (shots) await page.screenshot({ path: `${shots}/${size}-system.png`, fullPage: true });
+
+    // ---------------- G. the button text audit on every page, open state and workbench tab ----------------
+    const buttonProblems = new Set<string>();
+    const scanButtons = async (name: string) => {
+      const found = (await page.evaluate(BUTTON_TEXT_SOURCE)) as string[];
+      for (const x of found) buttonProblems.add(`${name}: ${x}`);
+    };
+    const openFolds = async () => {
+      await page.evaluate(() => {
+        for (const d of document.querySelectorAll('details:not([open])'))
+          (d.querySelector(':scope > summary') as HTMLElement | null)?.click();
+        for (const b of document.querySelectorAll('[aria-expanded="false"]'))
+          if (!b.closest('.admin-nav, .wb-roster')) (b as HTMLElement).click?.();
+      });
+      await page.waitForTimeout(700);
+    };
+    for (const p of [
+      'overview',
+      'cast',
+      'memes',
+      'cocreation',
+      'invites',
+      'points',
+      'broadcast',
+      'conversations',
+      'feedback',
+      'costs',
+      'models',
+      'system',
+      'members',
+      'account',
+    ]) {
+      await go(p);
+      await scanButtons(p);
+      await openFolds();
+      await scanButtons(`${p} (open)`);
+    }
+    for (const id of ['jojo', lqy]) {
+      await go(`characters/${id}`, '.wb-tab');
+      const tabNames = (await page.$$eval('.wb-tab', (n: Element[]) =>
+        n.map((x) => x.querySelector('span')!.textContent),
+      )) as string[];
+      for (const t of tabNames) {
+        await page.locator(`button.wb-tab:has(span:text-is("${t}"))`).first().click();
+        await page.waitForTimeout(600);
+        await scanButtons(`${id.slice(0, 4)} ${t}`);
+        await openFolds();
+        await scanButtons(`${id.slice(0, 4)} ${t} (open)`);
+      }
+    }
+    for (const x of buttonProblems) check(false, `${at} button text: ${x}`);
 
     // ---------------- D'. the copy audit's `sentences` rule, on the pages this check has open ----------------
     for (const [name, hash] of [

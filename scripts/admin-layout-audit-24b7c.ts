@@ -11,6 +11,10 @@ export const AUDIT_SOURCE = `(() => {
   // Buttons that are not row actions: whole-card / whole-row hit areas, the navigation and the rail. Each has its own spec.
   const EXEMPT_BUTTON = '.admin-nav-item, .admin-account-toggle, .admin-pick, .admin-pick-head, .cc-row-open, .cn-add-card, .wb-rail-item, .cs-card, .cs-cell, .cs-head, .cs-star-hit, .cc-card-open, .admin-menu-item, .admin-nav-collapse';
   const VOICE = '.vc-materials';
+  // Named inner scrollers (Part 44): 多轮预演's 对话 and 统计 tables scroll sideways INSIDE .rh-scroll (the 玩家 column sticky, 208 px model
+  // columns, the scrollbar pinned to the panel's foot), like the 关系 grid. The PAGE never scrolls sideways; what is inside such a scroller
+  // is not "cut off" and its model columns are not fields of a width class.
+  const INNER_SCROLLER = '.rh-scroll';
   const root = document.querySelector('.admin-frame') || document.querySelector('.admin-shell');
   const out = { bars: [], numbers: [], barAction: [], primary: [], buttonHeight: [], buttonGroup: [], fieldWidth: [], pair: [], gaps: [], emptyHeading: [], checkGroup: [], sideways: [], cut: [], rail: [] };
   const vis = (n) => { const r = n.getBoundingClientRect(); const s = getComputedStyle(n); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && !n.closest('[hidden]') && !n.closest(VOICE); };
@@ -53,6 +57,7 @@ export const AUDIT_SOURCE = `(() => {
   // 2. single-line fields never wider than their width class (data-w set by ui/field-width.ts); a missing class is a miss too
   const fields = [...root.querySelectorAll('input, select')].filter((n) => vis(n) && !n.matches('[type=checkbox],[type=radio],[type=color],[type=file],[type=range],[type=hidden]') && !n.closest('.admin-login, [data-surface=login], .admin-password-field'));
   for (const n of fields) {
+    if (n.closest(INNER_SCROLLER)) continue;
     const w = n.getAttribute('data-w'), width = R(n).width;
     if (!w) out.fieldWidth.push('no width class ' + label(n) + ' ' + Math.round(width));
     else if (w !== 'full' && width > (WIDTH[w] || 9999) + 1) out.fieldWidth.push(w + ' field ' + Math.round(width) + 'px (max ' + WIDTH[w] + ') ' + label(n));
@@ -124,10 +129,11 @@ export const AUDIT_SOURCE = `(() => {
   const de = document.documentElement;
   if (de.scrollWidth - de.clientWidth > 1) out.sideways.push('page ' + (de.scrollWidth - de.clientWidth));
   for (const n of root.querySelectorAll('.admin-frame, .admin-main, .wb-card, .wb-card-body, main, table, .admin-table-wrap')) {
-    if (!vis(n)) continue; const o = getComputedStyle(n).overflowX;
+    if (!vis(n) || n.closest(INNER_SCROLLER)) continue; const o = getComputedStyle(n).overflowX;
     if (n.scrollWidth - n.clientWidth > 1 && (o === 'auto' || o === 'scroll' || o === 'hidden')) out.sideways.push(label(n) + ' ' + (n.scrollWidth - n.clientWidth));
   }
   for (const n of root.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=file]):not([type=range]), textarea, button, th, td, label > span, h1, h2, h3, .cs-chip, .cn-chip, .cc-filter-chip, .seg-button')) {
+    if (n.closest(INNER_SCROLLER)) continue; // Part 44: an inner scroller's columns are measured by its own scrollbar
     if (n.closest('.admin-pick, .admin-pick-head')) continue; // the rail shows a name under the avatar and clips it by design (hover tip)
     if (!vis(n)) continue;
     if (n.scrollWidth - n.clientWidth > 1 || (n.tagName === 'TEXTAREA' && n.scrollHeight - n.clientHeight > 1)) out.cut.push(label(n) + ' ' + n.scrollWidth + '/' + n.clientWidth);

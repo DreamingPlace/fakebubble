@@ -472,9 +472,7 @@ try {
         items: document.querySelectorAll('.wb-roster .admin-pick').length,
       };
     });
-    // Named exception (Part 24b-7f): the rail is 124 px at rest (it was 64) because three 32 px tools now share ONE row at its foot and the
-    // group labels are read at rest; it still grows to ≈ 212 over the page without moving it (checked below).
-    check(rail.width <= 136, `角色工作台 ${width}: the rail is ${rail.width} px (≤ 136)`);
+    check(rail.width <= 72, `角色工作台 ${width}: the rail is ${rail.width} px (≤ 72)`);
     check(rail.items === 15, `角色工作台 ${width}: ${rail.items} roles in the rail (15)`);
     await page.locator('.wb-roster .admin-pick').nth(2).hover();
     await wait(600);

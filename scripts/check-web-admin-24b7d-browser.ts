@@ -124,6 +124,10 @@ try {
       'invites',
       'points',
       'conversations',
+      // Part 24b-7f round 3: the pages that came in from main are swept too (网络梗, 广播, 语音反馈)
+      'memes',
+      'broadcast',
+      'feedback',
       'costs',
       'models',
       'members',
