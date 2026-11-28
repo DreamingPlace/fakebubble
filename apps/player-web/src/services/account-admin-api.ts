@@ -18,7 +18,6 @@ import { ConversationsAdminClient } from './conversations-admin-api.ts';
 import { FeedbackAdminClient } from './feedback-admin-api.ts';
 import { ExportAdminClient } from './export-admin-api.ts';
 import { PreviewAdminClient } from './preview-admin-api.ts';
-import { isInterrupted } from './admin-connection.ts';
 import { InviteAdminApi } from './invite-admin-api.ts';
 import { InviteLocalApiError } from './invite-local-api.ts';
 import {
@@ -297,16 +296,9 @@ export class AccountAdminApi extends InviteAdminApi {
     return this.active(await this.request('/login', { token }));
   }
   override async restore() {
-    const kept = this.csrf;
-    this.csrf = null;
-    try {
-      return this.active(await this.request('/session'));
-    } catch (error) {
-      // Part 60: a read that timed out or was interrupted proves nothing about the grant: the token stays, or every write after a
-      // slow background refresh would first have to re-sync it.
-      if (isInterrupted(error) && this.csrf === null) this.csrf = kept;
-      throw error;
-    }
+    // Part 60: the token stays while the session is asked (the read needs none): clearing it first made every write that started
+    // during a background refresh go out without it, answer 403 and re-sync. A 401 clears it (the transport does that).
+    return this.active(await this.request('/session'));
   }
   async emailLogin(email: string, password: string) {
     this.csrf = null;
