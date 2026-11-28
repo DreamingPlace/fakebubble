@@ -14,6 +14,11 @@ import { defaultSchedule } from '../../../packages/domain/defaults.ts';
 import { COCREATION_THEMES } from '../../../packages/contracts/cocreation-wordings.ts';
 import { DAY, T0, origin, tiersFixture } from '../fixtures/invite-tiers.ts';
 import { sampleCastRaw } from '../fixtures/cast-sample.ts';
+import { compileCastViewDetailed } from '../../../apps/server/cast/cast-compile.ts';
+import { purgeCocreation } from '../../../apps/server/cocreation/web-cocreation-purge.ts';
+import { CAST_LIMITS } from '../../../packages/contracts/web-cast.ts';
+
+const CAST_PAIR_NOTE_MAX = CAST_LIMITS.pairNote;
 
 const midnight = Math.floor(T0 / DAY) * DAY;
 const IDS = ['wei-guagua', 'jojo', 'chen-jimi'] as const;
@@ -257,10 +262,15 @@ test('55: adopt 20 answers one after another, with a publish in between: no conf
   );
   assert.ok(again.every((r) => r.ok && r.duplicate === true));
   list.forEach((entry, n) => assert.equal(s.f.balance(owner(n)), before.get(entry.item.id)! + 20));
-  // Every note left 新.
-  assert.equal(
-    s.f.store.get<{ n: number }>("SELECT count(*) n FROM web_cocreation_submissions WHERE status='new'")!.n,
-    0,
+  // Part 59 (named exception): handling is per ITEM. Every character note left 新; the two relation notes adopted their story,
+  // but each also carries a player's reason, an item nobody handled yet, so they stay in 新 until it is.
+  assert.deepEqual(
+    s.f.store
+      .all<{ id: string; reason: string | null }>(
+        "SELECT s.id,r.reason FROM web_cocreation_submissions s LEFT JOIN web_cocreation_relations r ON r.submission_id=s.id WHERE s.status='new'",
+      )
+      .map((row) => row.reason !== null && row.reason !== ''),
+    [true, true],
   );
 });
 
@@ -453,4 +463,170 @@ test('55: the route takes exactly its keys, needs the session, CSRF and Origin, 
   assert.equal(refused.results[0]!.code, 'ADMIN_PERMISSION_REQUIRED');
   const done = (await admin(body, s.adopter as never))!.body as { results: Result[]; adopted: number };
   assert.equal(done.adopted, 1);
+});
+
+// ---- Part 59: handling is per item; 已处理 by processed time; the reason as the pair's 关系注解 -------------------------------------------
+const listOf = (s: Setup, status: 'new' | 'processed' | null) =>
+  s.co.list(s.adopter, { characterId: null, status, starred: null, query: null, before: null }).items as {
+    id: string;
+    status: string;
+    itemCount: number;
+    handledCount: number;
+  }[];
+
+test('59: a note moves to 已处理 only when EVERY item is handled; 整条标为已处理 moves it at once; 已处理 is by processed time', (t) => {
+  const s = setup(t);
+  const who = s.player();
+  const sent = s.card(who, 'jojo', [
+    { cardId: 'topics', text: '话题甲' },
+    { cardId: 'quirk', text: '怪癖乙' },
+    { cardId: 'catchphrase', text: '口头禅丙' },
+  ]);
+  const id = s.ids(sent);
+  // 采纳 of the first item (through the server's own adoption) leaves the note in 新 with 1/3
+  assert.ok(adopt(s, [{ id, ordinal: 0 }])[0]!.ok);
+  let row = listOf(s, 'new').find((entry) => entry.id === id)!;
+  assert.deepEqual([row.status, row.handledCount, row.itemCount], ['new', 1, 3], 'one of three handled: still new');
+  // 不采纳 / 复制 / 标为已处理 each count; the third one moves it
+  assert.equal(s.co.markItem(s.adopter, id, 1, 'rejected').status, 'new');
+  assert.equal(s.co.detail(s.adopter, id).answers[1]!.handled, 'rejected');
+  const last = s.co.markItem(s.adopter, id, 2, 'copied');
+  assert.equal(last.status, 'processed', 'the last unhandled item moves it');
+  assert.equal(last.handledCount, 3);
+  // taking a mark off reopens the count but never moves a processed note back by itself
+  assert.equal(s.co.markItem(s.adopter, id, 2, null).handledCount, 2);
+  // bad input
+  assert.equal(
+    code(() => s.co.markItem(s.adopter, id, 12, 'handled')),
+    'INVALID_REQUEST',
+  );
+  assert.equal(
+    code(() => s.co.markItem(s.adopter, id, 0, 'adopted' as never)),
+    'INVALID_REQUEST',
+  );
+  assert.equal(
+    code(() => s.co.markItem(s.adopter, id, 5, 'handled')),
+    'NOT_FOUND',
+  );
+  assert.equal(
+    code(() => s.co.markItem(s.adopter, 'nope', 0, 'handled')),
+    'NOT_FOUND',
+  );
+  // 整条标为已处理: whatever the count, at once
+  const big = s.ids(
+    s.card(s.player(), 'jojo', [
+      { cardId: 'topics', text: '一' },
+      { cardId: 'quirk', text: '二' },
+      { cardId: 'catchphrase', text: '三' },
+    ]),
+  );
+  s.co.setStatus(s.adopter, [big], 'processed');
+  assert.equal(s.co.detail(s.adopter, big).status, 'processed');
+  // 已处理 is ordered by when it was processed (newest first), not when it was sent
+  const a = s.ids(s.card(s.player(), 'jojo', [{ cardId: 'topics', text: 'A' }]));
+  const b = s.ids(s.card(s.player(), 'jojo', [{ cardId: 'topics', text: 'B' }]));
+  const c = s.ids(s.card(s.player(), 'jojo', [{ cardId: 'topics', text: 'C' }]));
+  for (const x of [c, a, b]) {
+    s.f.setNow(s.f.clock() + 60_000);
+    s.co.setStatus(s.adopter, [x], 'processed');
+  }
+  const order = listOf(s, 'processed').map((entry) => entry.id);
+  assert.deepEqual(order.slice(0, 3), [b, a, c], 'processed newest first');
+  // the cursor follows the same order (30 per page): ask for the page after the first row
+  const second = s.co
+    .list(s.adopter, {
+      characterId: null,
+      status: 'processed',
+      starred: null,
+      query: null,
+      before: (s.co.list(s.adopter, {
+        characterId: null,
+        status: 'processed',
+        starred: null,
+        query: null,
+        before: null,
+      }) as never as { items: unknown[] }) && {
+        createdAt: s.f.store.get<{ processed_at: number }>(
+          'SELECT processed_at FROM web_cocreation_submissions WHERE id=?',
+          b,
+        )!.processed_at,
+        id: b,
+      },
+    })
+    .items.map((entry: { id: string }) => entry.id);
+  assert.deepEqual(second.slice(0, 2), [a, c], 'the cursor pages by processed time');
+});
+
+test("59: the reason of a two-person note is adopted as the pair's 关系注解, apart from the story, and reaches both characters", (t) => {
+  const s = setup(t);
+  const sent = s.story(s.player(), ['wei-guagua', 'jojo'], '她们是邻居');
+  const id = s.ids(sent);
+  const detail = () => s.co.relationDetail(s.adopter, id);
+  assert.equal(detail().reasonMark, null);
+  const before = readDraft(s.f.store as never);
+  // too long / empty: nothing is written
+  assert.equal(
+    code(() => s.co.adoptReason(s.adopter, { id, requestId: 'x1', text: '字'.repeat(CAST_PAIR_NOTE_MAX + 1) })),
+    'COCREATION_PAIR_NOTE_TOO_LONG',
+  );
+  assert.equal(
+    code(() => s.co.adoptReason(s.adopter, { id, requestId: 'x2', text: '   ' })),
+    'COCREATION_TEXT_INVALID',
+  );
+  assert.equal(readDraft(s.f.store as never).revision, before.revision);
+  const done = s.co.adoptReason(s.adopter, { id, requestId: 'reason-1', text: '一个爱闹一个嫌吵' });
+  assert.equal(done.duplicate, false);
+  const after = readDraft(s.f.store as never);
+  assert.equal(after.revision, before.revision + 1, "written once at the draft's current revision");
+  assert.deepEqual(
+    after.doc.pairNotes?.map((n) => [[n.a, n.b].sort().join('|'), n.text]),
+    [[['jojo', 'wei-guagua'].join('|'), '一个爱闹一个嫌吵']],
+  );
+  // the story is untouched: no decision, no group, still new
+  assert.equal(detail().decision, null);
+  assert.equal(detail().reasonMark, 'adopted');
+  assert.equal(after.doc.groups.length, 0);
+  assert.equal(s.co.detail(s.adopter, id).status, 'new', 'one of two items handled');
+  // adopting it again writes nothing
+  const again = s.co.adoptReason(s.adopter, { id, requestId: 'reason-2', text: '一个爱闹一个嫌吵' });
+  assert.equal(again.duplicate, true);
+  assert.equal(readDraft(s.f.store as never).revision, after.revision);
+  // both characters' cast view carries it; nobody else's does
+  const view = (characterId: string) => compileCastViewDetailed(readDraft(s.f.store as never).doc, characterId).view;
+  const named = (characterId: string) => view(characterId).relations.find((r) => r.note !== undefined)?.note;
+  assert.equal(named('wei-guagua'), '一个爱闹一个嫌吵');
+  assert.equal(named('jojo'), '一个爱闹一个嫌吵');
+  assert.equal(named('chen-jimi'), undefined);
+  // the story, on its own, then the note is handled
+  s.co.adoptRelation(s.adopter, { id, requestId: 'story-1', text: '她们是邻居', groupName: null });
+  assert.equal(s.co.detail(s.adopter, id).status, 'processed', 'story + reason handled');
+  assert.equal(readDraft(s.f.store as never).doc.pairNotes?.length, 1, 'adopting the story did not touch the note');
+  // a second note about the same pair adds under the first (never overwrites it)
+  const second = s.ids(s.story(s.player(), ['jojo', 'wei-guagua'], '后来她们吵翻了'));
+  s.co.adoptReason(s.adopter, { id: second, requestId: 'reason-3', text: '吵归吵，没人敢动对方' });
+  assert.equal(readDraft(s.f.store as never).doc.pairNotes![0]!.text, '一个爱闹一个嫌吵\n吵归吵，没人敢动对方');
+});
+
+test('59: the reason can be marked 不采纳 / 已处理 on its own, and a reader without cast.edit cannot adopt it; marks go with the note', (t) => {
+  const s = setup(t);
+  const id = s.ids(s.story(s.player(), ['wei-guagua', 'jojo'], '故事'));
+  s.co.markItem(s.adopter, id, 'reason', 'rejected');
+  assert.equal(s.co.relationDetail(s.adopter, id).reasonMark, 'rejected');
+  assert.equal(s.co.detail(s.adopter, id).status, 'new', 'the story is still open');
+  const reader = s.f.member(['cocreation.manage', 'cocreation.read', 'cast.read'], 'NoCast');
+  const other = s.ids(s.story(s.player(), ['jojo', 'chen-jimi'], '另一个'));
+  assert.equal(
+    code(() => s.co.adoptReason(reader, { id: other, requestId: 'r-x', text: '注' })),
+    'ADMIN_PERMISSION_REQUIRED',
+  );
+  // a note without a reason has no reason item
+  const plain = s.ids(s.card(s.player(), 'jojo', [{ cardId: 'topics', text: '话题' }]));
+  assert.equal(
+    code(() => s.co.markItem(s.adopter, plain, 'reason', 'handled')),
+    'NOT_FOUND',
+  );
+  // purge: the marks leave with the submission
+  assert.equal(s.f.store.all('SELECT 1 FROM web_cocreation_item_marks WHERE submission_id=?', id).length, 1);
+  purgeCocreation(s.f.store as never, { characterId: 'jojo' });
+  assert.equal(s.f.store.all('SELECT 1 FROM web_cocreation_item_marks').length, 0);
 });

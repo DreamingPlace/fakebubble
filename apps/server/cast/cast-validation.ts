@@ -17,6 +17,7 @@ import {
   type CastGroupStory,
   type CastIssue,
   type CastMeme,
+  type CastPairNote,
   type CastPeriod,
   type CastPerson,
   type CastStory,
@@ -120,6 +121,7 @@ export function castEntryIds(doc: CastDoc): Set<string> {
     ids.add(direction.id);
     texts(direction.addresses);
   }
+  for (const note of doc.pairNotes ?? []) ids.add(note.id);
   for (const group of doc.groups) {
     ids.add(group.id);
     texts(group.stories);
@@ -171,17 +173,12 @@ const entries = <T>(
 export function normalizeCastDoc(rawInput: unknown, ids: IdSource): CastDoc {
   // A schema-1 document (an old client, an old file) is converted item by item first; it is saved as schema 2.
   const input = upgradeCastDoc(rawInput, { deriveIds: false });
-  const root = object(input, 'doc', [
-    'schema',
-    'world',
-    'characters',
-    'people',
-    'ratings',
-    'directions',
-    'groups',
-    'stories',
-    'memes',
-  ]);
+  const root = object(
+    input,
+    'doc',
+    ['schema', 'world', 'characters', 'people', 'ratings', 'directions', 'groups', 'stories', 'memes'],
+    ['pairNotes'],
+  );
   if (root.schema !== CAST_SCHEMA) fail('doc.schema');
   const world = object(root.world, 'doc.world', ['background']);
   const L = CAST_LIMITS;
@@ -402,6 +399,18 @@ export function normalizeCastDoc(rawInput: unknown, ids: IdSource): CastDoc {
       prohibited: text(v.prohibited, `${path}.prohibited`, L.memeProhibited, { multiline: true }),
     };
   };
+  const pairNote = (item: unknown, path: string): CastPairNote => {
+    const { value: v, id } = withId(item, path, ['a', 'b', 'text']);
+    if (typeof v.a !== 'string' || !ID.test(v.a)) fail(`${path}.a`);
+    if (typeof v.b !== 'string' || !ID.test(v.b)) fail(`${path}.b`);
+    return {
+      id,
+      a: ref(v.a as string),
+      b: ref(v.b as string),
+      text: text(v.text, `${path}.text`, L.pairNote, { min: 1, multiline: true }),
+    };
+  };
+  const pairNotes = root.pairNotes === undefined ? [] : entries(root.pairNotes, 'doc.pairNotes', L.pairNotes, pairNote);
   const doc: CastDoc = {
     schema: CAST_SCHEMA,
     world: { background: text(world.background, 'doc.world.background', L.worldBackground, { multiline: true }) },
@@ -412,6 +421,8 @@ export function normalizeCastDoc(rawInput: unknown, ids: IdSource): CastDoc {
     groups: entries(root.groups, 'doc.groups', L.groups, group),
     stories: entries(root.stories, 'doc.stories', L.stories, story),
     memes: entries(root.memes, 'doc.memes', L.memes, meme),
+    // Part 59: absent when empty, so a document without notes keeps exactly the bytes (and digest) it always had.
+    ...(pairNotes.length ? { pairNotes } : {}),
   };
   if (castDocTooLarge(canonicalCastJson(doc))) fail('doc');
   const totals = castItemTotals(doc);
@@ -490,6 +501,7 @@ export function validateCastDoc(
     for (const o of s.overrides) once(o.id, `stories[${s.id}].overrides[${o.id}]`);
   }
   for (const m of doc.memes) once(m.id, `memes[${m.id}]`);
+  for (const n of doc.pairNotes ?? []) once(n.id, `pairNotes[${n.id}]`);
 
   // prototypes
   for (const c of doc.characters) {
@@ -530,6 +542,17 @@ export function validateCastDoc(
     if (pairs.has(`${d.from}\n${d.to}`)) err('CAST_DUPLICATE_DIRECTION', path);
     pairs.add(`${d.from}\n${d.to}`);
     duplicates(d.addresses, `${path}.addresses`);
+  }
+  // Part 59: pair notes: both ends known, never the same, one per unordered pair
+  const noted = new Set<string>();
+  for (const n of doc.pairNotes ?? []) {
+    const path = `pairNotes[${n.id}]`;
+    if (!known(n.a)) err('CAST_UNKNOWN_CHARACTER', `${path}.a`);
+    if (!known(n.b)) err('CAST_UNKNOWN_CHARACTER', `${path}.b`);
+    if (n.a === n.b) err('CAST_SELF_RELATION', path);
+    const key = [n.a, n.b].sort().join('\n');
+    if (noted.has(key)) err('CAST_DUPLICATE_PAIR_NOTE', path);
+    noted.add(key);
   }
   for (const c of doc.characters) duplicates(c.identity.aliases, `characters[${c.characterId}].identity.aliases`);
   const totals = castItemTotals(doc);

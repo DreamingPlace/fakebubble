@@ -282,6 +282,8 @@ test('24b-3 the roles are one row of pills: colour dot, full name, one compact s
     { characterId: 'jojo', displayName: 'JOJO', publishedVersion: 2, draftRevision: 1 },
     { characterId: 'new-one', displayName: '新角色', publishedVersion: null, draftRevision: null },
   ]);
+  // Part 59 (named exception): the rail lists live characters by default; 「显示未上线」 shows the rest, so this test turns it on.
+  host.querySelector('.admin-pick-toggle')!.click();
   const rows = host.querySelectorAll('.admin-pick-row');
   assert.equal(rows.length, 2, 'every role is one pill');
   assert.match(rows[0]!.textContent, /JOJO/);

@@ -729,7 +729,11 @@ test('note, star and adopt: the note is bounded and clearable, adopting marks pr
   assert.throws(() => f.cocreation.note(f.ownerAuth, 'missing', 'x'), /NOT_FOUND/);
 
   f.advance(5000);
-  assert.deepEqual(f.cocreation.markAdopted(f.ownerAuth, id, 1), { id, ordinal: 1, status: 'processed' });
+  // Part 59 (named exception): handling is per item - one of two answers adopted leaves the submission in 新 (1/2); the
+  // second answer, once handled, moves it to 已处理.
+  assert.deepEqual(f.cocreation.markAdopted(f.ownerAuth, id, 1), { id, ordinal: 1, status: 'new' });
+  assert.equal(f.cocreation.detail(f.ownerAuth, id).status, 'new');
+  f.cocreation.markItem(f.ownerAuth, id, 0, 'handled');
   const detail = f.cocreation.detail(f.ownerAuth, id);
   assert.equal(detail.status, 'processed');
   assert.equal(detail.answers[0]!.adoptedAt, null);

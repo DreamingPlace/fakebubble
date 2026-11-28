@@ -170,6 +170,25 @@ export const blankPerson = (name: string, kind: CastPerson['kind'] = 'person'): 
   oneLiner: '',
 });
 
+/** Part 59: the 关系注解 of every pair that has this character (or person) goes with them. */
+function dropPairNotes(doc: CastDoc, id: string) {
+  if (!doc.pairNotes) return;
+  doc.pairNotes = doc.pairNotes.filter((n) => n.a !== id && n.b !== id);
+  if (!doc.pairNotes.length) delete doc.pairNotes;
+}
+/** The 关系注解 of the unordered pair (a, b), or null. */
+export const pairNoteOf = (doc: CastDoc, a: string, b: string) =>
+  doc.pairNotes?.find((n) => (n.a === a && n.b === b) || (n.a === b && n.b === a)) ?? null;
+/** Sets (or, with an empty text, removes) the 关系注解 of the pair; the list is dropped from the document when it is empty. */
+export function setPairNote(doc: CastDoc, a: string, b: string, text: string) {
+  const found = pairNoteOf(doc, a, b);
+  if (text === '') {
+    if (found) doc.pairNotes = doc.pairNotes!.filter((n) => n !== found);
+    if (doc.pairNotes && !doc.pairNotes.length) delete doc.pairNotes;
+  } else if (found) found.text = text;
+  else (doc.pairNotes ??= []).push({ id: '', a, b, text });
+}
+
 /** Takes a character out of the cast and out of everything that mentions them. */
 export function removeCharacter(doc: CastDoc, id: string) {
   doc.characters = doc.characters.filter((c) => c.characterId !== id);
@@ -179,6 +198,7 @@ export function removeCharacter(doc: CastDoc, id: string) {
     if (!Object.keys(row).length) delete doc.ratings[from];
   }
   doc.directions = doc.directions.filter((d) => d.from !== id && d.to !== id);
+  dropPairNotes(doc, id);
   for (const group of doc.groups) group.members = group.members.filter((m) => m !== id);
   for (const story of doc.stories) {
     story.participants = story.participants.filter((p) => p !== id);
@@ -194,6 +214,7 @@ export function removePerson(doc: CastDoc, id: string) {
     if (!Object.keys(row).length) delete doc.ratings[from];
   }
   doc.directions = doc.directions.filter((d) => d.from !== id && d.to !== id);
+  dropPairNotes(doc, id);
   for (const story of doc.stories) story.participants = story.participants.filter((p) => p !== id);
   for (const meme of doc.memes) meme.parties = meme.parties.filter((p) => p !== id);
   for (const character of doc.characters)
@@ -225,6 +246,7 @@ export function changeCount(base: CastDoc, doc: CastDoc): number {
     for (const k of a.keys()) if (!b.has(k)) n++;
   };
   compare(base.directions, doc.directions, (d) => `${d.from}\n${d.to}`);
+  compare(base.pairNotes ?? [], doc.pairNotes ?? [], (note) => [note.a, note.b].sort().join('\n'));
   compare(base.stories, doc.stories, (s, i) => s.id || `#${i}`);
   compare(base.groups, doc.groups, (g, i) => g.id || `#${i}`);
   compare(base.people, doc.people, (p) => p.id);

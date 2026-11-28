@@ -288,6 +288,7 @@ export class AccountAdminApi extends InviteAdminApi {
       ...(object(row.features ?? {}).chatReview === true ? { features: { chatReview: true as const } } : {}),
     };
     this.csrf = active.csrf;
+    this.signedIn = true;
     return active;
   }
   override async login(token: string) {

@@ -44,6 +44,9 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   COCREATION_REASON_INVALID: 400,
   COCREATION_STORY_TOO_LONG: 400,
   COCREATION_TIDY_INVALID: 400,
+  // Part 59: the reason adopted as a pair's 关系注解
+  COCREATION_PAIR_NOTE_TOO_LONG: 400,
+  COCREATION_CAST_MEMBER_MISSING: 409,
   // Part 39b: the wording pool and 生成
   COCREATION_WORDING_INVALID: 400,
   COCREATION_WORDINGS_INVALID: 400,

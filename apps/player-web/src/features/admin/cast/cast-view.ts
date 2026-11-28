@@ -14,6 +14,8 @@ import {
   type CastVersion,
 } from '../../../services/cast-admin-api.ts';
 import { InviteLocalApiError } from '../../../services/invite-local-api.ts';
+import { adminConnection, INTERRUPTED_LINE, isInterrupted } from '../../../services/admin-connection.ts';
+import { editKeeper, keepWhileEditing, plainEl, restoreBar } from '../ui/edit-keeper.ts';
 import { mergeCastDocs } from '../../../../../../packages/contracts/cast-merge.ts';
 import { browserDownload } from '../invite-tiers-view.ts';
 import { h } from '../../cocreation/h.ts';
@@ -28,6 +30,7 @@ import { nameCard, seesPanel } from './cast-character.ts';
 import { ISSUE_LABEL, blankCharacter, changeCount, humanIssue, issueSentence, nameOf } from './cast-model.ts';
 import { groupsPanel, storyPanel, worldPanel, type StoryState } from './cast-stories.ts';
 import { lock, svgNode, type CastCtx, type Region } from './cast-ui.ts';
+import { disclosureChevron } from '../ui/disclosure.ts';
 import { hoverValue } from '../ui/hover-value.ts';
 import { fillStatus, pageHead } from '../ui/page-head.ts';
 import { unsavedText } from '../ui/unsaved.ts';
@@ -142,11 +145,23 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     /** The workbench roster (角色工作台): the fixed grid, with each display name. */
     roster: [] as string[],
     rosterNames: new Map<string, string>(),
+    /** Part 59: the characters that are not live (not launched yet, or delisted), and whether they are shown. */
+    offline: new Set<string>(),
+    showOffline: false,
     /** A chosen cast file and what importing it would do; the server saved nothing yet. */
     importing: null as { file: unknown; preview: CastImportPreview; requestId: string } | null,
   };
   let disposed = false;
   const gone = () => disposed || host.disposed();
+  // Part 59: the unsaved working copy is kept in this browser (with the draft it started from, for a field-by-field restore).
+  const castKeeper = () =>
+    editKeeper<{ doc: CastDoc; base: CastDoc }>({ page: 'cast', character: 'doc', revision: state.revision });
+  const keepNow = () => {
+    if (!state.doc || !state.base) return;
+    if (!state.dirty) return castKeeper().clear();
+    castKeeper().put({ doc: state.doc, base: state.base }, Math.max(changeCount(state.base, state.doc), 1));
+  };
+  const writer = keepWhileEditing(keepNow, 400);
   const canEdit = () => host.can('cast.edit');
   const canPublish = () => host.can('cast.publish');
 
@@ -165,6 +180,37 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     world: h('section', { class: 'cs-card cs-world-card' }),
   };
   const side = h('div', { class: 'cs-side' }, frame.pair, frame.sees);
+  // Part 59: ONE compact 「版本」 control in the title row. It opens a popover (over the page, never in its flow) holding the draft
+  // number, the version list with 恢复 and the file actions: no bar about versions ever sits above the content.
+  const versionsButton = h('button', {
+    class: 'cs-versions-btn cs-quiet',
+    text: '版本',
+    attrs: { type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'data-versions-button': '' },
+  });
+  const versionsPop = h(
+    'div',
+    { class: 'cs-versions-pop', hidden: true, attrs: { role: 'group', 'aria-label': '版本' } },
+    frame.versions,
+  );
+  const versionsWrap = h('span', { class: 'cs-versions-wrap' }, versionsButton, versionsPop);
+  const setVersionsOpen = (open: boolean) => {
+    versionsPop.hidden = !open;
+    versionsButton.setAttribute('aria-expanded', String(open));
+  };
+  versionsButton.className = `${versionsButton.className} dc`;
+  versionsButton.append(disclosureChevron());
+  versionsButton.addEventListener('click', () => setVersionsOpen(versionsPop.hidden));
+  const closeVersionsOutside = (event: Event) => {
+    if (!versionsPop.hidden && !versionsWrap.contains(event.target as Node)) setVersionsOpen(false);
+  };
+  const closeVersionsKey = (event: Event) => {
+    if ((event as KeyboardEvent).key === 'Escape' && !versionsPop.hidden) {
+      setVersionsOpen(false);
+      versionsButton.focus({ preventScroll: true });
+    }
+  };
+  document.addEventListener('pointerdown', closeVersionsOutside, true);
+  document.addEventListener('keydown', closeVersionsKey);
   const head = h('span', { class: 'cs-head-right' });
   const title = pageHead('关系与故事', head);
   const half = svgNode('svg', { class: 'cs-defs', width: '0', height: '0', 'aria-hidden': 'true' });
@@ -182,7 +228,6 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     { class: 'cs' },
     half,
     title,
-    frame.versions,
     frame.confirm,
     frame.notice,
     frame.start,
@@ -207,7 +252,12 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   const ids = () => {
     const doc = state.doc;
     const own = doc ? doc.characters.map((c) => c.characterId) : [];
-    return [...new Set([...state.roster, ...own])];
+    const all = [...new Set([...state.roster, ...own])];
+    // Part 59: offline characters are hidden from the grid and every picker by default; their data stays in the document untouched
+    // (the document is never filtered, so a save sends them back exactly as they were). The one being looked at is never hidden.
+    return state.showOffline
+      ? all
+      : all.filter((id) => !state.offline.has(id) || id === state.sel || !!state.pair?.includes(id));
   };
   const nameFor = (id: string) =>
     state.doc && state.doc.characters.some((c) => c.characterId === id)
@@ -219,6 +269,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     edited: (soft = false) => {
       state.dirty = true;
       state.saveIssues = [];
+      writer.schedule();
       paint.bar();
       paint.notice();
       if (!soft) return;
@@ -335,6 +386,23 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       state.dirty ? h('span', { class: 'is-warn', text: changes > 0 ? unsavedText(changes) : '有没保存的修改' }) : null,
     );
     head.append(status);
+    if (state.offline.size) {
+      const toggle = h('button', {
+        class: 'cs-quiet cs-offline-toggle',
+        text: '显示未上线',
+        attrs: { type: 'button', 'aria-pressed': String(state.showOffline), 'data-offline-toggle': '' },
+      });
+      hoverValue(
+        toggle,
+        `未上线或已下线的角色（${state.offline.size} 个）：开着就在格子和选择里列出来；它们的内容不会被改动`,
+      );
+      toggle.addEventListener('click', () => {
+        state.showOffline = !state.showOffline;
+        paintAll();
+      });
+      head.append(toggle);
+    }
+    head.append(versionsWrap);
     if (canEdit()) {
       const save = h('button', { class: 'cs-save', text: '保存草稿', attrs: { type: 'button' } });
       lock(save, !state.dirty);
@@ -483,8 +551,10 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     }
     if (state.versions.length) frame.versions.append(history.root);
   }
+  let restoreNode: HTMLElement | null = null;
   function paintNotice() {
     frame.notice.replaceChildren();
+    if (restoreNode) frame.notice.append(restoreNode);
     if (state.conflict) {
       const keep = h('button', { class: 'cs-danger', text: '用我的内容覆盖', attrs: { type: 'button' } });
       keep.addEventListener('click', () => {
@@ -592,9 +662,15 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       const order = await (host.characters as { homeOrder?: () => Promise<string[]> }).homeOrder?.().catch(() => []);
       state.roster = consoleOrder(roster.characters, order ?? []).map((c) => c.characterId);
       state.rosterNames = new Map(roster.characters.map((c) => [c.characterId, c.displayName]));
+      state.offline = new Set(
+        roster.characters
+          .filter((c) => (c.group ? c.group !== 'live' : c.publishedVersion === null || c.online === false))
+          .map((c) => c.characterId),
+      );
     } catch {
       state.roster = [];
       state.rosterNames = new Map();
+      state.offline = new Set();
     }
   }
   async function load() {
@@ -605,10 +681,49 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     state.latest = versions.latest;
     state.publishIssues = validation.validation.errors;
     state.warnings = validation.validation.warnings.length;
-    if (!state.doc || !state.dirty) adopt(draft.doc, draft.revision);
+    const fresh = !state.doc || !state.dirty;
+    if (fresh) adopt(draft.doc, draft.revision);
     else if (draft.revision !== state.revision) rebaseOnto(draft.revision, draft.doc);
     paintAll();
+    if (fresh) offerRestore();
     void refreshSees();
+  }
+  /** Part 59: 「恢复未保存的修改」 - a working copy kept in this browser (a reload, a logout, a failed save) is offered once. */
+  function offerRestore() {
+    restoreNode = null;
+    frame.notice.querySelector('.wb-restore')?.remove();
+    const kept = castKeeper().find();
+    if (!kept || !state.doc || !state.base || !canEdit()) return;
+    // The same draft: the copy as it was. A draft that moved on: the owner's own changes laid over it, field by field (Part 55).
+    const merged =
+      kept.revision === state.revision
+        ? ({ ok: true, doc: kept.value.doc } as const)
+        : mergeCastDocs(kept.value.base, kept.value.doc, state.doc);
+    restoreNode = restoreBar(
+      kept,
+      {
+        restore: () => {
+          restoreNode = null;
+          if (!merged.ok) {
+            host.status(
+              `有 ${merged.conflicts.length} 处在别处也改过，没能自动恢复：${merged.conflicts.slice(0, 3).join('、')}`,
+            );
+            return;
+          }
+          state.doc = structuredClone(merged.doc);
+          ensureEntries(state.doc);
+          state.dirty = true;
+          writer.schedule();
+          paintAll();
+        },
+        discard: () => {
+          restoreNode = null;
+          castKeeper().clear();
+        },
+      },
+      plainEl,
+    );
+    frame.notice.prepend(restoreNode);
   }
   async function afterChange() {
     const { draft, versions, validation } = await readAll();
@@ -708,9 +823,18 @@ export function castView(root: HTMLElement, host: CastViewHost) {
             host.status('有些内容不符合要求，没有保存。');
             return;
           }
+          // Part 59: not a failed save but an interruption: the edits stay and are kept in this browser; saved again after re-auth.
+          if (isInterrupted(error)) {
+            keepNow();
+            writer.flush();
+            host.status(INTERRUPTED_LINE);
+            adminConnection.retryAfterReauth('cast-save', () => saveDraft(false));
+          }
           throw error;
         }
       }
+      castKeeper().clear();
+      adminConnection.forget('cast-save');
       await afterChange();
       if (!gone()) host.toast(`草稿 ${state.revision} 已保存`, 'ok');
     });
@@ -917,6 +1041,10 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     /** Unsaved edits block leaving the page the same way an unsaved character does. */
     canLeave: () => !state.dirty,
     dispose() {
+      document.removeEventListener('pointerdown', closeVersionsOutside, true);
+      document.removeEventListener('keydown', closeVersionsKey);
+      writer.flush();
+      writer.stop();
       disposed = true;
       root.replaceChildren();
     },

@@ -38,7 +38,18 @@ const isObj = (value: unknown): value is Obj => value !== null && typeof value =
 const CONTROL = /[\u0000-\u001f\u007f]/u;
 const PERSON_TOKEN = /^new-[A-Za-z0-9_-]{1,64}$/;
 const HEADER_KEYS = ['format', 'version'];
-const DOC_KEYS = ['schema', 'world', 'characters', 'people', 'ratings', 'directions', 'groups', 'stories', 'memes'];
+const DOC_KEYS = [
+  'schema',
+  'world',
+  'characters',
+  'people',
+  'ratings',
+  'directions',
+  'groups',
+  'stories',
+  'memes',
+  'pairNotes',
+];
 /** Characters that are not in the file's own words as plain text: the cap on what a person has to read in a report. */
 const MISSING = new Set(['CAST_CHARACTER_MISSING', 'CAST_CHARACTER_DELETED']);
 
@@ -227,6 +238,7 @@ export function prepareCastFile(file: unknown, input: PrepareInput): PreparedCas
       groups: file.groups ?? [],
       stories: file.stories ?? [],
       memes: file.memes ?? [],
+      ...(file.pairNotes === undefined ? {} : { pairNotes: file.pairNotes }),
     }),
     { deriveIds: false },
   ) as Obj;

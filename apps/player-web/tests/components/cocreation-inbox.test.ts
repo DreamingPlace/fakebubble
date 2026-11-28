@@ -829,7 +829,8 @@ test('24b-4 several rows ticked show a bulk bar with labelled actions; 标为已
       .q('.cc-bulk')!
       .querySelectorAll('button')
       .map((b) => b.textContent),
-    ['标为已处理（2）', '归档所选（2）', '取消选择'],
+    // Part 59 (named exception): the whole-note action is worded 整条标为已处理 (the per-item one is 标为已处理).
+    ['整条标为已处理（2）', '归档所选（2）', '取消选择'],
   );
   f.q('.cc-process-selected')!.click();
   await flush();
@@ -856,7 +857,8 @@ test('24b-4 every row starts with the character colour dot and the full name; no
       .q('.cc-detail-actions')!
       .querySelectorAll('button')
       .map((b) => b.textContent),
-    ['☆ 星标', '标为已处理', '归档'],
+    // Part 59 (named exception): 整条标为已处理 (the per-item buttons are on each answer).
+    ['☆ 星标', '整条标为已处理', '归档'],
   );
 });
 

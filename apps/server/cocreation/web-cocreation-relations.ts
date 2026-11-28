@@ -427,6 +427,8 @@ export class WebCocreationRelations extends WebCocreation {
       members,
       ratings,
       reason: rel?.reason ?? null,
+      /** Part 59: how the reason was handled (adopted / rejected / copied / handled), or null. */
+      reasonMark: this.markOf(row.id, 'reason'),
       text: rel?.edited_text ?? original,
       originalText: original,
       excluded: rel?.excluded === 1,
@@ -624,12 +626,64 @@ export class WebCocreationRelations extends WebCocreation {
       this.audit(actorId, 'cocreation-cast-group-story', `${row.id};revision=${saved.revision}`);
       return {
         id: row.id,
-        status: 'processed' as const,
+        status: this.row(row.id).status,
         groupId: after.id,
         joined: !created,
         castRevision: saved.revision,
         duplicate: false,
       };
+    });
+  }
+
+  /**
+   * Part 59: 采纳 of the REASON a player wrote for a two-character relation note, as the 关系注解 of that pair in the cast DRAFT
+   * (`doc.pairNotes`). It never touches the story (the group's story is adopted, or not, on its own) and the story's adoption never
+   * touches this. Written at the draft's current revision in one transaction with its mark; idempotent per request id; an existing
+   * note of the pair is kept and the reason is added under it. Never publishes. Needs cocreation.manage and cast.edit.
+   */
+  adoptReason(auth: Auth, input: { id: unknown; requestId: unknown; text: unknown }) {
+    const actor = this.actor(auth, 'cocreation.manage');
+    this.ensureCastEdit(auth, actor);
+    ensure(identifier(input.id) && requestIdOk(input.requestId), 'INVALID_REQUEST');
+    ensure(typeof input.text === 'string' && cocreationNoteOk(input.text), 'COCREATION_TEXT_INVALID');
+    const text = input.text.trim();
+    ensure(text !== '' && [...text].length <= CAST_LIMITS.pairNote, 'COCREATION_PAIR_NOTE_TOO_LONG');
+    return this.store.transaction(() => {
+      ensure(relationTablesExist(this.store) && castTablesExist(this.store), 'COCREATION_UNAVAILABLE');
+      const row = this.row(input.id);
+      ensure(row.kind === 'pair', 'COCREATION_NOT_RELATION');
+      const rel = this.relation(row.id);
+      ensure(rel && rel.member_count === 2 && rel.reason, 'NOT_FOUND');
+      if (this.markOf(row.id, 'reason') === 'adopted')
+        return { id: row.id, status: row.status, duplicate: true as const, castRevision: null };
+      const members = this.membersOf(row);
+      ensure(members.length === 2, 'COCREATION_NOT_RELATION');
+      const draft = readDraft(this.store);
+      for (const member of members)
+        ensure(
+          draft.doc.characters.some((c) => c.characterId === member),
+          'COCREATION_CAST_MEMBER_MISSING',
+        );
+      const notes = [...(draft.doc.pairNotes ?? [])];
+      const at = notes.findIndex((n) => sameSet([n.a, n.b], members));
+      if (at >= 0) {
+        const joined = notes[at]!.text.includes(text) ? notes[at]!.text : `${notes[at]!.text}\n${text}`;
+        ensure([...joined].length <= CAST_LIMITS.pairNote, 'COCREATION_PAIR_NOTE_TOO_LONG');
+        notes[at] = { ...notes[at]!, text: joined };
+      } else notes.push({ id: '', a: members[0]!, b: members[1]!, text });
+      const next: CastDoc = { ...draft.doc, pairNotes: notes };
+      ensure(!castDocTooLarge(canonicalCastJson(next)), 'COCREATION_CAST_DOC_FULL');
+      const saved = saveDraft(this.store, this.clock.now(), draft.revision, next);
+      this.store.run(
+        `INSERT INTO web_cocreation_item_marks(submission_id,item,how,actor_id,created_at) VALUES (?,'reason','adopted',?,?)
+        ON CONFLICT(submission_id,item) DO UPDATE SET how='adopted',actor_id=excluded.actor_id,created_at=excluded.created_at`,
+        row.id,
+        actor.memberId,
+        this.clock.now(),
+      );
+      this.audit(actor.memberId, 'cocreation-cast-pair-note', `${row.id};revision=${saved.revision}`);
+      this.settleStatus(actor.memberId, row);
+      return { id: row.id, status: this.row(row.id).status, duplicate: false as const, castRevision: saved.revision };
     });
   }
 

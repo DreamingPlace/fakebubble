@@ -107,8 +107,11 @@ test('one grant is consumed once; unused grant and session expire at exact deadl
   f.setNow(unused.expiresAt);
   assert.throws(() => f.admin.login(unused.token, origin), code('ADMIN_INVALID_GRANT'));
   f.setNow(first.expiresAt - 1);
-  assert.equal(f.admin.authorize(first.cookie, first.csrf, origin).expiresAt, first.expiresAt);
-  f.setNow(first.expiresAt);
+  // Part 59 (named exception): the admin session slides: a request in the last millisecond renews it (8 h idle, 24 h at most), so
+  // the deadline that ends it is the renewed one, and an idle session still ends exactly at its deadline.
+  const renewed = f.admin.authorize(first.cookie, first.csrf, origin).expiresAt;
+  assert.ok(renewed > first.expiresAt);
+  f.setNow(renewed);
   assert.throws(() => f.admin.authorize(first.cookie, first.csrf, origin), code('ADMIN_UNAUTHORIZED'));
 });
 

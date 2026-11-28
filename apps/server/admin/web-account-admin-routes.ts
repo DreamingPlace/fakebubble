@@ -210,6 +210,11 @@ export async function routeWebAccountAdmin(
       const value = body(['id', 'ordinal']);
       return { status: 200, body: cocreation.markAdopted(actor, value.id, value.ordinal) };
     }
+    // Part 59: 不采纳 / 复制 / 标为已处理 on one item (an answer, or the reason of a relation note).
+    if (action === 'mark-item') {
+      const value = body(['id', 'item', 'how']);
+      return { status: 200, body: cocreation.markItem(actor, value.id, value.item, value.how) };
+    }
     if (action === 'unadopt') {
       const value = body(['id', 'ordinal']);
       return { status: 200, body: cocreation.unadopt(actor, value.id, value.ordinal) };
@@ -245,6 +250,9 @@ export async function routeWebAccountAdmin(
         status: 200,
         body: relations.adoptRelation(actor, body(['id', 'requestId', 'text', 'groupName']) as never),
       };
+    // Part 59: the reason of a two-person note, adopted as that pair's 关系注解 in the cast draft.
+    if (action === 'relation/adopt-reason')
+      return { status: 200, body: relations.adoptReason(actor, body(['id', 'requestId', 'text']) as never) };
     if (action === 'relation/tidy')
       return { status: 200, body: await relations.tidy(actor, body(['id', 'requestId']) as never) };
     // Part 39b: 「题目」, the wording pool of every character's themes, and its 生成.

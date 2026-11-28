@@ -76,15 +76,22 @@ export function rolePicker(
   };
   /** The groups this administrator folded (kept while the page is open). */
   const collapsed = new Set<SidebarGroup>();
-  const paint = () => {
+  /** Part 59: the list shows the live characters; 「显示未上线」 adds the ones not launched yet or delisted (the open one is always shown). */
+  let showOffline = false;
+  const paint = (keepRail = false) => {
+    const railTop = host.scrollTop;
     for (const stop of drops.splice(0)) stop();
     host.replaceChildren();
-    if (!roles.length) host.append(h('p', { class: 'admin-empty', text: options.emptyText }));
+    const all = roles;
+    const hidden = all.filter((role) => groupOf(role) !== 'live' && role.characterId !== selected);
+    const roles_ = showOffline ? all : all.filter((role) => !hidden.includes(role));
+    if (!all.length) host.append(h('p', { class: 'admin-empty', text: options.emptyText }));
+    const offlineCount = all.filter((role) => groupOf(role) !== 'live').length;
     // Part 24l: one block per non-empty group, each with a small heading and its count. The order inside a group is this admin's.
     const lists = new Map<SidebarGroup, HTMLElement>();
     if (options.compact || options.onReorder)
       for (const group of SIDEBAR_GROUPS) {
-        const members = roles.filter((role) => groupOf(role) === group);
+        const members = roles_.filter((role) => groupOf(role) === group);
         if (!members.length) continue;
         const list = h('div', { class: 'admin-pick-list', attrs: { 'data-group': group, role: 'list' } });
         // Part 24b-7b: the group heading is a disclosure (chevron, aria-expanded): it folds its circles away and opens them again.
@@ -112,11 +119,12 @@ export function rolePicker(
       }
     const out = (role: PickerRole, node: HTMLElement) => {
       const list = lists.get(groupOf(role));
-      node.setAttribute('data-drag-row', '');
+      // Part 59: only the live characters have an order (首页顺序); the ones 「显示未上线」 adds are listed, never dragged.
+      if (groupOf(role) === 'live') node.setAttribute('data-drag-row', '');
       if (list) list.append(node);
       else host.append(node);
     };
-    roles.forEach((role, index) => {
+    roles_.forEach((role, index) => {
       const compact = options.compact;
       const unread = options.badges?.()[role.characterId] ?? 0;
       const seed = seeds.get(role.characterId) === true;
@@ -212,11 +220,34 @@ export function rolePicker(
       });
       out(role, h('div', { class: 'admin-pick-row' }, row, badge));
     });
+    if (offlineCount > 0) {
+      // Part 59: at the foot of the list; on the narrow rail it reads 「未上线」, in the expanded one 「显示未上线」.
+      const toggle = h(
+        'button',
+        {
+          class: 'admin-pick-toggle',
+          attrs: {
+            type: 'button',
+            'aria-pressed': String(showOffline),
+            'aria-label': '显示未上线',
+            title: `显示未上线：未上线或已下线的角色（${offlineCount} 个）。开着就列出来，准备上线要用`,
+          },
+        },
+        h('span', { class: 'short', text: showOffline ? '收起' : '未上线' }),
+        h('span', { class: 'full', text: '显示未上线' }),
+      );
+      toggle.addEventListener('click', () => {
+        showOffline = !showOffline;
+        paint(true);
+      });
+      host.append(toggle);
+    }
     // the rail scrolls inside itself: the open character is in view after every paint
-    keepOpenInView();
+    if (!keepRail) keepOpenInView();
     const reorder = options.onReorder;
     if (reorder)
-      for (const [group, list] of lists)
+      for (const [group, list] of lists) {
+        if (group !== 'live') continue;
         drops.push(
           dragOrder(list, {
             rows: () => Array.from(list.children) as HTMLElement[],
@@ -236,6 +267,9 @@ export function rolePicker(
             },
           }),
         );
+      }
+    // 「显示未上线」 repaints the rail: it must not jump (the open one is not scrolled to).
+    if (keepRail) host.scrollTop = railTop;
   };
   return {
     show(next: readonly PickerRole[]) {

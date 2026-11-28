@@ -1,4 +1,5 @@
 import type { CharacterAdminClient, CharacterProfile } from '../../../services/character-admin-api.ts';
+import { editKeeper } from '../ui/edit-keeper.ts';
 import {
   SPEECH_PROFILE_ERROR_TEXT,
   SpeechProfileError,
@@ -40,7 +41,10 @@ export async function saveTemplate(
   if (target.revision === null && target.publishedVersion !== null)
     (profile.template as { version: number }).version = target.publishedVersion + 1;
   profile.template = template as typeof profile.template;
-  return api.save(characterId, target.revision, profile);
+  const saved = await api.save(characterId, target.revision, profile);
+  // Part 59: saved - the edits kept in this browser for this character's 说话档案 are no longer unsaved.
+  editKeeper({ page: 'characters', character: characterId, section: 'speech', revision: null }).clear();
+  return saved;
 }
 
 /**

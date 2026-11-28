@@ -10,7 +10,7 @@ import type { CastDoc } from './web-cast.ts';
  * `mine` has are appended. Pure.
  */
 type Obj = Record<string, unknown>;
-const LISTS = ['characters', 'people', 'directions', 'stories', 'memes'] as const;
+const LISTS = ['characters', 'people', 'directions', 'stories', 'memes', 'pairNotes'] as const;
 const isObj = (value: unknown): value is Obj => !!value && typeof value === 'object' && !Array.isArray(value);
 const idOf = (list: (typeof LISTS)[number] | 'groups', entry: Obj) =>
   (list === 'characters' ? entry.characterId : entry.id) as string;
@@ -62,6 +62,7 @@ function labelOf(path: string, docs: CastDoc[]): string {
   if (kind === 'people') return `人物「${String(find('people')?.name ?? '')}」`.replace('「」', '');
   if (kind === 'directions') return '说话方向';
   if (kind === 'memes') return '内部梗';
+  if (kind === 'pairNotes') return '关系注解';
   if (kind === 'stories') return `故事「${String(find('stories')?.title ?? '')}」`;
   if (kind === 'groups') {
     const group = find('groups');
@@ -97,7 +98,7 @@ export function mergeCastDocs(base: CastDoc, mine: CastDoc, theirs: CastDoc): Ca
     const value = merged.values.get(path);
     if (kind === 'world') next.world = { ...next.world, background: value };
     else if ((LISTS as readonly string[]).includes(kind)) {
-      const list = next[kind] as Obj[];
+      const list = (next[kind] ??= []) as Obj[];
       const at = list.findIndex((entry) => idOf(kind as (typeof LISTS)[number], entry) === id);
       if (value === undefined) {
         if (at >= 0) list.splice(at, 1);
@@ -132,5 +133,6 @@ export function mergeCastDocs(base: CastDoc, mine: CastDoc, theirs: CastDoc): Ca
       } else row[sub!] = value as number;
     }
   }
+  if (Array.isArray(next.pairNotes) && next.pairNotes.length === 0) delete next.pairNotes;
   return { ok: true, doc: next as unknown as CastDoc };
 }

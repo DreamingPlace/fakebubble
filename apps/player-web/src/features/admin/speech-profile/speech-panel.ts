@@ -35,6 +35,8 @@ import {
 } from '../../../../../../packages/contracts/cocreation-day.ts';
 import type { CharacterAdminClient, CharacterDetail } from '../../../services/character-admin-api.ts';
 import { h } from '../../cocreation/h.ts';
+import { adminConnection, INTERRUPTED_LINE, isInterrupted } from '../../../services/admin-connection.ts';
+import { panelKeeper, plainEl } from '../ui/edit-keeper.ts';
 import { hoverValue } from '../ui/hover-value.ts';
 import { statusBadge } from '../ui/status-badge.ts';
 import {
@@ -82,7 +84,7 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
   parent.append(root);
   if (!base) {
     root.append(h('p', { class: 'sp-empty', text: '这个角色还没有可编辑的版本。' }));
-    return { root, refresh: () => {} };
+    return { root, refresh: () => {}, dispose: () => {} };
   }
   const target: DraftTarget = {
     base,
@@ -153,7 +155,16 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
       if (locked()) return;
       try {
         await work();
+        adminConnection.forget(`speech-save:${characterId}`);
       } catch (caught) {
+        // Part 59: a challenge page / lost connection / expired session: the typed text stays (and is kept in this browser); the
+        // save is sent again by itself after the owner has verified or signed in again.
+        if (isInterrupted(caught)) {
+          kept?.keepNow();
+          show(INTERRUPTED_LINE);
+          adminConnection.retryAfterReauth(`speech-save:${characterId}`, () => guarded(work));
+          return;
+        }
         show(profileErrorText(caught) ?? deps.errorText(caught) ?? NOT_SAVED_TEXT);
       }
     });
@@ -490,5 +501,18 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
     message,
   );
   paintLock();
-  return { root, refresh: paintLock };
+  // Part 59: what is typed in this section is kept in this browser until it is saved (loses nothing on a reload or a failed save).
+  const kept = panelKeeper(
+    root,
+    {
+      page: 'characters',
+      character: characterId,
+      section: 'speech',
+      revision: snapshot.draft?.revision ?? `v${snapshot.published?.version ?? 0}`,
+    },
+    plainEl,
+  );
+  const offer = kept.bar();
+  if (offer) root.prepend(offer);
+  return { root, refresh: paintLock, dispose: () => kept.stop() };
 }

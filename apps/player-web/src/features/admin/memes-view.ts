@@ -29,6 +29,7 @@ import { errorLine } from './ui/error-line.ts';
 import { hoverValue } from './ui/hover-value.ts';
 import { pageHead, statusLine } from './ui/page-head.ts';
 import { segmented } from './ui/segmented.ts';
+import { adminConnection, INTERRUPTED_LINE, isInterrupted } from '../../services/admin-connection.ts';
 
 type Deps = MemesDeps & {
   /** Part 57: the page's 导出 button (without it there is none). */
@@ -357,12 +358,21 @@ export function memesView(root: HTMLElement, deps: Deps) {
     try {
       await run(ids.of(signature));
       ids.done(signature);
+      adminConnection.forget(`memes-write:${signature}`);
       libraryTable.clearSelection();
       deletedTable.clearSelection();
       await fetchList();
       deps.toast(message);
     } catch (caught) {
       if (deps.disposed()) return;
+      // Part 59: not a failed switch but an interruption (Access / challenge / expired session): the request id is kept, and the
+      // same write is sent again by itself after re-authentication (it cannot apply twice).
+      if (isInterrupted(caught)) {
+        error.replaceChildren(INTERRUPTED_LINE);
+        error.hidden = false;
+        adminConnection.retryAfterReauth(`memes-write:${signature}`, () => write(signature, run, message));
+        return;
+      }
       showError(caught);
     }
   }

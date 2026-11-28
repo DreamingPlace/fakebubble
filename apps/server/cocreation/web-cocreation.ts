@@ -27,6 +27,7 @@ import type { WebCharacterAdmin } from '../characters/web-character-admin.ts';
 import { takeIpDaily } from '../admission/web-ip-daily.ts';
 import { cocreationTablesExist } from './web-cocreation-purge.ts';
 import { relationTablesExist } from './web-cocreation-relations-schema.ts';
+import { COCREATION_ITEM_HOW, installCocreationMarks, marksTableExists } from './web-cocreation-marks-schema.ts';
 import { wordingTablesExist } from './web-cocreation-wordings-schema.ts';
 import { awardCocreationPoints, cocreationReceiver } from '../admin/web-points-admin.ts';
 import { readDraft, saveDraft } from '../cast/cast-store.ts';
@@ -112,6 +113,8 @@ export class WebCocreation {
     this.admin = admin;
     this.key = pseudonymKey;
     this.id = nextId;
+    // Part 59: the per-item marks (digest-checked; STOP WEB_COCREATION_MARKS_SCHEMA_MISMATCH). No numbered migration.
+    installCocreationMarks(store);
   }
 
   /** Stable per-player label for the inbox: a keyed hash of the principal id, never an identity. */
@@ -505,15 +508,18 @@ export class WebCocreation {
           ELSE json_extract(a.text_json,'$.player')||' '||json_extract(a.text_json,'$.replies') END) LIKE ? ESCAPE '\\'))`);
       args.push(like, like);
     }
+    // Part 59: 已处理 is sorted by when it was processed (newest first), not when it was sent; the cursor's `createdAt` then carries
+    // that time (a row processed before Part 24 has none, and falls back to its sent time).
+    const key = input.status === 'processed' ? 'coalesce(s.processed_at,s.created_at)' : 's.created_at';
     if (before !== null) {
-      where.push('(s.created_at<? OR (s.created_at=? AND s.id<?))');
+      where.push(`(${key}<? OR (${key}=? AND s.id<?))`);
       args.push(before.createdAt as number, before.createdAt as number, before.id as string);
     }
     const rows = this.store.all<SubmissionRow & { answers: number; adopted: number }>(
       `SELECT s.*,(SELECT count(*) FROM web_cocreation_answers a WHERE a.submission_id=s.id) answers,
         (SELECT count(*) FROM web_cocreation_answers a WHERE a.submission_id=s.id AND a.adopted_at IS NOT NULL) adopted
       FROM web_cocreation_submissions s ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-      ORDER BY s.created_at DESC,s.id DESC LIMIT ${PAGE + 1}`,
+      ORDER BY ${key} DESC,s.id DESC LIMIT ${PAGE + 1}`,
       ...args,
     );
     const page = rows.slice(0, PAGE);
@@ -526,13 +532,127 @@ export class WebCocreation {
         pseudonym: this.pseudonym(row.principal_id),
         answerCount: row.answers,
         adoptedCount: row.adopted,
+        ...this.handledOf(row, row.answers),
         firstLine: this.firstAnswer(row.id),
         status: row.status,
         starred: row.starred === 1,
         hasNote: row.admin_note !== null && row.admin_note !== '',
       })),
-      next: rows.length > PAGE ? { createdAt: page.at(-1)!.created_at, id: page.at(-1)!.id } : null,
+      next:
+        rows.length > PAGE
+          ? {
+              createdAt:
+                input.status === 'processed'
+                  ? (page.at(-1)!.processed_at ?? page.at(-1)!.created_at)
+                  : page.at(-1)!.created_at,
+              id: page.at(-1)!.id,
+            }
+          : null,
     };
+  }
+  /**
+   * Part 59: the items of a submission and how many are handled. An item is an answer (handled once adopted, or marked 不采纳 / 复制 /
+   * 标为已处理) or the reason of a two-character relation note. A submission is processed only when every item is handled.
+   */
+  protected handledOf(row: Pick<SubmissionRow, 'id'>, answers: number) {
+    const marks = marksTableExists(this.store)
+      ? this.store.all<{ item: string }>('SELECT item FROM web_cocreation_item_marks WHERE submission_id=?', row.id)
+      : [];
+    const adopted = new Set(
+      this.store
+        .all<{ ordinal: number }>(
+          'SELECT ordinal FROM web_cocreation_answers WHERE submission_id=? AND adopted_at IS NOT NULL',
+          row.id,
+        )
+        .map((a) => `a${a.ordinal}`),
+    );
+    for (const mark of marks) if (mark.item.startsWith('a')) adopted.add(mark.item);
+    const reason =
+      relationTablesExist(this.store) &&
+      !!this.store.get(
+        "SELECT 1 FROM web_cocreation_relations WHERE submission_id=? AND reason IS NOT NULL AND reason<>''",
+        row.id,
+      );
+    const reasonHandled = reason && marks.some((m) => m.item === 'reason');
+    return { itemCount: answers + (reason ? 1 : 0), handledCount: adopted.size + (reasonHandled ? 1 : 0) };
+  }
+  /** After an item changed: when every item is handled the submission moves to 已处理 (the first one handled never moves it). */
+  protected settleStatus(actorId: string, row: SubmissionRow) {
+    const total = this.store.get<{ n: number }>(
+      'SELECT count(*) n FROM web_cocreation_answers WHERE submission_id=?',
+      row.id,
+    )!.n;
+    const { itemCount, handledCount } = this.handledOf(row, total);
+    const fresh = this.row(row.id);
+    if (itemCount > 0 && handledCount >= itemCount && fresh.status !== 'processed')
+      this.setStatusRow(actorId, fresh, 'processed');
+  }
+
+  /**
+   * 不采纳 / 复制 / 标为已处理 on ONE item (an answer's ordinal, or `reason`); `how: null` takes the mark off. The submission moves
+   * to 已处理 only when this was the last unhandled item.
+   */
+  markItem(auth: Auth, id: unknown, item: unknown, how: unknown) {
+    const actor = this.actor(auth, 'cocreation.manage');
+    ensure(
+      how === null || (typeof how === 'string' && (COCREATION_ITEM_HOW as readonly string[]).includes(how)),
+      'INVALID_REQUEST',
+    );
+    ensure(marksTableExists(this.store), 'COCREATION_UNAVAILABLE');
+    const key =
+      item === 'reason'
+        ? 'reason'
+        : Number.isSafeInteger(item) && (item as number) >= 0 && (item as number) <= 11
+          ? `a${item as number}`
+          : null;
+    ensure(key !== null, 'INVALID_REQUEST');
+    return this.store.transaction(() => {
+      const row = this.row(id);
+      if (key === 'reason') {
+        ensure(
+          relationTablesExist(this.store) &&
+            this.store.get(
+              "SELECT 1 FROM web_cocreation_relations WHERE submission_id=? AND reason IS NOT NULL AND reason<>''",
+              row.id,
+            ),
+          'NOT_FOUND',
+        );
+      } else {
+        ensure(
+          this.store.get(
+            'SELECT 1 FROM web_cocreation_answers WHERE submission_id=? AND ordinal=?',
+            row.id,
+            item as number,
+          ),
+          'NOT_FOUND',
+        );
+      }
+      if (how === null) {
+        this.store.run(
+          "DELETE FROM web_cocreation_item_marks WHERE submission_id=? AND item=? AND how<>'adopted'",
+          row.id,
+          key,
+        );
+      } else {
+        this.store.run(
+          `INSERT INTO web_cocreation_item_marks(submission_id,item,how,actor_id,created_at) VALUES (?,?,?,?,?)
+          ON CONFLICT(submission_id,item) DO UPDATE SET how=excluded.how,actor_id=excluded.actor_id,created_at=excluded.created_at`,
+          row.id,
+          key,
+          how as string,
+          actor.memberId,
+          this.clock.now(),
+        );
+      }
+      this.audit(actor.memberId, `cocreation-item:${key}:${how ?? 'cleared'}`, row.id);
+      this.settleStatus(actor.memberId, row);
+      const fresh = this.row(row.id);
+      const total = this.store.get<{ n: number }>(
+        'SELECT count(*) n FROM web_cocreation_answers WHERE submission_id=?',
+        row.id,
+      )!.n;
+      return { id: row.id, status: fresh.status, ...this.handledOf(row, total) };
+    });
   }
   protected hasKinds() {
     return cocreationPointsTablesExist(this.store);
@@ -589,9 +709,26 @@ export class WebCocreation {
             kind: answer.kind,
             ...(typeof value === 'string' ? { text: value } : { player: value.player, replies: value.replies }),
             adoptedAt: answer.adopted_at,
+            handled: this.markOf(row.id, `a${answer.ordinal}`),
           };
         }),
+      ...this.handledOf(
+        row,
+        this.store.get<{ n: number }>('SELECT count(*) n FROM web_cocreation_answers WHERE submission_id=?', row.id)!.n,
+      ),
     };
+  }
+
+  /** How an item was handled without an adoption (不采纳 / 复制 / 标为已处理), or null. */
+  protected markOf(submissionId: string, item: string) {
+    if (!marksTableExists(this.store)) return null;
+    return (
+      this.store.get<{ how: string }>(
+        'SELECT how FROM web_cocreation_item_marks WHERE submission_id=? AND item=?',
+        submissionId,
+        item,
+      )?.how ?? null
+    );
   }
 
   private setStatusRow(actorId: string, row: SubmissionRow, status: CocreationStatus) {
@@ -686,7 +823,6 @@ export class WebCocreation {
       row.id,
       answer.ordinal,
     );
-    if (row.status !== 'processed') this.setStatusRow(actorId, row, 'processed');
     this.audit(actorId, `cocreation-adopted:${answer.ordinal}`, row.id);
     if (answer.adopt_paid === 0 && row.kind !== undefined) {
       // The marker is set whether or not points are paid (a guest never gets them later), so the reward is for the first adoption only.
@@ -716,7 +852,9 @@ export class WebCocreation {
           actorId,
         );
     }
-    return { id: row.id, ordinal: answer.ordinal, status: 'processed' as const };
+    // Part 59: per item. The submission moves to 已处理 only when this was its last unhandled item.
+    this.settleStatus(actorId, row);
+    return { id: row.id, ordinal: answer.ordinal, status: this.row(row.id).status };
   }
 
   /** Takes the adoption mark off an answer. Nothing already paid is taken back, and the reward is not paid again by adopting anew. */

@@ -132,6 +132,18 @@ Player pages: one line on the terms page (the license notice and its link); noth
 | refusal | 这次导出的行数太多，请缩小日期范围，或加上筛选。 (`EXPORT_TOO_LARGE`) |
 | tables | 每条消息 · 按对话汇总 · 失败的回复 · 模型调用 · 外部调用 · 向量调用 · 结果未知的调用 · 每日统计 · 每小时 · 消耗明细 · 按玩家类型 · 批次 · 邀请码 · 额度 · 预演轮次 · 对话 · 评分. A CSV file name carries an ASCII word for its table (`messages`, `summary`, `hourly` …). No explanation line: hover tips only. |
 
+## Part 59 — never lose an edit, per-item handling, offline characters
+| Where | Words |
+|---|---|
+| the connection line (floats over the page, top right) | **保存没完成，修改都还在，验证或重新登录后会自动再存一次** (a save was interrupted) · 连接中断，修改都还在，验证或重新登录后会自动继续 (a read was) · button **验证 / 重新登录** (opens the console in a popup; the page stays where it is) |
+| a kept buffer, at the top of its editor | 这个浏览器里留着 MM-DD HH:MM 没保存的修改（N 处）· **恢复未保存的修改** · 放弃这些修改 |
+| 共创收件箱, a card in 新 that is partly handled | chip **已处理 x/n** (n = its answers, plus the players' reason of a two-person note) |
+| 共创收件箱, one answer | 复制 · 采纳 · **不采纳** · **标为已处理** · after: 已采用 / 不采纳 / 已复制 / 已处理 + 撤销标记 |
+| 共创收件箱, the whole card | **整条标为已处理** (was 标为已处理): it moves to 已处理 at once, whatever its count. 已处理 is sorted by when it was processed, newest first. |
+| a two-person relation note | 理由 (the players' words, read only) · 关系注解 (the box, the owner may edit) · **采纳为关系注解** · 不采纳 · 标为已处理 · 撤销标记; badge 已采纳为关系注解. 采纳 (the story) and the reason never change each other. |
+| 关系与故事, a pair | 关系注解 (a box under the two directions; it goes into both characters' 名片) |
+| offline characters | **显示未上线** (角色工作台 rail: 未上线 on the narrow rail; 共创收件箱 filter chip; 关系与故事 title row). Off by default. |
+| 关系与故事, versions | one button **版本** in the title row; it opens a panel over the page (draft number, version list with 恢复此版本, 从旧资料导入, 导出文件). Nothing about versions sits above the content. |
 ## Part 37c-1b — 网络梗: 词库 and 待审
 | Where | Words |
 |---|---|
