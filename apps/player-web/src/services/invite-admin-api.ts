@@ -22,7 +22,7 @@ export const ADMIN_EXPORT_DEADLINE_MS = 60_000;
 export const ADMIN_GENERATE_DEADLINE_MS = 60_000;
 /** Paths that only READ (their last segment): the ones a newer page-open may cancel, and whose interruption is not a lost write. */
 const READ_PATH =
-  /(?:^|\/)(?:list|read|status|detail|counts|draft|order|home-order|versions?|library|options|items|heard|arc-read|closed-read|memes-list|memes-queue|batch-list|batch-detail|unknown-calls|review-read|writer-read|stage-latency|chart|costs|players|spend-by-type|stats|relation\/(?:detail|stats|order)|wordings\/list|members\/list|points\/(?:preview|reset-preview|cocreation)|overview\/read|models\/read)$/;
+  /(?:^|\/)(?:list|read|status|detail|counts|draft|order|home-order|versions?|library|options|items|heard|arc-read|closed-read|memes-list|memes-queue|batch-list|batch-detail|unknown-calls|validate|review-read|writer-read|stage-latency|chart|costs|players|spend-by-type|stats|relation\/(?:detail|stats|order)|wordings\/list|members\/list|points\/(?:preview|reset-preview|cocreation)|overview\/read|models\/read)$/;
 export const isReadPath = (path: string) => READ_PATH.test(path);
 const EXPORT_PATH = /export/;
 const GENERATE_PATH = /(?:generate|tidy|speak|start|take-audio|import-file|import-legacy|memes-import|upload)$/;
@@ -65,7 +65,7 @@ export class InviteAdminApi {
     const wasWrite = !!body && !read;
     const interrupted = (reason: 'access' | 'challenge' | 'network' | 'login', status = 0) => {
       // Only a console that had a session can be "interrupted": the first sign-in's own failures are ordinary errors.
-      if (this.signedIn) adminConnection.interrupt(reason, wasWrite);
+      if (this.signedIn) adminConnection.interrupt(reason, wasWrite, external !== null);
       return new AdminInterruptedError(reason, status);
     };
     const external = read && path !== '/session' ? this.loadSignal : null;

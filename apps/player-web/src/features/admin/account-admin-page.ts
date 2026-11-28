@@ -368,7 +368,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   // What the owner touched last: the save that starts a moment later belongs to that form (or, without a form, to that control).
   let touchedAt = 0;
   let touchedEl: HTMLElement | null = null;
-  const SCOPE = 'form, [data-save-scope], #wb-editor, #wb-preview, #wb-import-host, #wb-arc-host, [role="dialog"], dialog';
+  const SCOPE =
+    'form, [data-save-scope], #wb-editor, #wb-preview, #wb-import-host, #wb-arc-host, [role="dialog"], dialog';
   const markTouch = (event: Event) => {
     const target = event.target as HTMLElement | null;
     if (!target || typeof target.closest !== 'function') return;
@@ -622,7 +623,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       try {
         setRoster((await api.list()).characters);
       } catch {
-        /* a convenience: without it the ids are dealt the palette */
+        /* a convenience: without it the ids are dealt the palette (and the next page-open tries once more) */
+        rosterRead = null;
       }
     })());
   /** What opening the current page has to load, or null when it only shows what is already there. */
@@ -730,6 +732,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
    * connection raises the connection line with the page's name and 重试.
    */
   let loadControl: AbortController | null = null;
+  let loadWork: (() => Promise<void>) | null = null;
+  let loadPage: string | null = null;
   let failedLoad: { page: string; again: () => void } | null = null;
   const pageName = (id: string) => {
     for (const group of navTree()) for (const item of groupPages(group)) if (item.page === id) return item.label;
@@ -740,6 +744,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     loadControl?.abort();
     const control = new AbortController();
     loadControl = control;
+    loadWork = work;
+    loadPage = page;
     failedLoad = null;
     // The older line (naming the page that could not load) is repainted at once: it no longer names the page being opened.
     if (adminConnection.state === 'interrupted') paintConnection('interrupted', adminConnection.reason);
@@ -1567,6 +1573,18 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     }
   };
   cleanups.push(adminConnection.on(paintConnection), stopProbe);
+  // A read of the page being opened was interrupted (it timed out, or the connection broke): the line names that page and offers
+  // 重试, and the rest of that load is cancelled (it would only wait for the same dead connection, request after request).
+  cleanups.push(
+    adminConnection.onLoadInterrupted((why) => {
+      const work = loadWork,
+        opened = loadPage;
+      if (!loadControl || !work || !opened || !session || !isAdminPage(opened) || opened !== page || disposed) return;
+      failedLoad = { page: opened, again: () => startLoad(work) };
+      loadControl.abort();
+      paintConnection('interrupted', why);
+    }),
+  );
   listen(q('#admin-conn-open'), 'click', openReauth);
   listen(retryButton, 'click', () => {
     const again = failedLoad;
