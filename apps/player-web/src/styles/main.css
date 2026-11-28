@@ -18902,9 +18902,8 @@ button:not(
   vertical-align: middle;
 }
 .account-admin-page.admin-shell .sys-unknown-calls .sys-uc-code {
-  max-width: 18ch;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 .account-admin-page.admin-shell .sys-unknown-calls .sys-uc-settle {
   display: table-cell;
@@ -18917,6 +18916,12 @@ button:not(
 /* 清理失败明细: the message shape wraps inside its cell instead of running off it */
 .account-admin-page.admin-shell .sys-failures .admin-table td,
 .account-admin-page.admin-shell .sys-failures .admin-table .admin-dev {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.account-admin-page.admin-shell .sys-failures .admin-table td:nth-child(5),
+.account-admin-page.admin-shell .sys-failures .admin-table td:nth-child(5) .admin-dev {
+  min-width: 14ch;
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -19002,11 +19007,32 @@ button:not(
 }
 /* a danger zone's body steps in once under its opener */
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .dz > .dz-panel {
+  box-sizing: border-box;
+  width: calc(100% - var(--ad-sp-4));
   margin-left: var(--ad-sp-4);
 }
 /* the 预演 settings line opens its settings under its text, one step in */
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-settings-panel {
+  box-sizing: border-box;
+  width: calc(100% - var(--ad-sp-4));
   margin-left: var(--ad-sp-4);
+}
+/* the quick picks of a date field (7 / 30 / 90 天 / 不限) fit their labels, 4 px apart, instead of four 35 px slots */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-date-picks {
+  display: flex;
+  gap: var(--ad-sp-1);
+  width: auto;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-date-pick:is(button) {
+  padding-inline: var(--ad-sp-2);
+  font-size: 12px;
+}
+/* the sidebar's last item is never half under the account pill */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-nav {
+  padding-block-end: 72px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .admin-pick-head {
+  overflow: hidden;
 }
 /* ---- 测试对话: the conversation's lines are the size of the list beside them ---- */
 .account-admin-page.admin-shell .review-text,
