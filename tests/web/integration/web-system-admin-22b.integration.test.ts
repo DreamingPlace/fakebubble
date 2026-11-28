@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { WebProviderOffline } from '../../../apps/server/generation/web-provider-offline.ts';
 import { WebSecurityCounters, installWebAdminActions } from '../../../apps/server/admin/web-admin-actions.ts';
 import { WebSystemAdmin, type WebSystemOps } from '../../../apps/server/admin/web-system-admin.ts';
-import { priceRows } from '../../../apps/server/admin/web-system-status.ts';
+import { priceRows, SYSTEM_SOURCE_DEADLINE_MS } from '../../../apps/server/admin/web-system-status.ts';
 import { ensurePlayerNumber } from '../../../apps/server/admission/web-player-number.ts';
 import { PLAYER_MODELS } from '../../../packages/contracts/player-models.ts';
 import { DAY, T0, tiersFixture } from '../fixtures/invite-tiers.ts';
@@ -519,4 +519,24 @@ test('Turnstile failures: counted per UTC day in the business object (counts onl
     [false],
     'the table holds a day, an outcome and a count',
   );
+});
+
+// Part 60: a stuck budget Worker or retention read must not hold 系统状态 (the console gives up after 20 s): after the bound the budget
+// block says unavailable and the retention block is empty, and the rest of the status still answers.
+test('status: a budget read and a retention read that never answer are cut off; the rest of the status still answers (Part 60)', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = system(t, { budget: () => new Promise(() => {}), retention: () => new Promise(() => {}) });
+  let done = false;
+  const pending = f.admin.status(f.owner).finally(() => void (done = true));
+  // each stuck source is cut off in its own turn (the budget first, then the retention ledger, twice)
+  for (let round = 0; round < 6 && !done; round++) {
+    for (let i = 0; i < 30; i++) await Promise.resolve();
+    t.mock.timers.tick(SYSTEM_SOURCE_DEADLINE_MS);
+  }
+  const view = await pending;
+  assert.equal(view.budget.available, false);
+  assert.equal((view.budget as { error: string }).error, 'WEB_SYSTEM_SOURCE_TIMEOUT');
+  assert.equal(view.retention, null);
+  assert.equal(view.warnings.retentionFailing, 0);
+  assert.ok(Array.isArray(view.prices), 'the pieces that live in the business object are still there');
 });

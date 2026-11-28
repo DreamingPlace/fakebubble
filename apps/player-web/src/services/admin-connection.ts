@@ -40,12 +40,19 @@ class Connection {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
-  interrupt(reason: InterruptReason, wasWrite: boolean) {
+  private loadListeners = new Set<(reason: InterruptReason) => void>();
+  /** Part 60: a READ made by a page-open (a load) was interrupted: the page names itself on the connection line and stops that load. */
+  onLoadInterrupted(listener: (reason: InterruptReason) => void) {
+    this.loadListeners.add(listener);
+    return () => this.loadListeners.delete(listener);
+  }
+  interrupt(reason: InterruptReason, wasWrite: boolean, duringLoad = false) {
     this.writePending ||= wasWrite;
     const changed = this.state !== 'interrupted' || this.reason !== reason;
     this.state = 'interrupted';
     this.reason = reason;
     if (changed) for (const listener of [...this.listeners]) listener('interrupted', reason);
+    if (duringLoad) for (const listener of [...this.loadListeners]) listener(reason);
   }
   /** Any API answer proves the way is open again; the saves that were waiting then run (once each, newest registration per key). */
   open() {
@@ -78,6 +85,7 @@ class Connection {
     this.writePending = false;
     this.retries.clear();
     this.listeners.clear();
+    this.loadListeners.clear();
   }
 }
 export const adminConnection = new Connection();

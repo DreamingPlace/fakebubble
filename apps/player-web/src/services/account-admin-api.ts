@@ -296,7 +296,8 @@ export class AccountAdminApi extends InviteAdminApi {
     return this.active(await this.request('/login', { token }));
   }
   override async restore() {
-    this.csrf = null;
+    // Part 60: the token stays while the session is asked (the read needs none): clearing it first made every write that started
+    // during a background refresh go out without it, answer 403 and re-sync. A 401 clears it (the transport does that).
     return this.active(await this.request('/session'));
   }
   async emailLogin(email: string, password: string) {

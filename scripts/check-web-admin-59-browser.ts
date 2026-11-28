@@ -52,6 +52,11 @@ try {
     await page.goto(`${f.origin}/?mode=provider-admin#/${route}`);
     await page.reload();
     await quietWait(page, 1200);
+    // Part 60 exception (named, narrow): the console now shows the page's (still empty) panel as soon as the session answers, instead of
+    // keeping the tall login form on screen until the whole load finished. The scroll checks need the page's content, so wait for it.
+    await page
+      .waitForFunction(() => document.documentElement.scrollHeight > innerHeight + 350, null, { timeout: 15_000 })
+      .catch(() => undefined);
   };
   const scrollY = () => page.evaluate(() => Math.round(window.scrollY));
   const scrollTo = async (y: number) => {

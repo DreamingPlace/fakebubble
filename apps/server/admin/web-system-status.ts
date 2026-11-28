@@ -19,6 +19,21 @@ import type { StageLatencyDay } from './web-account-admin.ts';
 
 const DAY_MS = 86_400_000;
 type Digest = { version: number; sha256: string };
+/**
+ * Part 60: the two reads that leave the business object (the budget Worker's summary and the retention ledger) are bounded. A stuck
+ * answer there used to hold the whole 系统状态 read for as long as it stayed stuck. After this long the source counts as unavailable
+ * (the budget block says so, the retention block is empty), and the page still answers inside the console's 20 s deadline.
+ */
+export const SYSTEM_SOURCE_DEADLINE_MS = 8_000;
+function bounded<T>(work: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('WEB_SYSTEM_SOURCE_TIMEOUT')), SYSTEM_SOURCE_DEADLINE_MS);
+    (timer as { unref?: () => void }).unref?.();
+  });
+  return Promise.race([work, late]).finally(() => clearTimeout(timer));
+}
+
 /** What only the Worker knows (its environment, its bindings, the budget Worker, its retention ledger). Absent in a harness. */
 export interface WebSystemSources {
   flags(): SystemFlags;
@@ -123,7 +138,7 @@ async function retentionOf(
   sources: WebSystemSources | undefined,
   now: number,
 ): Promise<SystemRetention> {
-  const health = await sources?.retention().catch(() => null);
+  const health = sources ? await bounded(sources.retention()).catch(() => null) : null;
   if (!health) return null;
   const purge = purgeDiagnostics(store, now);
   return {
@@ -149,7 +164,7 @@ export async function systemWarnings(
 ): Promise<SystemWarnings> {
   return {
     priceExpiring: priceRows(store, now).filter((row) => row.expiring).length,
-    retentionFailing: (await sources?.retention().catch(() => null))?.failing ?? 0,
+    retentionFailing: (sources ? await bounded(sources.retention()).catch(() => null) : null)?.failing ?? 0,
     unknownNew: unknownNew(store, now),
   };
 }
@@ -181,7 +196,7 @@ export async function readSystemStatus(
   let budget: { available: true; rows: SystemBudgetRow[] } | { available: false; error: string };
   try {
     if (!sources) throw new Error('WEB_SYSTEM_SOURCES_UNAVAILABLE');
-    budget = { available: true, rows: budgetRows(await sources.budget()) };
+    budget = { available: true, rows: budgetRows(await bounded(sources.budget())) };
   } catch (error) {
     budget = { available: false, error: inspectErrorCode(error) };
   }

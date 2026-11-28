@@ -167,7 +167,11 @@ function setup(t: test.TestContext) {
 
 // Part 24b-2 exception (named, narrow): 预演 lives inside 角色工作台 now, so the same "latest pick wins" rules are checked on the role list of
 // that page (#admin-characters).
-test('预演测试: a character picked while another one is still loading is not dropped; the latest pick ends up open', async (t) => {
+// Part 60 exception (named, narrow; both tests below): a load never queues behind another. The newest click starts its load AT ONCE and
+// the older load is cancelled (its reads are aborted by the transport; this fake client has no signal, so the older read simply stays
+// in flight here and its answer is dropped by the workbench's own view counter). The old assertions "never two loads at once" and "the
+// later pick opens after the first read finished" described the queue Part 60 removed.
+test('预演测试: a character picked while another one is still loading starts at once; the latest pick ends up open (Part 60)', async (t) => {
   const f = setup(t);
   await f.mount();
   f.root.querySelector('[data-page="characters"]').fire();
@@ -176,23 +180,20 @@ test('预演测试: a character picked while another one is still loading is not
   f.pick('wei-guagua');
   await flush();
   assert.deepEqual(f.reads, ['wei-guagua'], 'the first pick starts its read');
-  // The first read is still in flight (the page is busy): this click used to vanish without any trace.
+  // The first read is still in flight: the newest click is not held back (it used to wait, then vanish, before Part 60).
   f.pick('jojo');
   await flush();
-  assert.equal(f.maxInFlight(), 1, 'never two loads at once');
+  assert.deepEqual(f.reads, ['wei-guagua', 'jojo'], 'the later pick is opened at once');
   f.release('wei-guagua');
   await flush();
-  await flush();
-  assert.deepEqual(f.reads, ['wei-guagua', 'jojo'], 'the later pick is opened after the first read finishes');
-  assert.equal(f.maxInFlight(), 1);
   f.release('jojo');
   await flush();
   await flush();
-  assert.equal(f.maxInFlight(), 1);
+  assert.deepEqual(f.reads, ['wei-guagua', 'jojo'], 'nothing is read again after the answers');
   assert.equal(f.root.querySelector('.invite-admin-status').textContent.includes('请等待'), false);
 });
 
-test('预演测试: of several clicks during one load only the latest is opened, never a stale pick', async (t) => {
+test('预演测试: of several clicks during one load the latest is the one that stays open, never a stale pick (Part 60)', async (t) => {
   const f = setup(t);
   await f.mount();
   f.root.querySelector('[data-page="characters"]').fire();
@@ -204,12 +205,11 @@ test('预演测试: of several clicks during one load only the latest is opened,
   f.pick('wei-guagua');
   f.pick('jojo');
   await flush();
+  assert.equal(f.reads.at(-1), 'jojo', 'the newest click is the last one read');
   f.release('wei-guagua');
   await flush();
-  await flush();
-  assert.deepEqual(f.reads, ['wei-guagua', 'jojo']);
   f.release('jojo');
   await flush();
   await flush();
-  assert.equal(f.maxInFlight(), 1);
+  assert.equal(f.reads.at(-1), 'jojo', 'a late answer of an older pick starts nothing new');
 });
