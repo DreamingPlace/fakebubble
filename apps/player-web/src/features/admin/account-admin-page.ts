@@ -72,6 +72,7 @@ import {
   isInterrupted,
   reauthUrl,
 } from '../../services/admin-connection.ts';
+import { isCancelled } from '../../services/invite-admin-api.ts';
 import { clearAllKeptEdits } from './ui/edit-keeper.ts';
 import { keepScroll } from './ui/keep-scroll.ts';
 
@@ -91,6 +92,8 @@ type Port = Pick<
   | 'revokeCredential'
   | 'characters'
 > & {
+  /** Part 60: the page-open that is loading now (its reads are cancelled by a newer one). Optional: a port without it never cancels. */
+  setLoadSignal?: (signal: AbortSignal | null) => void;
   /** 预演 beside the editor of 角色工作台 (runs, eval sets, batched status). Without it the page keeps the single-preview panel. */
   previews?: PreviewAdminClient;
   /** 关系与故事. Optional: a page without it has no such page in the nav. */
@@ -243,6 +246,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <div class="admin-content" tabindex="-1">
     <section class="admin-conn" id="admin-conn" role="alert" hidden><p id="admin-conn-line"></p>
       <button type="button" id="admin-conn-open" class="admin-primary">验证 / 重新登录</button>
+      <button type="button" id="admin-conn-retry" class="admin-primary" hidden>重试</button>
       <a id="admin-conn-link" href="/?mode=provider-admin" target="_blank" rel="noopener" hidden>重新验证</a></section>
     <section class="admin-access-notice" id="admin-access" role="alert" hidden><p>需要先通过 Cloudflare Access 验证身份。</p>
       <button type="button" id="admin-access-enter">前往验证</button></section>
@@ -330,19 +334,60 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
             : INTERRUPTED_LINE_READ;
       return;
     }
-    const needsAccess = error instanceof InviteLocalApiError && error.code === 'ACCESS_REQUIRED';
+    // Part 60: a request that timed out (or lost its connection) before any sign-in is not an Access problem: the form is simply
+    // still there, and the owner is told to try again.
+    const timedOut = isInterrupted(error) && error.reason === 'network';
+    const needsAccess = !timedOut && error instanceof InviteLocalApiError && error.code === 'ACCESS_REQUIRED';
     accessNotice.hidden = !needsAccess;
-    statusLine.textContent = needsAccess ? '' : adminAccountError(error);
+    statusLine.textContent = timedOut ? '连接超时，请再试一次。' : needsAccess ? '' : adminAccountError(error);
     if (!needsAccess) toastSink?.(statusLine.textContent, 'danger');
   };
   let session: AccountAdminSession | null = null,
     page: AdminPage | 'login' | 'token' | 'reset' = 'login',
     routeId: string | null = null,
-    busy = true,
     disposed = false;
+  /**
+   * Part 60: there is NO page-wide busy. A save locks only its own form (the scope below); a load locks nothing. What was wrong: one
+   * `busy` disabled every control of the page (the 「not-allowed」 cursor) and started TRUE until the first session read answered, so
+   * a request that never came back (a stuck answer, a Cloudflare challenge, a dead connection after the tab slept) froze the whole
+   * console, the login form included, until the tab was closed.
+   */
+  const cleanups: Array<() => void> = [];
+  const inFlight = new Set<HTMLElement>();
+  const running = new Set<unknown>();
+  const lockedBy = (control: HTMLElement) => {
+    for (const scope of inFlight) if (scope === control || scope.contains?.(control)) return true;
+    return false;
+  };
+  /** A save lock touches this element (it is inside a locked form, or contains one). */
+  const lockedWithin = (host: HTMLElement | null | undefined) => {
+    if (!host) return false;
+    for (const scope of inFlight) if (scope === host || scope.contains?.(host) || host.contains?.(scope)) return true;
+    return false;
+  };
+  // What the owner touched last: the save that starts a moment later belongs to that form (or, without a form, to that control).
+  let touchedAt = 0;
+  let touchedEl: HTMLElement | null = null;
+  const SCOPE = 'form, [data-save-scope], #wb-editor, #wb-preview, #wb-import-host, #wb-arc-host, [role="dialog"], dialog';
+  const markTouch = (event: Event) => {
+    const target = event.target as HTMLElement | null;
+    if (!target || typeof target.closest !== 'function') return;
+    touchedEl = target;
+    touchedAt = Date.now();
+  };
+  for (const type of ['click', 'submit', 'keydown', 'change']) {
+    root.addEventListener(type, markTouch, true);
+    cleanups.push(() => root.removeEventListener(type, markTouch, true));
+  }
+  const scopeOfTouch = (): HTMLElement | null => {
+    const el = touchedEl;
+    if (!el || Date.now() - touchedAt > 10_000) return null;
+    const form = el.closest(SCOPE) as HTMLElement | null;
+    if (form) return form;
+    return el.matches?.('button,input,select,textarea') ? el : null;
+  };
   let bindId: string | null = null,
     resetId: string | null = null;
-  const cleanups: Array<() => void> = [];
   const can = (permission: InviteAdminPermission) =>
     session?.member.role === 'owner' || (!!session && hasInvitePermission(session.member.permissions, permission));
   const access = (): NavAccess => ({
@@ -379,7 +424,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   let workbench: ReturnType<typeof characterWorkbench> | null = null;
   let previewBench: {
     open(id: string): Promise<void>;
-    update(busy: boolean): void;
+    update(locked: boolean): void;
     refresh(): void;
     clear(): void;
     dispose(): void;
@@ -484,8 +529,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     for (const control of root.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>(
       'button,input,select,textarea',
     ))
-      control.disabled = busy || control.dataset.locked === 'true';
-    q<HTMLButtonElement>('#admin-bind-start button').disabled = busy || !session?.emailDeliveryAvailable;
+      control.disabled = lockedBy(control) || control.dataset.locked === 'true';
+    q<HTMLButtonElement>('#admin-bind-start button').disabled =
+      lockedBy(q<HTMLButtonElement>('#admin-bind-start button')) || !session?.emailDeliveryAvailable;
     members.paintIssue();
     q<HTMLElement>('main').setAttribute('data-surface', session ? page : 'login');
     // 系统 → 模型与价格 is the one page that is usable on a phone: its route lifts the desktop-only notice (and the login in front of it).
@@ -495,8 +541,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     else q<HTMLElement>('main').removeAttribute('data-mobile-ok');
     if (accessNotice.hidden) q<HTMLElement>('main').removeAttribute('data-access');
     else q<HTMLElement>('main').setAttribute('data-access', '');
-    workbench?.update(busy);
-    previewBench?.update(busy);
+    workbench?.update(lockedWithin(editorHost));
+    previewBench?.update(lockedWithin(previewHost));
     newRole.hidden = !session || !canCreateRole();
     importRoles.hidden = !canImportProfiles();
     arcButton.hidden =
@@ -629,51 +675,110 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     if (page === 'models' && port.modelSettings) return () => models.load();
     return null;
   };
-  /** The newest load a click asked for while something else was running; it starts when that run ends. */
-  let queuedLoad: (() => Promise<void>) | null = null;
-  const run = async (work: () => Promise<void>) => {
-    if (busy || disposed) return;
-    busy = true;
-    render();
-    try {
-      await work();
-    } catch (error) {
-      if (disposed) return;
-      if (
-        !isInterrupted(error) &&
-        error instanceof InviteLocalApiError &&
-        error.status === 401 &&
-        error.code !== 'ADMIN_LOGIN_INVALID'
-      ) {
-        session = null;
-        page = 'login';
-        clearSecrets();
-        clearManagement();
+  /** What went wrong in a load or a save: the page's one place for it (sign-in lost, a missing permission, an interruption). */
+  const handleError = async (error: unknown) => {
+    if (disposed || isCancelled(error)) return;
+    if (
+      !isInterrupted(error) &&
+      error instanceof InviteLocalApiError &&
+      error.status === 401 &&
+      error.code !== 'ADMIN_LOGIN_INVALID'
+    ) {
+      session = null;
+      page = 'login';
+      cancelLoad();
+      clearSecrets();
+      clearManagement();
+    }
+    report(error);
+    if (error instanceof InviteLocalApiError && error.code === 'ADMIN_PERMISSION_REQUIRED') {
+      try {
+        adoptSession(await port.restore());
+      } catch {
+        /* Keep the error; the next request still rechecks server authority. */
       }
-      report(error);
-      if (error instanceof InviteLocalApiError && error.code === 'ADMIN_PERMISSION_REQUIRED') {
-        try {
-          adoptSession(await port.restore());
-        } catch {
-          /* Keep the error; the next request still rechecks server authority. */
-        }
-      }
-    } finally {
-      busy = false;
-      if (!disposed) render();
-      const next = queuedLoad;
-      queuedLoad = null;
-      if (next && !disposed) void run(next);
     }
   };
   /**
-   * A click that opens something is never dropped: it runs now, or, when another run is in flight, waits for it (only
-   * the newest waiting load is kept, and never two run at once). The work itself must check it is still wanted.
+   * A SAVE (or any action a click starts). It locks only the form it came from (never two saves of one form at once); navigation,
+   * sign-out and every other field stay usable. A load is not a `run`: see `startLoad`.
    */
-  const runLatest = (work: () => Promise<void>) => {
+  const run = async (work: () => Promise<void>) => {
     if (disposed) return;
-    if (busy) queuedLoad = work;
-    else void run(work);
+    const scope = scopeOfTouch();
+    // One save per form: the form itself, or (when no event told which one) the same piece of code, is the key.
+    const key: unknown = scope ?? work.toString();
+    if (running.has(key)) return;
+    running.add(key);
+    if (scope) {
+      inFlight.add(scope);
+      render();
+    }
+    try {
+      await work();
+    } catch (error) {
+      await handleError(error);
+    } finally {
+      running.delete(key);
+      if (scope) inFlight.delete(scope);
+      if (!disposed) render();
+    }
+  };
+  /**
+   * Opening a page (or a role, a tab) is a LOAD. It never locks the page; the newest click wins: starting one cancels the load that
+   * is still in flight (its reads are aborted), and a cancelled load shows nothing. A load that times out (20 s) or loses the
+   * connection raises the connection line with the page's name and 重试.
+   */
+  let loadControl: AbortController | null = null;
+  let failedLoad: { page: string; again: () => void } | null = null;
+  const pageName = (id: string) => {
+    for (const group of navTree()) for (const item of groupPages(group)) if (item.page === id) return item.label;
+    return id === 'account' ? '我的账号' : '这个页面';
+  };
+  const startLoad = (work: () => Promise<void>) => {
+    if (disposed) return;
+    loadControl?.abort();
+    const control = new AbortController();
+    loadControl = control;
+    failedLoad = null;
+    // The older line (naming the page that could not load) is repainted at once: it no longer names the page being opened.
+    if (adminConnection.state === 'interrupted') paintConnection('interrupted', adminConnection.reason);
+    port.setLoadSignal?.(control.signal);
+    const opened = page;
+    void (async () => {
+      try {
+        await work();
+      } catch (error) {
+        if (control.signal.aborted || disposed) return;
+        if (isInterrupted(error) && session && isAdminPage(opened)) {
+          failedLoad = { page: opened, again: () => startLoad(work) };
+          report(error);
+          paintConnection('interrupted', adminConnection.reason);
+          return;
+        }
+        await handleError(error);
+      } finally {
+        if (loadControl === control) {
+          loadControl = null;
+          port.setLoadSignal?.(null);
+          if (!disposed) render();
+        }
+      }
+    })();
+  };
+  /** A click that opens something: it runs now and the newest wins (the older load is cancelled). */
+  const runLatest = (work: () => Promise<void>) => startLoad(work);
+  const cancelLoad = () => {
+    loadControl?.abort();
+    loadControl = null;
+    failedLoad = null;
+    port.setLoadSignal?.(null);
+  };
+  /** Opens the current page: its load starts (the newest click wins); a page with nothing to load cancels the older load. */
+  const openLoad = () => {
+    const load = loader();
+    if (load) startLoad(load);
+    else cancelLoad();
   };
   const listen = (element: HTMLElement, event: string, callback: (event: Event) => void) => {
     element.addEventListener(event, callback);
@@ -681,7 +786,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   };
   for (const id of passwordIds)
     listen(q(`#${id}-toggle`), 'click', () => {
-      if (busy || disposed) return;
+      if (disposed) return;
       const input = q<HTMLInputElement>(`#${id}`),
         visible = input.type === 'password';
       input.type = visible ? 'text' : 'password';
@@ -714,8 +819,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     page = landing.page;
     routeId = landing.id;
     address.replace(landing);
-    const load = loader();
-    if (load) await load();
+    // Part 60: the load of the first page runs on its own (the newest click wins); the sign-in itself is already done.
+    openLoad();
   };
   const showSecret = (label: string, secret: string | null) => {
     if (disposed) return;
@@ -807,11 +912,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       }
     },
     openInbox: (characterId) => {
-      if (busy || disposed) return;
+      if (disposed) return;
       whenLeaveOk(() => {
         if (!navigate('cocreation', characterId)) return;
-        const load = loader();
-        if (load) void run(load);
+        openLoad();
       });
     },
     onPick: (characterId) => {
@@ -900,16 +1004,16 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       })
     : null;
   listen(arcButton, 'click', () => {
-    if (busy || disposed || !arcOrder) return;
+    if (disposed || !arcOrder) return;
     if (arcOrder.isOpen()) arcOrder.close();
     else arcOrder.open();
   });
   listen(importRoles, 'click', () => {
-    if (busy || disposed) return;
+    if (disposed) return;
     whenLeaveOk(() => profileImporter?.open());
   });
   listen(newRole, 'click', () => {
-    if (busy || disposed) return;
+    if (disposed) return;
     whenLeaveOk(() => {
       previewBench?.clear();
       previewHost.hidden = true;
@@ -1174,7 +1278,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       (session?.features?.chatReview === true || !item.startsWith('conversations.')),
     permissionControls,
     run,
-    busy: () => busy,
+    busy: () => lockedBy(q<HTMLButtonElement>('#admin-member-issue button[type="submit"]')),
     api: port,
     showSecret,
     status: (text) => {
@@ -1222,13 +1326,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       // Let the browser open a link in a new tab; everything else is handled here so unsaved edits are guarded.
       if (click.metaKey || click.ctrlKey || click.shiftKey || click.button === 1) return;
       event.preventDefault();
-      if (busy || disposed) return;
+      if (disposed) return;
       // Already on this page: nothing to do (each page has its own refresh button).
       if (isAdminPage(button.dataset.page!) && sameRoute({ page: button.dataset.page, id: null }, here())) return;
       whenLeaveOk(() => {
         if (!navigate(button.dataset.page!)) return;
-        const load = loader();
-        if (load) void run(load);
+        openLoad();
       });
     });
   listen(q('#admin-account-toggle'), 'click', toggleMenu);
@@ -1256,19 +1359,13 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       return;
     }
     const before = here();
-    if (busy) {
-      status.textContent = '请等待当前操作完成后再切换。';
-      address.replace(before);
-      return;
-    }
     // Back, Forward or an edited address with unsaved changes: the address goes back at once, the question is asked, and the move
     // is made only if the answer lets it.
     if (page === 'characters' && workbench && !workbench.canLeave()) {
       address.replace(before);
       whenLeaveOk(() => {
         if (!navigate(wanted.page, wanted.id)) return;
-        const load = loader();
-        if (load) void run(load);
+        openLoad();
       });
       return;
     }
@@ -1276,8 +1373,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       address.replace(before);
       return;
     }
-    const load = loader();
-    if (load) void run(load);
+    openLoad();
   });
   cleanups.push(stopHash);
   submit('#admin-email-login', async () => {
@@ -1331,6 +1427,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   listen(q('#admin-logout'), 'click', () => {
     whenLeaveOk(() => {
       void run(async () => {
+        cancelLoad();
         clearSecrets();
         // Part 59: an explicit sign-out removes the edits this browser kept (a session that merely expired keeps them).
         clearAllKeptEdits();
@@ -1382,7 +1479,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   };
   // 总览 and 系统状态 reload by themselves every 60 s while the tab is visible and nothing else is running.
   const tick = setInterval(() => {
-    if (!session || busy || disposed || (page !== 'overview' && page !== 'system')) return;
+    if (!session || disposed || (page !== 'overview' && page !== 'system')) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     // Never under the administrator's hands: not while a field has focus (the repaint would take it away).
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName ?? '')) return;
@@ -1431,14 +1528,20 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     // Blocked: the 重新验证 link does the same in a new tab.
     q<HTMLElement>('#admin-conn-link').hidden = !!reauthPopup;
   };
+  const retryButton = q<HTMLElement>('#admin-conn-retry');
   const paintConnection = (state: 'ok' | 'interrupted', reason?: string | null) => {
     connBox.hidden = state === 'ok' || !session;
+    // Part 60: a page whose load timed out is named (the page's name only, never an id) and offers 重试.
+    const naming = state === 'interrupted' && failedLoad && failedLoad.page === page ? failedLoad : null;
+    retryButton.hidden = !naming;
     connLine.textContent =
       adminConnection.reason === 'access' || reason === 'access'
         ? ACCESS_EXPIRED_LINE
-        : adminConnection.writePending
-          ? INTERRUPTED_LINE
-          : INTERRUPTED_LINE_READ;
+        : naming && !adminConnection.writePending
+          ? `「${pageName(naming.page)}」没能加载：连接超时或中断，修改都还在`
+          : adminConnection.writePending
+            ? INTERRUPTED_LINE
+            : INTERRUPTED_LINE_READ;
     if (state === 'interrupted' && (reason ?? adminConnection.reason) === 'access' && !reauthPopup?.closed)
       openReauth();
     if (state === 'ok') {
@@ -1450,7 +1553,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       }
       reauthPopup = null;
       q<HTMLElement>('#admin-conn-link').hidden = true;
+      retryButton.hidden = true;
       stopProbe();
+      // The way is open again: the page that could not load tries once more by itself.
+      const again = failedLoad;
+      failedLoad = null;
+      if (again && !disposed && again.page === page) again.again();
       if (!disposed && [INTERRUPTED_LINE, ACCESS_EXPIRED_LINE].includes(statusLine.textContent))
         statusLine.textContent = '';
     } else if (!probe) {
@@ -1460,6 +1568,13 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   };
   cleanups.push(adminConnection.on(paintConnection), stopProbe);
   listen(q('#admin-conn-open'), 'click', openReauth);
+  listen(retryButton, 'click', () => {
+    const again = failedLoad;
+    failedLoad = null;
+    if (again && again.page === page) again.again();
+    else openLoad();
+    connBox.hidden = true;
+  });
   q<HTMLElement>('#admin-env').textContent = environmentLabel(window.location?.hostname);
   render();
   void port
@@ -1480,10 +1595,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       }
     })
     .finally(() => {
-      busy = false;
       if (!disposed) render();
     });
   return () => {
+    loadControl?.abort();
     disposed = true;
     clearSecrets();
     session = null;
