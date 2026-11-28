@@ -18994,6 +18994,12 @@ button:not(
   opacity: 1;
   overflow: visible;
   padding-block: var(--ad-sp-2) var(--ad-sp-1);
+  /* opening shows the content at once (a field in it takes focus the moment it opens); only closing waits for the motion to end */
+  transition:
+    block-size var(--ad-t-open) var(--ad-ease),
+    opacity var(--ad-t-open) var(--ad-ease),
+    padding-block var(--ad-t-open) var(--ad-ease),
+    overflow var(--ad-t-open) allow-discrete;
 }
 /* a tab that is one section has no header: no hairline, no step */
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) details.wb-sole:has(> summary.dc)::details-content {
