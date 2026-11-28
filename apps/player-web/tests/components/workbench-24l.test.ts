@@ -37,6 +37,8 @@ test('24l the rail has a small heading and a count per group; an empty group is 
     role('d', 'offline'),
     role('n', 'draft', null),
   ]);
+  // Part 59 (named exception): the rail lists live characters by default; 「显示未上线」 shows the rest, so this test turns it on.
+  one(host, '.admin-pick-toggle').click();
   const heads = all(host, '.admin-pick-head').map((n) => n.textContent);
   assert.deepEqual(heads, ['当前阵容3', '未发布草稿1', '已下线1']);
   assert.deepEqual(ids(host, 'live'), ['a', 'b', 'c']);
@@ -64,6 +66,8 @@ test('24l Alt+↓ / Alt+↑ moves a row inside its group and reports the whole g
     },
   });
   picker.show([role('a', 'live'), role('b', 'live'), role('c', 'live'), role('d', 'offline'), role('e', 'offline')]);
+  // Part 59 (named exception): offline characters are shown only with 「显示未上线」.
+  one(host, '.admin-pick-toggle').click();
   const key = (id: string, k: string) =>
     one(host, `.admin-pick[data-character="${id}"]`).dispatch('keydown', { key: k, altKey: true } as never);
   key('a', 'ArrowDown');
@@ -73,8 +77,11 @@ test('24l Alt+↓ / Alt+↑ moves a row inside its group and reports the whole g
   assert.deepEqual(saved.at(-1), ['live', ['b', 'c', 'a']]);
   key('b', 'ArrowUp'); // already first: nothing
   assert.equal(saved.length, 2);
+  const savedBefore = saved.length;
   key('e', 'ArrowUp');
-  assert.deepEqual(saved.at(-1), ['offline', ['e', 'd']], 'a drag never mixes groups');
+  // Part 59 (named exception): only the live characters have an order (首页顺序); the offline ones shown by 「显示未上线」 are not
+  // draggable, so moving one saves nothing and the saved order is unchanged.
+  assert.equal(saved.length, savedBefore, 'an offline row is not reorderable');
   assert.deepEqual(ids(host, 'live'), ['b', 'c', 'a']);
   // A repaint (another role is picked, the roster is read again) keeps the order the admin made.
   picker.select('a');

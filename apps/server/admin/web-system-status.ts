@@ -11,6 +11,7 @@ import type {
   SystemRetention,
   SystemRetentionFailure,
   SystemSecurity,
+  SystemShares,
   SystemUnknownKind,
   SystemWarnings,
 } from '../../../packages/contracts/web-system.ts';
@@ -169,7 +170,7 @@ export async function readSystemStatus(
   store: BusinessStore,
   now: number,
   sources: WebSystemSources | undefined,
-  extras: { metrics: StageLatencyDay[]; security: Omit<SystemSecurity, 'turnstile'> },
+  extras: { metrics: StageLatencyDay[]; security: Omit<SystemSecurity, 'turnstile'>; shares?: SystemShares },
 ) {
   const flags = sources?.flags() ?? null;
   const ledger = has(store, 'cf_web_migrations')
@@ -202,6 +203,7 @@ export async function readSystemStatus(
     retention: await retentionOf(store, sources, now),
     metrics: extras.metrics,
     security: { turnstile: flags?.turnstile ?? false, ...extras.security },
+    ...(extras.shares ? { shares: extras.shares } : {}),
     warnings: await systemWarnings(store, now, sources),
   };
 }

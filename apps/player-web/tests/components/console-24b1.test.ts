@@ -594,8 +594,6 @@ function mountCosts(t: test.TestContext, view: SpendView | Error) {
       if (view instanceof Error) throw view;
       return { ...view, range };
     },
-    exportCsv: async () => ({ csv: '', rows: 0 }),
-    download: () => {},
     run: async (work) => {
       await work();
     },

@@ -8,6 +8,15 @@ const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 const secret = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value);
 const csrfFor = (cookie: string) => hash(`bubble-admin-csrf:${cookie}`);
 
+/**
+ * Part 59: the admin session slides. It lasts ADMIN_IDLE_MS (8 h) after the LAST request the console made, and never longer than
+ * ADMIN_ABSOLUTE_MS (24 h) after the sign-in. Before this Part it was a fixed 8 h from sign-in, so an owner who was working was
+ * logged out mid-edit. The write is throttled (at most once per ADMIN_RENEW_STEP_MS) so reads stay cheap.
+ */
+export const ADMIN_IDLE_MS = 8 * 60 * 60_000;
+export const ADMIN_ABSOLUTE_MS = 24 * 60 * 60_000;
+export const ADMIN_RENEW_STEP_MS = 10 * 60_000;
+
 /** The local synthetic instance's administrator login. Grant issuance requires trusted local code. */
 export class WebInviteAdmin {
   private readonly store: Store;
@@ -68,7 +77,7 @@ export class WebInviteAdmin {
       ensure(grant && grant.expires_at > now && grant.consumed_session_id === null, 'ADMIN_INVALID_GRANT');
       const cookie = this.newSecret(),
         id = this.nextId(),
-        expiresAt = now + 8 * 60 * 60_000;
+        expiresAt = now + ADMIN_IDLE_MS;
       ensure(Number.isSafeInteger(expiresAt), 'INVALID_TIME');
       this.store.run('INSERT INTO admin_sessions VALUES (?,?,?,?,NULL)', id, hash(cookie), now, expiresAt);
       const consumed = this.store.run(
@@ -83,8 +92,8 @@ export class WebInviteAdmin {
 
   authorize(cookie: unknown, csrf: unknown, origin: unknown) {
     ensure(origin === this.origin && secret(cookie), 'ADMIN_UNAUTHORIZED');
-    const row = this.store.get<{ id: string; expires_at: number }>(
-      `SELECT id,expires_at FROM admin_sessions
+    const row = this.store.get<{ id: string; expires_at: number; created_at: number }>(
+      `SELECT id,expires_at,created_at FROM admin_sessions
       WHERE secret_hash=? AND revoked_at IS NULL AND expires_at>?`,
       hash(cookie),
       this.now(),
@@ -97,20 +106,34 @@ export class WebInviteAdmin {
         timingSafeEqual(Buffer.from(csrf), Buffer.from(expected)),
       'ADMIN_CSRF_REQUIRED',
     );
-    return { sessionId: row.id, expiresAt: row.expires_at };
+    return { sessionId: row.id, expiresAt: this.renew(row) };
+  }
+
+  /** Slides the expiry forward for a session that is in use (never past the absolute limit); returns the expiry now in force. */
+  private renew(row: { id: string; expires_at: number; created_at: number }) {
+    const now = this.now();
+    const next = Math.min(now + ADMIN_IDLE_MS, row.created_at + ADMIN_ABSOLUTE_MS);
+    if (next - row.expires_at < ADMIN_RENEW_STEP_MS) return row.expires_at;
+    this.store.run(
+      'UPDATE admin_sessions SET expires_at=? WHERE id=? AND revoked_at IS NULL AND expires_at<?',
+      next,
+      row.id,
+      next,
+    );
+    return next;
   }
 
   /** Safe same-origin GET bootstrap; the HttpOnly cookie itself never enters JavaScript. */
   session(cookie: unknown) {
     ensure(secret(cookie), 'ADMIN_UNAUTHORIZED');
-    const row = this.store.get<{ expires_at: number }>(
-      `SELECT expires_at FROM admin_sessions
+    const row = this.store.get<{ id: string; expires_at: number; created_at: number }>(
+      `SELECT id,expires_at,created_at FROM admin_sessions
       WHERE secret_hash=? AND revoked_at IS NULL AND expires_at>?`,
       hash(cookie),
       this.now(),
     );
     ensure(row, 'ADMIN_UNAUTHORIZED');
-    return { csrf: csrfFor(cookie), expiresAt: row.expires_at };
+    return { csrf: csrfFor(cookie), expiresAt: this.renew(row) };
   }
 
   logout(cookie: unknown) {

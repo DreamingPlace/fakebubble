@@ -196,10 +196,18 @@ try {
 
   // The bare URL opens the player (the demo prototype is gone).
   const first = await page.goto(`${origin}/`);
-  assert.equal(new URL(page.url()).searchParams.get('mode'), 'provider', 'the bare URL redirects to ?mode=provider');
+  // Part 48 (named exception to "the bare URL redirects to ?mode=provider"): the bare URL serves the player directly (no 302, no extra
+  // round trip), so the address stays as it was typed; the page is the same player.
+  assert.equal(new URL(page.url()).searchParams.get('mode'), null, 'the bare URL is served directly, with no redirect');
   assert.ok(first && first.status() === 200);
   await page.locator('button:visible').first().waitFor({ timeout: 15_000 });
   const cookieName = config.cookieName;
+  // Part 49 (named exception to "the cookie is there right after the first screen"): since Part 48 the first screen draws before the
+  // session exists and the session arrives in the background, so the cookie is set a moment later. Wait (up to 15 s) until the server has
+  // set it, then assert it exactly as before.
+  const hasGuestCookie = async () =>
+    (await context.cookies()).some((cookie: Cookie) => cookie.name === cookieName && cookie.httpOnly && cookie.secure);
+  for (let i = 0; i < 150 && !(await hasGuestCookie()); i++) await page.waitForTimeout(100);
   const cookies = await context.cookies();
   assert.ok(
     cookies.some((cookie: Cookie) => cookie.name === cookieName && cookie.httpOnly && cookie.secure),
@@ -331,7 +339,10 @@ try {
     }
     // The welcome is a pill with a waveform and a length - and none of the welcome words is on the card.
     const face = view.locator('.card-slot.is-active .card-face');
-    assert.equal(await face.locator('.face-voice .face-wave').count(), 1);
+    // Part 49 (named exception): the pill's waveform is drawn twice, the grey bars and the played copy over them (.pk-played), so the
+    // single waveform is counted without the played copy; the played copy is asserted on its own.
+    assert.equal(await face.locator('.face-voice .face-wave:not(.pk-played)').count(), 1);
+    assert.equal(await face.locator('.face-voice .face-wave.pk-played').count(), 1);
     assert.match(await face.locator('.face-dur').innerText(), /^\d:\d\d$/);
     const faceText: string = await face.evaluate((el: HTMLElement) => el.textContent ?? '');
     for (const entry of Object.values(WEB_PROVIDER_WELCOME) as { text: string }[])
@@ -533,7 +544,10 @@ try {
         const prev = w.__frames.at(-1);
         if (!prev || Math.abs(prev.x - frame.x) > 0.05 || Math.abs(prev.opacity - frame.opacity) > 0.002) still = now;
         w.__frames.push(frame);
-        if ((now - t0 > 300 && now - still > 250) || now - t0 > 8000) w.__framesDone = true;
+        // Part 48 (named exception): the quiet window may not close before the turn has even begun. On this page the wheel reaches the
+        // page ~200 ms after the recording starts (it was ~100 ms before Part 48: measured with a capture listener), so the first move
+        // can come after 300 ms; 700 ms keeps the "must travel through frames, must not jump" assertions below exactly as they were.
+        if ((now - t0 > 700 && now - still > 250) || now - t0 > 8000) w.__framesDone = true;
         else requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
@@ -779,7 +793,8 @@ try {
     const submitCards = async (view: any) => {
       // The deck is shuffled: the first card can be the dialogue card (two fields, written only when both are) or the pair card. A
       // single-field card is the one this check writes into, so the send enables with one text.
-      const card = view.locator('.cc-card:not(.cc-pair):not(.is-dialogue)').first();
+      // Part 39b (named exception): the deck is five fixed themes (a spent one is disabled), so take the first card that is still open.
+      const card = view.locator('.cc-card[data-card^="theme-"]:not(.is-used)').first();
       await card.locator('.cc-face').click();
       await sendWhenReady(view, card.locator('.cc-editor textarea:visible').first(), '爱吃甜的，笑起来像猫');
       await view.locator('.cc-thanks:not([hidden])').waitFor({ timeout: 10_000 });
@@ -799,9 +814,21 @@ try {
       // A pair-story note is a co-creation submission too.
       const { phone, view } = await phoneContext('light');
       await open(view);
-      const area = view.locator('.cc-pair textarea').first();
-      assert.equal(await area.count(), 1, 'the pair story card is on offer');
-      await sendWhenReady(view, area, '她们在雨天一起分过一把伞');
+      // Named exception (Part 39, owner-approved board 2026-11-14): the old pair card (a select and a dice) is replaced by the dice card of
+      // the relation flow; the same pair story is now written through its four steps (choose, stars, reason, story).
+      await view.locator('.cc-rel-dice').scrollIntoViewIfNeeded();
+      await view.locator('.cc-rel-dice').click();
+      // Named exception (Part 47, owner-approved board): the card is the choose step, a sentence with the fixed main character and one
+      // partner slot (no chip row); 下一步 sits on the card itself.
+      assert.equal(await view.locator('.cc-rel-slot').count(), 1, 'the sentence has one partner slot');
+      await view.locator('.cc-rel-card-next').click();
+      await view.locator('.cc-rate').first().waitFor();
+      for (const row of await view.locator('.cc-rate').all()) await row.locator('[data-stars="3"]').click();
+      await view.locator('.cc-rel-next').click();
+      await view.locator('.cc-rel-area').fill('她们话不多，但互相记得');
+      await view.locator('.cc-rel-next').click();
+      await view.locator('.cc-rel-area').fill('她们在雨天一起分过一把伞');
+      await view.locator('.cc-rel-next').click();
       await view.locator('.cc-thanks:not([hidden])').waitFor({ timeout: 10_000 });
       assert.ok(
         (await view.locator('.cc-thanks-sub').innerText()).includes(hintText),

@@ -17,6 +17,10 @@ import type { ConfirmInPlace } from './ui/inline-confirm.ts';
 import { keyValuePanel } from './ui/key-value-panel.ts';
 import { statusBadge } from './ui/status-badge.ts';
 import { pageHead } from './ui/page-head.ts';
+import { selectField, textField, type MakeExport } from './export/export-dialog.ts';
+import { modelField, writerField } from './export/export-fields.ts';
+import { CALL_SHEETS } from './export/export-sheets.ts';
+import { unknownCallsPanel } from './unknown-calls-panel.ts';
 
 const onOff = (value: boolean) => statusBadge(value ? '开' : '关', value ? 'ok' : 'neutral');
 const yesNo = (value: boolean) => statusBadge(value ? '有' : '无', value ? 'ok' : 'neutral');
@@ -43,7 +47,16 @@ export function systemView(
     load: () => Promise<SystemStatusView>;
     renewPrices: (requestId: string) => Promise<RenewPricesResult>;
     topUp: (input: { requestId: string; provider: 'deepseek' | 'fish'; dollars: number }) => Promise<BudgetTopUpResult>;
+    /** Part 54: 未确认的调用 (absent where the server has no such page). */
+    unknownCalls?:
+      | {
+          load: Parameters<typeof unknownCallsPanel>[0]['load'];
+          resolve: Parameters<typeof unknownCallsPanel>[0]['resolve'];
+        }
+      | undefined;
     isOwner: () => boolean;
+    /** Part 57: the page's 导出 button (without it there is none). */
+    makeExport?: MakeExport;
     run: (work: () => Promise<void>) => Promise<void>;
     /** 续期 and 预算充值 confirm in place, inside the host they are given (no dialog). */
     confirm: ConfirmInPlace;
@@ -60,6 +73,18 @@ export function systemView(
     pending.set(key, held);
     return held;
   };
+  const unknownPanel = deps.unknownCalls
+    ? unknownCallsPanel({
+        load: deps.unknownCalls.load,
+        resolve: deps.unknownCalls.resolve,
+        isOwner: deps.isOwner,
+        run: deps.run,
+        confirm: deps.confirm,
+        toast: deps.toast,
+        newRequestId: deps.newRequestId,
+        disposed: deps.disposed,
+      })
+    : null;
   const sections = h('div', { class: 'system-sections' });
   const result = h('div', { class: 'system-result', attrs: { role: 'status' } });
   const metricsHost = h('div', { class: 'system-metrics' });
@@ -75,7 +100,48 @@ export function systemView(
   });
   // The overall verdict sits in the header: green, or the same one-line summary 总览 shows.
   const overall = h('p', { class: 'ov-status sys-overall', attrs: { role: 'status' } });
-  root.replaceChildren(pageHead('系统状态', overall), sections, result);
+  // Part 57: 导出. The call records and the failed replies are the owner's; the share-link counts are the page's own.
+  const exportButton = deps.makeExport?.(() => [
+    ...(deps.isOwner()
+      ? ([
+          {
+            id: 'calls',
+            label: '调用记录',
+            kind: 'calls',
+            range: 'dates',
+            sheets: CALL_SHEETS,
+            fields: [
+              selectField(
+                '状态',
+                [
+                  { value: '', label: '全部' },
+                  { value: 'unknown', label: '结果未确认' },
+                  { value: 'sent', label: '已发出' },
+                  { value: 'known', label: '已确认' },
+                  { value: 'not_sent', label: '未发出' },
+                ],
+                'state',
+                '结果未确认的调用也在最后一张表里。',
+              ),
+              textField('供应商', 'provider', {
+                placeholder: '例如 deepseek',
+                tip: '只导出这个供应商的调用（不填就是全部）。',
+              }),
+            ],
+            tip: '模型调用、外部调用、向量调用，以及结果未确认的调用',
+          },
+          {
+            id: 'failures',
+            label: '失败的回复',
+            kind: 'failures',
+            range: 'dates',
+            fields: [writerField, modelField],
+          },
+        ] as const)
+      : []),
+    { id: 'shares', label: '分享链接', kind: 'shares', range: 'none' },
+  ]);
+  root.replaceChildren(pageHead('系统状态', overall, exportButton), sections, result);
   /** Sections laid out in a row: `top` is the three-up row with the version card, `pair` two side by side, `wide` one full row. */
   const row = (kind: 'top' | 'pair' | 'wide', ...children: (Node | null)[]) =>
     h('div', { class: `sys-row sys-${kind}` }, ...children);
@@ -334,6 +400,15 @@ export function systemView(
         ['最近 7 天无法验证', exactCount(v.security.unavailableLast7Days)],
         ['今天限流表已满、逐 IP 检查被放行（全站限流仍有效）', exactCount(v.security.rateOverflowToday)],
         ['未登记的拒绝码（按 400 回答，自启动起）', exactCount(v.security.unknownRefusals)],
+        // Part 45: shareable voice-card links, counts only (no token, id, nickname or content).
+        ...(v.shares
+          ? ([
+              ['语音小卡链接 · 已创建', exactCount(v.shares.created)],
+              ['语音小卡链接 · 已打开', exactCount(v.shares.opened)],
+              ['语音小卡链接 · 已过期', exactCount(v.shares.expired)],
+              ['语音小卡链接 · 有效中', exactCount(v.shares.active)],
+            ] as Array<[string, string]>)
+          : []),
       ]),
     );
     const cleanup = v.retention
@@ -428,6 +503,7 @@ export function systemView(
     sections.replaceChildren(
       row('top', version, unknown, security),
       row('wide', priceSection(v)),
+      ...(unknownPanel ? [row('wide', unknownPanel.element)] : []),
       row('pair', budgetSection(v), cleanupCard),
       row('wide', section('技术指标', metricsHost)),
     );
@@ -439,6 +515,7 @@ export function systemView(
     if (deps.disposed()) return;
     view = next;
     paint(next);
+    if (unknownPanel) await unknownPanel.load().catch(() => {});
   }
   return {
     load: refresh,
@@ -453,6 +530,7 @@ export function systemView(
       sections.replaceChildren();
       result.replaceChildren();
       metrics.clear();
+      unknownPanel?.clear();
     },
   };
 }

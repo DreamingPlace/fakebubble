@@ -202,6 +202,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
   #keys: Readonly<Partial<Record<Exclude<TextProviderId, 'deepseek'>, string>>>;
   #fetch: typeof fetch;
   #policy: TextGenerationPolicy;
+  #callTimeoutMs: number | undefined;
   get policy() {
     return this.#policy;
   }
@@ -230,9 +231,19 @@ export class DeepSeekTextGenerator implements TextGenerator {
   get writerPolicyHash() {
     return writerPolicyHash(JSON.stringify(this.#policy));
   }
+  /** Part 37b: the policy hash of a 新+档案 reply (the v8 hash plus the pin of the profile words and rules). */
+  get writerProfilePolicyHash() {
+    return writerPolicyHash(JSON.stringify(this.#policy), true);
+  }
+  /** Part 37c-1: the policy hash of a 新+档案+梗 reply (the profile hash plus the pin of the meme words and selection rules). */
+  get writerMemesPolicyHash() {
+    return writerPolicyHash(JSON.stringify(this.#policy), true, true);
+  }
   /** The hash a frozen request must carry: v7's policy hash, or the v8 one when the request froze the v8 writer. */
-  policyHashFor(request: Pick<TextGenerationRequest, 'writer'>) {
-    return request.writer === 'v8' ? this.writerPolicyHash : this.policyHash;
+  policyHashFor(request: Pick<TextGenerationRequest, 'writer' | 'writerProfile' | 'writerMemes'>) {
+    if (request.writer !== 'v8') return this.policyHash;
+    if (request.writerMemes === true) return this.writerMemesPolicyHash;
+    return request.writerProfile === true ? this.writerProfilePolicyHash : this.writerPolicyHash;
   }
 
   constructor(
@@ -242,8 +253,20 @@ export class DeepSeekTextGenerator implements TextGenerator {
       fetch?: typeof fetch;
       /** xAI / Gemini keys. A missing key makes that model unavailable (answered as definitely-not-billed), never a crash. */
       keys?: { xai?: string | undefined; gemini?: string | undefined };
+      /**
+       * Part 54: a limit for EACH provider call, well below the RPC limit and the stage lease. It is NOT part of the policy
+       * (the policy, and so every policy hash, still carries timeoutMs 90 000 for the whole reply): a call that exceeds it is
+       * interrupted and reported as TEXT_REQUEST_TIMEOUT, so generation always returns a structured result instead of hanging.
+       */
+      callTimeoutMs?: number;
     },
   ) {
+    ensure(
+      options.callTimeoutMs === undefined ||
+        (Number.isSafeInteger(options.callTimeoutMs) && options.callTimeoutMs >= 1 && options.callTimeoutMs <= 120_000),
+      'INVALID_TEXT_TIMEOUT',
+    );
+    this.#callTimeoutMs = options.callTimeoutMs;
     ensure(typeof options.apiKey === 'string' && options.apiKey.trim().length > 0, 'DEEPSEEK_KEY_MISSING');
     ensure(options.apiKey.length <= 512 && !/[\r\n]/.test(options.apiKey), 'INVALID_DEEPSEEK_KEY');
     let base: URL;
@@ -429,7 +452,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
         'TEXT_STAGE_RESUME_INVALID',
       );
     const knownParsedDraft = knownDraft ? parseDraft(structuredClone(knownDraft.payload), frozen) : null;
-    const messages = v8 ? writerDraftMessages(frozen) : promptMessages(frozen);
+    const messages = v8 ? writerDraftMessages(frozen, chains.draft[0]!.provider) : promptMessages(frozen);
     const timeout = AbortSignal.timeout(this.timeoutMs);
     const combined = AbortSignal.any([signal, timeout]);
     const started = performance.now();
@@ -487,16 +510,27 @@ export class DeepSeekTextGenerator implements TextGenerator {
       ref: ModelRef,
       reservationFor: ProviderReservation | undefined,
       willRetry: (error: unknown) => boolean,
-      messages: ReturnType<typeof promptMessages>,
+      stageMessages: ReturnType<typeof promptMessages>,
       outputTool: ReturnType<typeof draftTool> | null,
       parse: (value: unknown) => T,
     ): Promise<T> => {
       ensure(!combined.aborted, errorCode(null));
+      // Part 37a-3: the v8 draft carries the addendum of the model that writes THIS call (a fallback model gets its own).
+      const messages = v8 && !outputTool ? writerDraftMessages(frozen, ref.provider) : stageMessages;
       const stageStarted = performance.now();
       const model = ref.model;
       let value: unknown;
       let observer: ProviderCallObserver | undefined,
         recorded = false;
+      // Part 54: the limit of this one provider call (see callTimeoutMs). Starts when the call is about to be sent.
+      let callTimeout: AbortSignal | undefined;
+      const callFailed = (error: unknown) =>
+        callTimeout?.aborted &&
+        !signal.aborted &&
+        !(error instanceof DomainError && error.code === 'COST_RECORDING_FAILED')
+          ? 'TEXT_REQUEST_TIMEOUT'
+          : errorCode(error);
+      const callAborted = () => combined.aborted || callTimeout?.aborted === true;
       let parsed!: T;
       let handoff: AcceptedV7StageOutput | undefined;
       try {
@@ -556,13 +590,15 @@ export class DeepSeekTextGenerator implements TextGenerator {
         const wireRequestHash = providerRequestHash(endpoint, model, body);
         observer = await reservationFor?.start(stage, wireRequestHash, bytes);
         ensure(!combined.aborted, errorCode(null));
+        callTimeout = this.#callTimeoutMs === undefined ? undefined : AbortSignal.timeout(this.#callTimeoutMs);
+        const sendSignal = callTimeout ? AbortSignal.any([combined, callTimeout]) : combined;
         const key = ref.provider === 'deepseek' ? this.#apiKey : this.#keys[ref.provider]!;
         let response: Response;
         try {
           response = await this.#fetch(endpoint, {
             method: 'POST',
             redirect: 'manual',
-            signal: combined,
+            signal: sendSignal,
             headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
             body,
           });
@@ -581,7 +617,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
           throw new DomainError(statusFailure(ref.provider, response.status, text));
         }
         value = await readBody(response);
-        ensure(!combined.aborted, errorCode(null));
+        ensure(!sendSignal.aborted, callFailed(null));
         const payload = outputTool
           ? parseDeepSeekToolResponse(value, outputTool.function.name, ref.provider)
           : parsePlainTextResponse(value);
@@ -622,7 +658,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
             model,
             ...reportedModel(response.model),
             status: 'failed',
-            errorCode: errorCode(error),
+            errorCode: callFailed(error),
             elapsedMs: Math.round(performance.now() - stageStarted),
             requestId:
               typeof response.id === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(response.id) ? response.id : null,
@@ -645,14 +681,14 @@ export class DeepSeekTextGenerator implements TextGenerator {
           // preview). Best effort and before finish(); it can neither change the observation nor throw.
           if (value !== undefined && typeof observer?.rejected === 'function') {
             try {
-              observer.rejected({ raw: rawModelOutput(value), errorCode: errorCode(error) });
+              observer.rejected({ raw: rawModelOutput(value), errorCode: callFailed(error) });
             } catch {
               /* diagnosis only */
             }
           }
           await finishProviderCall(
             observer,
-            chatObservation(ref.provider, value, combined.aborted ? 'interrupted' : 'failed', errorCode(error)),
+            chatObservation(ref.provider, value, callAborted() ? 'interrupted' : 'failed', callFailed(error)),
           );
         }
         throw error;
@@ -720,7 +756,13 @@ export class DeepSeekTextGenerator implements TextGenerator {
       }
     } catch (error) {
       // No draft fallback or hidden third call; retain known first-stage usage if review fails.
-      throw new TextGenerationFailure(errorCode(error), metadata());
+      // Part 54: a call that hit its own per-call limit reports that, not a generic network error.
+      const last = stages.at(-1);
+      const code =
+        last?.status === 'failed' && last.errorCode === 'TEXT_REQUEST_TIMEOUT' && !signal.aborted
+          ? 'TEXT_REQUEST_TIMEOUT'
+          : errorCode(error);
+      throw new TextGenerationFailure(code, metadata());
     }
   }
 }

@@ -153,6 +153,10 @@ export interface DialogueCandidate extends ReplyCandidate {
   bubbleMarkup?: (string | null)[];
   // Part 37a (v8): the guard's reasons for each bubble it replaced (codes only, no content). Absent on v7; [] when it changed nothing.
   guardReasons?: string[];
+  // Part 58 (v8): the writer's hidden plan, kept for the owner only (the preview run, its export, the rehearsal lines). `read` is what
+  // she read behind the player's words, `aim` her purpose with a few words of how, `aims` the closed-list purposes it names. Never
+  // published, spoken or shown to a player. Absent on v7 and when the writer wrote no usable plan.
+  plan?: { read: string; aim: string; aims: string[] };
 }
 export interface TopicMemory {
   // Only the deferred memory-link experiment adds a catalog ID to model recall.
@@ -195,6 +199,12 @@ export interface TextGenerationRequest {
   // Part 37a: absent = the v7 writer (every byte of the request is what it was). 'v8' = the plain-text writer; frozen with the
   // request, so a reply in flight finishes with the writer it started with.
   writer?: 'v8';
+  // Part 37b: 新+档案 (rehearsal columns only for now): the v8 writer plus the character's own 核心卡 and examples. Absent = 新, untouched.
+  writerProfile?: true;
+  // Part 37c-1: 新+档案+梗 (needs writerProfile): the dictionary entries the player's recent messages contain, each with THIS character's
+  // level, frozen with the request. `writerMemes` alone (no hits) is a reply where nothing matched: nothing about memes is printed.
+  writerMemes?: true;
+  memeHits?: import('./web-memes.ts').MemeHit[];
   // Part 37a (v8, voice only): the frozen voice model of this reply is Drama 3, so a spoken line may carry inline directions.
   voiceDirections?: boolean;
   sceneContext?: import('./scenes.ts').SceneState;
@@ -214,7 +224,26 @@ export interface TextGenerationRequest {
   };
   // Part 26a: the character's welcome line, from the published revision the template was frozen from, said as the character's
   // first line when the history reaches the start of a normal chat. Absent - never null - otherwise.
-  opening?: { text: string };
+  opening?: {
+    text: string /** Part 37a-2 (v8 only): the 情境 note of that line, while the chat is young. Never spoken. */;
+    context?: string;
+  };
+  /**
+   * Part 37a-2 (v8 only): the compact roster of the OTHER published characters, in the console's catalog order: a name, the aliases
+   * others may use and the cast card's one-liner. No hidden setting, no relationship. Absent on a v7 request.
+   */
+  roster?: { name: string; aliases: string[]; oneLiner: string }[];
+  /**
+   * Part 51 (v8 only): the character's OWN names, each with its kind (自称 / 别名 / 中性称呼 / 黑称 / 饰演过的角色) and her attitude to it
+   * (likes / ok / dislikes): the published cast file's aliases merged with the profile settings (the cast file wins on a conflict),
+   * whatever CAST_CONTEXT_ENABLED says. Absent on a v7 request and when the character has none.
+   */
+  ownNames?: { text: string; kind: string; attitude: 'likes' | 'ok' | 'dislikes' }[];
+  /**
+   * Part 58 (v8 only): the purposes (from the closed list in writer-plan.ts) of her last few replies in this conversation, oldest
+   * first, at most 3, so the writer varies them. Absent when there is none, so such a request is what it was.
+   */
+  recentAims?: string[];
   messages: MessageDTO[];
   mustClose: boolean;
   // Untrusted source/memory records, never interpolated as developer instructions.

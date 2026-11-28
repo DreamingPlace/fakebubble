@@ -58,7 +58,16 @@ export function installWebCharacterPreviews(store: BusinessStore) {
     ensure(rows.length === 1 && rows[0]!.version === 1 && rows[0]!.sha256 === digest, 'WEB_PREVIEW_SCHEMA_MISMATCH');
   });
 }
-/** Optional extension: legacy/synthetic runtimes never install this queue. */
+/**
+ * Part 40: the console's own 预演 being generated. A 单次预演 waits only for another of its own kind (and for the live chat),
+ * never for a 多轮预演 or a 审核对比 in flight.
+ */
+export function webOwnPreviewsRunning(store: BusinessStore) {
+  if (!store.get("SELECT 1 FROM sqlite_master WHERE name='web_character_preview_jobs'")) return 0;
+  return store.get<{ n: number }>(`SELECT count(*) n FROM web_character_preview_jobs j
+    JOIN admin_previews p ON p.id=j.preview_id WHERE p.status='generating'`)!.n;
+}
+/** Every console model call in flight (live chat counts these against its own text slots). */
 export function webCharacterPreviewsRunning(store: BusinessStore) {
   // Part 26b: a 审核对比 case being generated takes the same one text slot as a preview.
   // Part 35: so does a 多轮预演 unit being generated.

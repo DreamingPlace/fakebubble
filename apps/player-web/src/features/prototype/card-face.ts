@@ -15,8 +15,9 @@ export function cardFace(person: Person, configured: boolean) {
   return `<div class="card-face">
       <div class="face-top" aria-hidden="true"><span>burbur</span><span>No.${person.card.no}</span></div>
       <div class="face-main" aria-hidden="true">${
-        person.portrait ? `<span class="face-portrait">${escapeCardText(person.mark)}</span>` : ''
-      }<span class="face-name">${escapeCardText(person.name)}</span>${
+        // Part 40: every configured card has its avatar circle (the initials stand in until / without a picture).
+        `<span class="face-portrait">${escapeCardText(person.mark)}</span>`
+      }<span class="face-name"><span class="face-name-text">${escapeCardText(person.name)}</span></span>${
         person.card.latin
           ? handSvg(person.card.latin, { size: 44, weight: 1.9, label: null, className: 'hand face-latin' })
           : ''

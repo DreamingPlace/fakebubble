@@ -1,3 +1,5 @@
+import { turnMemberIds, turnQuotes } from '../turns/web-turns.ts';
+import { broadcastContextMessages } from '../broadcast/web-broadcast-read.ts';
 import { createHash } from 'node:crypto';
 import type {
   CharacterScope,
@@ -26,9 +28,17 @@ import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract
 import { readInputSnapshot } from './web-input-snapshot.ts';
 import { recallsMemory } from '../admission/web-free-tier.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
-import { castRequestContext } from '../cast/cast-store.ts';
+import { castDigest, castRequestContext, readPublication } from '../cast/cast-store.ts';
+import { compileFullView } from '../cast/cast-compile.ts';
+import { selectCastView } from '../cast/cast-select.ts';
+import { readMemeLibrary } from '../memes/web-meme-library.ts';
+import { matchMemes } from '../memes/meme-match.ts';
+import { MEME_TURNS, readMemeUse, withoutMemeUse } from '../../../packages/contracts/web-memes.ts';
 import { castPromptHash } from './cast-prompt.ts';
-import { frozenOpening } from './opening-line.ts';
+import { frozenOpening, openingForWriter } from './opening-line.ts';
+import { writerOwnNames } from './writer-own-names.ts';
+import { writerRoster } from './writer-roster.ts';
+import { MAX_RECENT_AIMS } from './writer-plan.ts';
 
 /** Messages (published prior turns + the current input) a request carries; the opening is added only when none was cut. */
 const HISTORY_WINDOW = 24;
@@ -66,6 +76,8 @@ interface RequestRow {
   voice_version: string;
   frozen_at: number;
 }
+const sameIds = (a: string[], b: string[]) => a.length === b.length && a.every((id, at) => id === b[at]);
+
 function dto(row: MessageRow): MessageDTO {
   return {
     id: row.id,
@@ -83,6 +95,9 @@ function dto(row: MessageRow): MessageDTO {
 }
 
 /** The player's input embedded for this reply: in memory only, produced before the freeze and never stored. */
+/** Part 51: the key is absent (not an empty list) when the character has no names, so the request is what it was. */
+const ownNamesKey = (names: ReturnType<typeof writerOwnNames>) => (names.length ? { ownNames: names } : {});
+
 export interface QueryEmbedding {
   model: string;
   vector: Float32Array;
@@ -98,10 +113,10 @@ const withoutTestOverride = <T extends { testOverride?: unknown }>({ testOverrid
  */
 export function framePinsMatch(
   row: { protocol_digest: string; prompt_digest: string },
-  request: Pick<TextGenerationRequest, 'writer'>,
+  request: Pick<TextGenerationRequest, 'writer' | 'writerProfile' | 'writerMemes'>,
 ) {
   if (request.writer === 'v8') {
-    const pins = writerPins();
+    const pins = writerPins(request.writerProfile === true, request.writerMemes === true);
     return row.protocol_digest === pins.protocolDigest && row.prompt_digest === pins.promptDigest;
   }
   return (
@@ -157,8 +172,11 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
   const orderedIds: string[] = [];
   const priorJobs = new Set(prior.map((row) => row.job_id));
   for (const row of prior) {
-    allowed.add(row.input_message_id);
-    orderedIds.push(row.input_message_id);
+    // Part 36: a prior turn answered every bubble of its batch (a single message answered itself), in the order they were sent.
+    for (const id of turnMemberIds(store, row.operation_id, row.input_message_id)) {
+      allowed.add(id);
+      orderedIds.push(id);
+    }
     for (const item of store.all<{ message_id: string }>(
       `SELECT message_id FROM web_publication_items
       WHERE operation_id=? AND origin IN ('narrative','text_fallback') ORDER BY ordinal`,
@@ -168,7 +186,41 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
       orderedIds.push(item.message_id);
     }
   }
-  orderedIds.push(input.input_message_id);
+  // Part 36: this turn's own bubbles, in order; the last one is the input message.
+  const members = turnMemberIds(store, operationId, input.input_message_id);
+  for (const id of members) {
+    allowed.add(id);
+    orderedIds.push(id);
+  }
+  // Part 42: what the character was broadcast to this player is the character's own earlier message in this conversation, in order.
+  const broadcast = broadcastContextMessages(
+    store,
+    {
+      principalId: operation.principal_id,
+      worldId: scope.worldId,
+      conversationId: scope.conversationId,
+      characterId: scope.characterId,
+    },
+    input.input_seq,
+  );
+  if (broadcast.length) {
+    const seqs = new Map(
+      store
+        .all<{ id: string; seq: number }>(
+          `SELECT id,seq FROM messages WHERE world_id=? AND conversation_id=? AND id IN (${orderedIds.map(() => '?').join(',')})`,
+          scope.worldId,
+          scope.conversationId,
+          ...orderedIds,
+        )
+        .map((row) => [row.id, row.seq] as const),
+    );
+    for (const item of broadcast) {
+      allowed.add(item.id);
+      seqs.set(item.id, item.seq);
+      const at = orderedIds.findIndex((id) => (seqs.get(id) ?? Number.MAX_SAFE_INTEGER) > item.seq);
+      orderedIds.splice(at === -1 ? orderedIds.length : at, 0, item.id);
+    }
+  }
   // Reject alien memory before v7 ranking/limit; post-filtering would change which topics were selected.
   const episodes = store.all<{ job_id: string; evidence_ids_json: string }>(
     `SELECT job_id,evidence_ids_json FROM memory_episodes WHERE world_id=? AND conversation_id=? AND character_id=?`,
@@ -278,7 +330,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
       template.schedule !== undefined,
     'WEB_V7_TEMPLATE_INVALID',
   );
-  const cast = castRequestContext(input);
+  const snapshotCast = castRequestContext(input);
   const relationship = store.get<{ relationship: TextGenerationRequest['relationship'] }>(
     'SELECT relationship FROM world_characters WHERE world_id=? AND character_id=?',
     scope.worldId,
@@ -344,7 +396,37 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
   const introduction = playerIntroduction(userStore(store), scope);
   const facts = recalls ? recallPlayerFacts(userStore(store), scope) : [];
   // Part 37a: the owner's switch is read ONCE, here, and frozen with the request. v7 requests gain no key at all.
-  const v8 = readWriter(store) === 'v8';
+  // Part 37b: 新+档案 ('v8p') is the v8 writer plus the profile flag, frozen with the request (the 多轮预演 column's request).
+  const choice = readWriter(store);
+  const v8 = choice !== 'v7';
+  // Part 37c-1: 新+档案+梗. The player's last messages of THIS window (the published prior turns and the input, nothing unproven),
+  // latest first, are read for dictionary terms and for the cast selection; both results are frozen in the request.
+  const memes = choice === 'v8m';
+  const playerTexts = memes
+    ? selected
+        .filter((row) => row?.author_kind === 'player')
+        .map((row) => row!.body)
+        .reverse()
+        .slice(0, MEME_TURNS)
+    : [];
+  // Part 37c-1b: the EFFECTIVE library (shipped + the owner's own entries, with his edits, switches and deletions), read live per reply.
+  const effective = memes ? readMemeLibrary(store) : null;
+  const memeHits = effective
+    ? matchMemes(playerTexts, effective.off, readMemeUse(template), undefined, effective.library)
+    : [];
+  // The cast the snapshot froze stays the cast of this reply (its publication version); 新+档案+梗 keeps only what this reply needs.
+  const cast =
+    memes && snapshotCast
+      ? (() => {
+          const published = readPublication(store, snapshotCast.version);
+          ensure(
+            published.doc.characters.some((c) => c.characterId === scope.characterId),
+            'WEB_V7_CAST_INVALID',
+          );
+          const view = selectCastView(compileFullView(published.doc, scope.characterId), playerTexts);
+          return { ...snapshotCast, digest: castDigest(JSON.stringify(view)), view };
+        })()
+      : snapshotCast;
   const schemaVersion = store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
   const voiceBinding =
     schemaVersion >= 113
@@ -355,11 +437,15 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
           scope.characterId,
         )
       : undefined;
+  // Part 36: the quotes of this window's bubbles (same conversation only), as `replyTo`; a request without quotes gains no key.
+  const quotes = turnQuotes(store, scope.worldId, scope.conversationId, ids);
   const request: TextGenerationRequest = {
     jobId: operation.id,
     scope: { worldId: scope.worldId, conversationId: scope.conversationId, characterId: scope.characterId },
     now,
     ...(v8 ? { writer: 'v8' as const } : { relationship }),
+    ...(choice === 'v8p' || memes ? { writerProfile: true as const } : {}),
+    ...(memes ? { writerMemes: true as const, ...(memeHits.length ? { memeHits } : {}) } : {}),
     ...(v8 && voiceBinding && resolveVoiceModel(voiceBinding.model, siteVoiceModel(store)) === 'drama-3'
       ? { voiceDirections: true }
       : {}),
@@ -368,13 +454,32 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     ...(introduction ? { playerIntroduction: introduction } : {}),
     ...(facts.length ? { playerFacts: facts } : {}),
     deliveryMode: 'voice',
-    requiredMessageIds: [input.input_message_id],
-    character: template,
+    requiredMessageIds: members,
+    // Part 37c-1: the character's own meme settings never reach a prompt; the matched entries carry the level.
+    character: withoutMemeUse(template),
     // Part 24a: only a snapshot that froze a cast view carries `cast`. The key is absent (not null) otherwise, so the serialized
     // request and its digest are what they were before.
     ...(cast ? { cast } : {}),
-    ...(opening ? { opening } : {}),
-    messages: selected.map((row) => dto(row!)),
+    ...(opening
+      ? { opening: openingForWriter(opening, v8, selected.filter((row) => row?.author_kind === 'player').length) }
+      : {}),
+    // Part 37a-2: the v8 writer's teammates (public catalog data); a v7 request gains no key.
+    ...(v8 ? { roster: writerRoster(store as never, scope.characterId) } : {}),
+    // Part 51: her own names with kind and attitude (published cast file + profile settings), whatever CAST_CONTEXT_ENABLED says.
+    ...(v8 ? ownNamesKey(writerOwnNames(store as never, scope.characterId, template)) : {}),
+    // Part 58: her last few purposes in this conversation, read from the stored candidates of her earlier published replies (the
+    // plan rides in the candidate JSON; no new column). Absent when there are none, so such a request is what it was.
+    ...(v8
+      ? recentAimsKey(
+          store,
+          prior.map((row) => row.operation_id),
+        )
+      : {}),
+    // Part 36: a bubble that quotes carries it as `replyTo` (same conversation only); every other message is as it was.
+    messages: selected.map((row) => {
+      const quote = quotes.get(row!.id);
+      return quote ? { ...dto(row!), replyTo: quote } : dto(row!);
+    }),
     mustClose: false,
     evidence: [],
     memories,
@@ -395,7 +500,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
   const serialized = JSON.stringify(request),
     requestDigest = digest(serialized),
     pins = v8
-      ? writerPins()
+      ? writerPins(choice === 'v8p' || memes, memes)
       : { protocolDigest: digest(JSON.stringify(protocolFingerprint())), promptDigest: textPromptHash() };
   const voiceVersion =
     schemaVersion >= 113
@@ -425,6 +530,26 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
   return requestDigest;
 }
 
+/** The first purpose of each of her last published replies that carried a plan, oldest first (at most MAX_RECENT_AIMS). */
+function recentAimsKey(store: WebStore, operationIds: readonly string[]) {
+  const aims: string[] = [];
+  if (!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_provider_candidates'")) return {};
+  for (const operationId of operationIds.slice(-12)) {
+    const row = store.get<{ candidate_json: string }>(
+      'SELECT candidate_json FROM web_provider_candidates WHERE operation_id=?',
+      operationId,
+    );
+    if (!row) continue;
+    try {
+      const aim = (JSON.parse(row.candidate_json) as { plan?: { aims?: unknown } }).plan?.aims;
+      if (Array.isArray(aim) && typeof aim[0] === 'string') aims.push(aim[0]);
+    } catch {
+      /* a candidate that does not parse has no aim */
+    }
+  }
+  return aims.length ? { recentAims: aims.slice(-MAX_RECENT_AIMS) } : {};
+}
+
 export function readWebV7Request(
   store: WebStore,
   operationId: string,
@@ -440,8 +565,7 @@ export function readWebV7Request(
       request.scope.worldId === row.world_id &&
       request.scope.conversationId === row.conversation_id &&
       request.scope.characterId === row.character_id &&
-      request.requiredMessageIds.length === 1 &&
-      request.requiredMessageIds[0] === row.input_message_id,
+      sameIds(request.requiredMessageIds, turnMemberIds(store, operationId, row.input_message_id)),
     'WEB_V7_REQUEST_INVALID',
   );
   return { request, row };

@@ -1,3 +1,7 @@
+import { purgeBroadcastCharacter, purgeBroadcastConversation } from '../broadcast/web-broadcast-schema.ts';
+import { purgeShareCharacter, purgeShareConversation } from '../share/web-share-schema.ts';
+import { purgeTurnsCharacter, purgeTurnsConversation } from '../turns/web-turn-schema.ts';
+import { purgeFeedbackCharacter, purgeFeedbackConversation } from '../turns/web-feedback-schema.ts';
 import { clearProfileMeta } from './web-profile-schema.ts';
 import { purgePreviewWorkbench } from './web-character-preview-purge.ts';
 import { purgeWelcomeChoices } from './web-welcome-choice.ts';
@@ -27,6 +31,7 @@ import {
 import { WebProviderOffline } from '../generation/web-provider-offline.ts';
 import { settleWebLifetimeReservation, webReceiptDigest } from '../admission/web-retention.ts';
 import { checkAudioReference, speechObjectScope } from '../audio/web-provider-media.ts';
+import { markExternalAttemptsUnknown } from '../budget/web-external-tickets.ts';
 import type { MediaObjectReference } from '../cloudflare/media-objects.ts';
 
 type Actor = { memberId: string; sessionId: string };
@@ -314,12 +319,7 @@ export class WebCharacterDeletion {
           ledger.releaseUnsent(key, scope); // Never releases unknown shared reservations.
         else {
           ledger.markUnknown(key, scope);
-          this.store.run(
-            `UPDATE web_external_attempts SET dispatch_state='unknown' WHERE operation_id=? AND phase=? AND ordinal=? AND dispatch_state='sent'`,
-            a.operation_id,
-            a.phase,
-            a.ordinal,
-          );
+          markExternalAttemptsUnknown(this.store, { operationId: a.operation_id, phase: a.phase, ordinal: a.ordinal });
         }
       }
       if (this.store.providerAudio)
@@ -390,6 +390,17 @@ export class WebCharacterDeletion {
           a.phase,
           a.ordinal,
         );
+      // Part 42: the broadcast messages of this conversation (and the character's own voice clips and takes) go with its messages.
+      purgeBroadcastConversation(this.store, s.world_id, s.conversation_id);
+      purgeBroadcastCharacter(this.store, s.character_id);
+      // Part 45: the share links of this conversation and of the character.
+      purgeShareConversation(this.store, s.world_id, s.conversation_id);
+      purgeShareCharacter(this.store, s.character_id);
+      // Part 36: the bubbles' turn rows and the ratings of this conversation and of the character.
+      purgeTurnsConversation(this.store, s.world_id, s.conversation_id);
+      purgeTurnsCharacter(this.store, s.character_id);
+      purgeFeedbackConversation(this.store, s.world_id, s.conversation_id);
+      purgeFeedbackCharacter(this.store, s.character_id);
       this.store.run('DELETE FROM messages WHERE world_id=? AND conversation_id=?', s.world_id, s.conversation_id);
       this.store.run(
         'UPDATE contacts SET state_json=? WHERE world_id=? AND conversation_id=? AND character_id=?',

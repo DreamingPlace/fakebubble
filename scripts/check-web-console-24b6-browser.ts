@@ -361,6 +361,12 @@ try {
   for (const [width, height] of SIZES) {
     await page.setViewportSize({ width, height });
     await open('cocreation');
+    // Named exception (Part 55, owner-approved): the inbox opens on 新; this check measures all nine notes, so it reads 全部.
+    await page
+      .locator('.cc-chip-row[aria-label="状态"] .cc-filter-chip')
+      .filter({ hasText: /^全部$/ })
+      .click();
+    await page.waitForFunction(() => document.querySelectorAll('.cc-row').length >= 9, null, { timeout: 10_000 });
     const cards = await page.evaluate(() =>
       [...document.querySelectorAll('.cc-row')].map((el) => {
         const r = (el as HTMLElement).getBoundingClientRect();
@@ -511,6 +517,8 @@ try {
         '其余设定',
         '声音',
         '资料改动',
+        // Named exception (Part 37b): 说话档案 is one more section, before 发布.
+        '说话档案',
         '发布',
         // Named exception (Part 24f): 版本历史 is one more entry of the bar, after 发布.
         '版本历史',
@@ -539,7 +547,13 @@ try {
     check(
       form
         ? showing.fieldsets === 1 && showing.preview === 0 && (voice ? showing.flow <= 2 : showing.flow === 0)
-        : showing.fieldsets === 0 && showing.flow + showing.preview >= 1,
+        : showing.fieldsets === 0 &&
+            (showing.flow + showing.preview >= 1 ||
+              // Named exception (Part 37b): 说话档案 is its own block (.wb-speech), outside the flow and the preview.
+              (tabs[i]!.trim() === '说话档案' &&
+                (await page.evaluate(
+                  () => (document.querySelector('.wb-speech') as HTMLElement | null)?.offsetParent !== null,
+                )))),
       `角色工作台: tab ${tabs[i]} shows ${JSON.stringify(showing)}`,
     );
     const current = await page.locator('.wb-tab[aria-current="true"]').count();
@@ -592,7 +606,8 @@ try {
   );
 
   // 预演: the settings line across the whole width (Part 24b-6c: one column; the results table is the feed below the box)
-  await page.locator('.wb-tab').nth(9).click();
+  // Named exception (Part 37b): one place later (说话档案 is a section before 发布).
+  await page.locator('.wb-tab').nth(10).click();
   await wait(900);
   const preview = await page.evaluate(() => {
     const section = document.querySelector('.wb-preview-section') as HTMLElement;
@@ -609,7 +624,8 @@ try {
   await shot('workbench-preview');
 
   // 发布: 放弃服务器草稿 and 删除角色 sit in danger zones at the bottom; 删除角色 needs the typed name and a hold
-  await page.locator('.wb-tab').nth(8).click();
+  // Named exception (Part 37b): 发布 is one place later (说话档案 is a section before it).
+  await page.locator('.wb-tab').nth(9).click();
   await wait(500);
   check(
     (await page.locator('.wb-tab', { hasText: '删除角色' }).count()) === 0,
@@ -1165,8 +1181,10 @@ try {
   for (const [index, name] of [
     [1, '欢迎内容'],
     [6, '声音'],
-    [8, '发布'],
-    [9, '预演'],
+    // Named exception (Part 37b): one place later (说话档案 is a section before 发布).
+    [9, '发布'],
+    // Named exception (Part 37b): one place later (说话档案 is a section before 发布).
+    [10, '预演'],
   ] as const) {
     await page.locator('.wb-tab').nth(index).click();
     await wait(900);
@@ -1500,6 +1518,12 @@ try {
   for (const [width, height] of [SIZES[0], SIZES[1]] as const) {
     await page.setViewportSize({ width, height });
     await open('cocreation');
+    // Named exception (Part 55, owner-approved): the inbox opens on 新 and an adopted note leaves it, so the second size reads 全部 to find
+    // the note the first size adopted again.
+    await page
+      .locator('.cc-chip-row[aria-label="状态"] .cc-filter-chip')
+      .filter({ hasText: /^全部$/ })
+      .click();
     await page.locator('.cc-row.is-active').waitFor({ timeout: 10_000 });
     await wait(700);
     // (an adopted note cannot be adopted again: the second size starts by taking the mark off, as an administrator would)
@@ -1711,6 +1735,11 @@ try {
   for (const [width, height] of [SIZES[0], SIZES[1]] as const) {
     await page.setViewportSize({ width, height });
     await open('cocreation');
+    // Named exception (Part 55, owner-approved): 新 is the default and an adopted note leaves it; this check follows the adopted note.
+    await page
+      .locator('.cc-chip-row[aria-label="状态"] .cc-filter-chip')
+      .filter({ hasText: /^全部$/ })
+      .click();
     await page.locator('.cc-row.is-active').waitFor({ timeout: 10_000 });
     await wait(700);
     const openButton = page.locator('.cc-adopt-open').first();

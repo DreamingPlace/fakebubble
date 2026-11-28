@@ -1,3 +1,6 @@
+import { COCREATION_THEMES, COCREATION_SHOWN_MAX } from './cocreation-wordings.ts';
+import { DAY_PARTS, DAY_PART_LABELS, DAY_PART_MAX, DAY_PROMPT, dayCardId, type DayPart } from './cocreation-day.ts';
+
 /**
  * Co-creation ("共创") cards: players write ideas that make an official character more like themselves.
  * The card list is the single definition shared by the player sheet, the submit route and the admin inbox.
@@ -23,8 +26,17 @@ export type CocreationCard = {
   prompt: string;
   targetField: CocreationTargetField;
   kind: CocreationKind;
+  /** Part 39b: one of the five themes. A theme answer also carries the exact wording that was shown (`wording`). */
+  theme?: true;
+  /** Part 47: one part of the fixed 「一天」 card; answered like a text card, capped by its own part limit. */
+  day?: DayPart;
 };
 
+/**
+ * Part 39b: the sheet offers only the five themes (see cocreation-wordings.ts) and the relationship card. The cards below are the
+ * OLD list: no longer offered to players, but still accepted by the server (a sheet loaded before the change can still hand over) and
+ * still the label of an existing note in the inbox.
+ */
 export const COCREATION_CARDS: readonly CocreationCard[] = Object.freeze([
   { id: 'praise-stubborn', prompt: '{name}被夸的时候会怎么嘴硬？', targetField: 'personalityLayers', kind: 'text' },
   { id: 'catchphrase', prompt: '{name}最常挂在嘴边的一句话', targetField: 'speechStyle', kind: 'text' },
@@ -40,7 +52,22 @@ export const COCREATION_CARDS: readonly CocreationCard[] = Object.freeze([
   { id: 'dialogue', prompt: '来一段对话', targetField: 'dialogueExamples', kind: 'dialogue' },
 ] satisfies CocreationCard[]);
 
-const byId = new Map(COCREATION_CARDS.map((card) => [card.id, card]));
+const THEME_CARDS: readonly CocreationCard[] = COCREATION_THEMES.map((theme) => ({
+  id: theme.id,
+  prompt: theme.fallback,
+  targetField: theme.targetField,
+  kind: 'text' as const,
+  theme: true as const,
+}));
+/** Part 47: the six parts of the fixed 「一天」 card. Each is its own text answer (existing kind), routed to 「一天的安排」 by `day`. */
+const DAY_CARDS: readonly CocreationCard[] = DAY_PARTS.map((part) => ({
+  id: dayCardId(part),
+  prompt: `${DAY_PROMPT}（${DAY_PART_LABELS[part]}）`,
+  targetField: 'free' as const,
+  kind: 'text' as const,
+  day: part,
+}));
+const byId = new Map([...COCREATION_CARDS, ...THEME_CARDS, ...DAY_CARDS].map((card) => [card.id, card]));
 export const cocreationCard = (id: string) => byId.get(id);
 export const cocreationPrompt = (card: CocreationCard, name: string) => card.prompt.replaceAll('{name}', name);
 
@@ -74,7 +101,10 @@ export const COCREATION_FIELD_LABELS: Record<CocreationTargetField, string> = {
   free: '自由发挥',
 };
 
-export type CocreationAnswer = { cardId: string; text: string } | { cardId: string; player: string; replies: string[] };
+export type CocreationAnswer =
+  | { cardId: string; text: string }
+  | { cardId: string; text: string; wording: string }
+  | { cardId: string; player: string; replies: string[] };
 
 /** Same rule as chat input: non-blank after trim, counted in code points, no control characters (not even a newline). */
 export const cocreationTextOk = (value: unknown, max: number): value is string =>
@@ -100,10 +130,17 @@ export function validateCocreationAnswers(value: unknown): CocreationValidation 
     seen.add(card.id);
     const keys = Object.keys(entry).sort().join(',');
     if (card.kind === 'text') {
-      if (keys !== 'cardId,text') return bad('INVALID_REQUEST');
-      if (!cocreationTextOk(entry.text, card.id === 'free' ? COCREATION_LIMITS.free : COCREATION_LIMITS.text))
-        return bad('COCREATION_TEXT_INVALID');
-      answers.push({ cardId: card.id, text: entry.text });
+      if (keys !== (card.theme ? 'cardId,text,wording' : 'cardId,text')) return bad('INVALID_REQUEST');
+      const max = card.day
+        ? DAY_PART_MAX[card.day]
+        : card.id === 'free'
+          ? COCREATION_LIMITS.free
+          : COCREATION_LIMITS.text;
+      if (!cocreationTextOk(entry.text, max)) return bad('COCREATION_TEXT_INVALID');
+      if (card.theme) {
+        if (!cocreationTextOk(entry.wording, COCREATION_SHOWN_MAX)) return bad('COCREATION_WORDING_INVALID');
+        answers.push({ cardId: card.id, text: entry.text, wording: entry.wording });
+      } else answers.push({ cardId: card.id, text: entry.text });
     } else {
       if (keys !== 'cardId,player,replies') return bad('INVALID_REQUEST');
       const replies = entry.replies;

@@ -14,6 +14,7 @@ import { WebProviderOffline } from './web-provider-offline.ts';
 import { INDEX_IDLE_MS, type IndexBatch, type QueryClaim } from './web-embed-ledger.ts';
 import type { QueryVector } from './web-embed-runner.ts';
 import { logWebReply } from './web-reply-telemetry.ts';
+import { healLegacyUnknownTickets } from '../budget/web-external-tickets.ts';
 
 /** Separate schema113 scheduler. No synthetic output, default budget or footer is installed. */
 export class WebProviderExecutor {
@@ -44,6 +45,14 @@ export class WebProviderExecutor {
   /** Query embeddings waiting for their operation's claim; in memory only (see WebStageQueue). */
   private readonly queryVectors = new Map<string, QueryVector>();
   private readonly activity: { hold(task: Promise<void>): void; settled(): Promise<void> } | undefined;
+  /**
+   * Part 54: where each running stage gets its OWN request context. Cloudflare limits one invocation to 6 simultaneous outbound
+   * connections, and the alarm used to start up to 20 text + 4 voice stages inside ONE invocation. With a dispatcher, the alarm only
+   * ANSWERS "start this stage" with a short call that returns at once, and the stage runs in the invocation that call opened
+   * (see startLaunched). Without one (local transport, tests) a stage runs where it was scheduled, as before.
+   */
+  private readonly dispatch: ((launchId: string) => Promise<unknown>) | undefined;
+  private readonly launches = new Map<string, () => Promise<void>>();
   lastError: string | null = null;
 
   constructor(
@@ -51,7 +60,9 @@ export class WebProviderExecutor {
     clock: Clock,
     runner: WebProviderRunner,
     activity?: { hold(task: Promise<void>): void; settled(): Promise<void> },
+    dispatch?: (launchId: string) => Promise<unknown>,
   ) {
+    this.dispatch = dispatch;
     requireWebRuntime(store, 'provider');
     ensure(
       (store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= 113,
@@ -237,11 +248,12 @@ export class WebProviderExecutor {
     this.unreported.add(claim.operationId);
     const controller = new AbortController();
     this.controllers.add(controller);
-    const task = (
-      claim.stage === 'text'
+    const body = () =>
+      (claim.stage === 'text'
         ? this.runner.runText(claim, controller.signal)
         : this.runner.runSpeech(claim, controller.signal)
-    ).then(() => {});
+      ).then(() => {});
+    const task = this.dispatch ? this.launch(`${claim.operationId}:${claim.stageVersion}`, body) : body();
     const timeout = this.managed
       ? setTimeout(() => controller.abort(), Math.max(1, claim.leaseExpiresAt - this.clock.now()))
       : undefined;
@@ -249,6 +261,43 @@ export class WebProviderExecutor {
       if (timeout) clearTimeout(timeout);
       this.controllers.delete(controller);
     });
+  }
+
+  /**
+   * Hand a stage to its own request context. The stage's work is parked under `launchId`; the dispatcher's short call lands in
+   * startLaunched, which starts it there. If the call cannot be made the stage starts here instead (it is never lost).
+   */
+  private launch(launchId: string, body: () => Promise<void>): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      this.launches.set(launchId, () => body().then(resolve, reject));
+      // A stage is never lost: if the dispatch fails, answers "not started", or has not started it within 5 s, it runs here.
+      const here = () => {
+        const run = this.launches.get(launchId);
+        this.launches.delete(launchId);
+        run?.();
+      };
+      const timer = setTimeout(here, 5_000);
+      this.dispatch!(launchId).then(
+        (started) => {
+          if (started === false) {
+            clearTimeout(timer);
+            here();
+          } else if (started === true) clearTimeout(timer);
+        },
+        () => {
+          clearTimeout(timer);
+          here();
+        },
+      );
+    });
+  }
+
+  /** Called by the dispatched invocation: starts the parked stage and returns the promise that holds that invocation open. */
+  startLaunched(launchId: string): Promise<void> | null {
+    const run = this.launches.get(launchId);
+    if (!run) return null;
+    this.launches.delete(launchId);
+    return run();
   }
 
   private track(task: Promise<void>, cleanup: () => void) {
@@ -376,6 +425,19 @@ export class WebProviderExecutor {
     const lease = this.coordinator;
     // Everything in flight is known before this pass recovers, resumes or expires anything, so whatever it finishes is reported.
     this.reportFinished();
+    // Part 54: self-healing. A legacy UNKNOWN call still holds a running-slot ticket (its money stays held), and a legacy
+    // 'unknown' reply still holds its player's slot until its deadline: free the first and end the second now.
+    try {
+      healLegacyUnknownTickets(this.store);
+      for (const row of this.store.all<{ id: string }>(
+        "SELECT id FROM web_operations WHERE status='unknown' LIMIT 16",
+      )) {
+        const fence = this.ledger.fence(row.id);
+        this.ledger.terminate(lease, fence, fence.principalId, 'failed', 'unconfirmed');
+      }
+    } catch (error) {
+      this.error(error);
+    }
     for (const row of this.store.all<{ id: string; status: string }>(
       `SELECT id,status FROM web_operations
       WHERE status IN ('text_running','audio_running','ready_to_publish')

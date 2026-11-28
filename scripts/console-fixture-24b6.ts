@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -7,6 +7,9 @@ import { localRuntime, initProviderInstance } from '../apps/server/platform/web-
 import { WebProviderOffline } from '../apps/server/generation/web-provider-offline.ts';
 import { DomainError } from '../packages/domain/errors.ts';
 import { WebClipDirection } from '../apps/server/characters/web-clip-direction.ts';
+import { WebCocreationTidy } from '../apps/server/cocreation/web-cocreation-tidy.ts';
+import { WebCocreationWordingGen } from '../apps/server/cocreation/web-cocreation-wordings-gen.ts';
+import { COCREATION_THEMES } from '../packages/contracts/cocreation-wordings.ts';
 import { WebAdminSpeech } from '../apps/server/characters/web-admin-speech.ts';
 import { WebCharacterPreviewRunner } from '../apps/server/characters/web-character-preview-runner.ts';
 import { WebProviderRunner } from '../apps/server/generation/web-provider-runner.ts';
@@ -25,7 +28,10 @@ import { characterProfileHash } from '../apps/server/characters/web-character-ca
 import { acceptedAuditEnvelope, auditReply, draftEnvelope, draftWire, toolEnvelope } from '../tests/text-fixtures.ts';
 import { renewProviderPrices } from '../apps/server/generation/web-provider-configuration.ts';
 import type { WebRuntimeStore } from '../apps/server/platform/web-store-contract.ts';
-import { REHEARSAL_HINT_PROMPT_SHA256 } from '../apps/server/characters/web-rehearsal-prompts.ts';
+import {
+  REHEARSAL_HINT_PROMPT_SHA256,
+  REHEARSAL_STYLE_PROMPT_SHA256,
+} from '../apps/server/characters/web-rehearsal-prompts.ts';
 
 /**
  * Part 24b-6: the synthetic site the V3 console is looked at on (the browser audit and the screenshots). A real migrated
@@ -33,6 +39,34 @@ import { REHEARSAL_HINT_PROMPT_SHA256 } from '../apps/server/characters/web-rehe
  * cast saved as the draft, nine co-creation notes, four invite batches, and a busy history of player counters and consumption.
  * Everything is SYNTHETIC ("[示例]" style); nothing reaches a provider.
  */
+/**
+ * The server's clock on this site is the fixture's: frozen at NOW (2026-11-20T10:00Z), or NOW plus the time since the fixture started
+ * when an offline provider runs. The browser's own clock is real time, which has moved past NOW, so anything a page compares with a
+ * server time (a broadcast that must be scheduled "a minute from now", a note's age, a countdown) would disagree by the days between.
+ * Fixed ONCE, here: every context a script gets from a browser this module launched starts its clock at NOW and lets it run from there
+ * (Playwright's `clock.install({time})` then `resume()`), so no script depends on today's date.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
+async function startAtFixtureNow(context: any) {
+  await context.clock.install({ time: NOW });
+  await context.clock.resume();
+}
+// biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
+function withFixtureClock(browser: any) {
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (...args: unknown[]) => {
+    const context = await newContext(...args);
+    await startAtFixtureNow(context);
+    return context;
+  };
+  const newPage = browser.newPage.bind(browser);
+  browser.newPage = async (...args: unknown[]) => {
+    const page = await newPage(...args);
+    await startAtFixtureNow(page.context());
+    return page;
+  };
+  return browser;
+}
 // biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
 export function loadPlaywright(): any {
   const candidates = [
@@ -43,7 +77,10 @@ export function loadPlaywright(): any {
   ].filter(Boolean) as string[];
   for (const candidate of candidates) {
     try {
-      return createRequire(import.meta.url)(candidate);
+      const playwright = createRequire(import.meta.url)(candidate);
+      const launch = playwright.chromium.launch.bind(playwright.chromium);
+      playwright.chromium.launch = async (...args: unknown[]) => withFixtureClock(await launch(...args));
+      return playwright;
     } catch {
       /* try the next one */
     }
@@ -128,7 +165,10 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
   /** The scripted answer of one column to one turn of a 多轮预演: three different manners, so the columns can be told apart. */
   const rehearsalDraft = (request: { scope: { worldId: string }; messages: Array<{ authorKind: string }> }) => {
     // Part 37a: a 新 column's world ends in -v8; it speaks like its model.
-    const model = request.scope.worldId.replace(/-v8$/, '').split('-').at(-1);
+    const model = request.scope.worldId
+      .replace(/-v8[pm]?$/, '')
+      .split('-')
+      .at(-1);
     const turn = request.messages.filter((m) => m.authorKind === 'player').length;
     const say: Record<string, string[][]> = {
       deepseek: [
@@ -168,9 +208,25 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
       const compare = store.get<{ request_json: string }>(
         "SELECT request_json FROM web_review_compare_cases WHERE status='generating'",
       );
-      const rehearsal = store.get<{ request_json: string }>(
-        "SELECT request_json FROM web_rehearsal_units WHERE status='generating' AND request_json IS NOT NULL",
+      // Part 40: columns run side by side, so several units generate at once; the call says which one it is for (DeepSeek: the scope
+      // hash it carries; the other two: their own endpoint).
+      const units = store.all<{ request_json: string; model_key: string }>(
+        "SELECT request_json,model_key FROM web_rehearsal_units WHERE status='generating' AND request_json IS NOT NULL",
       );
+      const url0 = String(_url);
+      const named = url0.includes('x.ai') ? 'xai' : url0.includes('googleapis') ? 'gemini' : null;
+      const scopeHash = (json: string) => {
+        const scope = JSON.parse(json).scope;
+        return createHash('sha256')
+          .update(JSON.stringify([scope.worldId, scope.conversationId, scope.characterId]))
+          .digest('hex');
+      };
+      const rehearsal =
+        (typeof body.user_id === 'string'
+          ? units.find((u) => scopeHash(u.request_json) === body.user_id)
+          : undefined) ??
+        (named ? units.find((u) => u.model_key.startsWith(named)) : undefined) ??
+        units[0];
       const generating =
         compare ??
         rehearsal ??
@@ -243,6 +299,13 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
     async completeJson(input) {
       await sleep(150);
       const hint = input.systemSha256 === REHEARSAL_HINT_PROMPT_SHA256;
+      // Part 37a-3: the style judge flags each reply in a fixed pattern (the first column shares its own life more often).
+      if (input.systemSha256 === REHEARSAL_STYLE_PROMPT_SHA256) {
+        const n = (JSON.parse(input.user) as { turns: unknown[] }).turns.length;
+        const mod = (k: number) => Array.from({ length: n }, (_, i) => i % k !== 0);
+        const text = JSON.stringify({ own: mod(2), topic: mod(3), emotion: mod(2) });
+        return { text, inputTokens: 600, outputTokens: 60, model: input.model, receipt: { id: 'fake-judge' } };
+      }
       const text = hint
         ? JSON.stringify({ hints: ['那次淋了一身的事还记得吗', '上回在海边那档子事'], negative: '你生日哪天' })
         : JSON.stringify({ hints: [true, false], negative: false, ownSide: true });
@@ -288,6 +351,56 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
         { reserve() {}, settle() {} },
       ),
     );
+  // Part 39: 整理 in the co-creation inbox on the synthetic site: a stand-in text model that returns a tidied story and one flag.
+  previews.useTidy(
+    new WebCocreationTidy(
+      store,
+      clock,
+      {
+        model: 'deepseek-flash',
+        async completePlain(input) {
+          await sleep(300);
+          const { text } = JSON.parse(input.user) as { text: string };
+          return {
+            text: JSON.stringify({ story: `（整理）${text}`.slice(0, 400), flags: ['像是玩家自己的经历'] }),
+            inputTokens: 120,
+            outputTokens: 40,
+            model: 'deepseek-flash',
+            receipt: { id: 'fake-tidy' },
+          };
+        },
+      },
+      { reserve() {}, settle() {} },
+    ),
+  );
+  // Part 39b: 生成 of the wording pool on the synthetic site: a stand-in text model that drafts eight wordings per theme.
+  previews.useWordingGen(
+    new WebCocreationWordingGen(
+      store,
+      clock,
+      {
+        model: 'deepseek-flash',
+        async completePlain(input) {
+          await sleep(300);
+          const { name } = JSON.parse(input.user) as { name: string };
+          const wordings = Object.fromEntries(
+            COCREATION_THEMES.map((theme) => [
+              theme.id,
+              Array.from({ length: 8 }, (_, n) => `{name}的${theme.label}之${n + 1}（为${name}生成）`),
+            ]),
+          );
+          return {
+            text: JSON.stringify({ wordings }),
+            inputTokens: 300,
+            outputTokens: 500,
+            model: 'deepseek-flash',
+            receipt: { id: 'fake-wordings' },
+          };
+        },
+      },
+      { reserve() {}, settle() {} },
+    ),
+  );
   const app = new WebProviderServer(store, config, clock, runner, undefined, previews, {
     signupEnabled: options.signup === true,
     ...(options.signup === true

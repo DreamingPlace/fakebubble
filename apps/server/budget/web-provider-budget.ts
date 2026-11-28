@@ -260,13 +260,20 @@ export class WebProviderBudget implements WebAttemptBudget {
       return grant;
     });
   }
-  beginAttempt(store: Store, key: AttemptKey, resume = false) {
+  beginAttempt(store: Store, key: AttemptKey, resume = false, requeued = false) {
     const { row, id, fingerprint } = budgetAttempt(store, key);
     ensure(row.state === 'not_sent', 'WEB_SHARED_ATTEMPT_UNRESOLVED');
     if (resume) {
       const held = this.read(id, fingerprint);
       ensure(held?.state === 'sent' && held.held_micros === row.held_micros, 'WEB_SHARED_ATTEMPT_UNRESOLVED');
       return;
+    }
+    if (requeued) {
+      const held = this.read(id, fingerprint);
+      if (held) {
+        ensure(held.state === 'sent' && held.held_micros === row.held_micros, 'WEB_SHARED_ATTEMPT_UNRESOLVED');
+        return;
+      }
     }
     this.reserve(id, budgetBucket(row.provider), fingerprint, row.held_micros);
   }

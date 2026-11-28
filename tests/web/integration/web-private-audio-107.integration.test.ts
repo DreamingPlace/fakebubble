@@ -269,7 +269,7 @@ test('C-S3-005 explicit 106→107 migration preserves old candidate/segment/rece
   assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_private_audio_assets')?.n, 0);
   assert.equal(
     f.store.get<{ reserved: number }>("SELECT reserved FROM web_external_budgets WHERE stage='text'")?.reserved,
-    1,
+    0, // Part 54 NAMED EXCEPTION: an UNKNOWN call no longer keeps its running-slot ticket (its money stays held).
   );
   const service = new WebSyntheticPrivateAudio(f.store, f.clock);
   assert.throws(() => service.stage(scope, flow.coordinator, tone(250)), /WEB_PRIVATE_AUDIO_NOT_ELIGIBLE/);

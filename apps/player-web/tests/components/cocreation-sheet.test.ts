@@ -1,3 +1,9 @@
+// Part 39b (named exception, owner decision 2026-11-18): the deck is now the five themes (each showing ONE question from the character's
+// wording pool, else the plain default) and the relationship card. The tests of the removed behaviour (a shuffled batch of twelve old
+// cards, the free card, the dialogue card, 换一批, the old pair card) are replaced by the tests below; every other test keeps its
+// assertions, with the card ids and the "written / cards on offer" count (n / 5) updated.
+// Part 47 (named exception, owner decision 2026-11-21): the fixed card 「一天」 sits right after the five themes, so the deck lists six cards
+// (the card ids gain 'day') and the progress is "n / 6"; "everything answered today" now also needs a part of 一天 answered. Nothing else changed.
 // Part 25a (named exception): the sheet's header is "让{name}更像{name}" (the chat ⋯ menu entry keeps "共创 · …") and the progress is
 // "written / cards on offer" ("n / 6": a batch of five plus the free card) instead of "已写 n 张" / "写几张都行，不用写完".
 import test from 'node:test';
@@ -6,19 +12,17 @@ import { LiveBinding } from '../../src/features/prototype/provider-binding.ts';
 import { ProviderApi, ProviderApiError } from '../../src/services/provider-api.ts';
 import { mountChatMenu } from '../../src/features/cocreation/chat-menu.ts';
 import {
-  BATCH_SIZE,
   cocreationCopy,
   openCocreationSheet,
   resetCocreationDrafts,
   type CocreationApi,
 } from '../../src/features/cocreation/cocreation-sheet.ts';
 import {
-  COCREATION_CARDS,
   COCREATION_FIELD_LABELS,
   COCREATION_TARGET_FIELDS,
-  cocreationPrompt,
   type CocreationAnswer,
 } from '../../../../packages/contracts/cocreation-cards.ts';
+import { COCREATION_THEMES, COCREATION_THEME_IDS } from '../../../../packages/contracts/cocreation-wordings.ts';
 import { parseWebProviderBootstrap, syntheticProviderBootstrap } from '../../../../packages/contracts/web-provider.ts';
 import { FakeElement, flush, installFakeDom } from './fake-dom.ts';
 
@@ -82,44 +86,123 @@ function setup(t: test.TestContext, options: { api?: Partial<CocreationApi>; tha
   const progress = () => root().querySelector('.cc-progress')!.textContent;
   return { doc, sheet, root, card, ids: ids_, write, send, progress, calls, open, storage };
 }
-const firstTextCards = (ids: string[]) => ids.filter((id) => id !== 'dialogue' && id !== 'free');
+const firstTextCards = (ids: string[]) => ids.filter((id) => id.startsWith('theme-'));
+const PLAIN = [
+  '你眼中的瓜瓜是什么样的人？',
+  '瓜瓜经历过哪些事？',
+  '瓜瓜有哪些小习惯？',
+  '瓜瓜常挂在嘴边的话',
+  '瓜瓜最近在忙什么？',
+];
+const promptOf = (f: { card: (id: string) => FakeElement | null }, id: string) =>
+  f.card(id)!.querySelector('.cc-prompt')!.textContent;
 
-test('the card list is the whole spec: prompts name the character and no routing field is ever shown', (t) => {
+test('the deck is the five themes in order, each with its plain default question while the pool is empty; no routing field is ever shown', async (t) => {
   const f = setup(t);
-  const prompts = COCREATION_CARDS.map((card) => cocreationPrompt(card, NAME));
-  assert.ok(prompts.includes('瓜瓜被夸的时候会怎么嘴硬？'));
-  assert.ok(prompts.includes('你觉得瓜瓜现在哪里不像瓜瓜'));
-  assert.ok(prompts.includes('瓜瓜的一个小秘密（无伤大雅的那种）'));
-  assert.ok(prompts.includes('随便写点什么'));
-  assert.ok(prompts.every((prompt) => !prompt.includes('{name}')));
+  await flush();
+  assert.deepEqual(f.ids(), [...COCREATION_THEME_IDS, 'day']);
+  assert.deepEqual(
+    COCREATION_THEMES.map((theme) => theme.label),
+    ['认识这个人', '他的经历', '他的习惯', '他的口头禅', '他的近况'],
+  );
+  assert.deepEqual(
+    COCREATION_THEME_IDS.map((id) => promptOf(f, id)),
+    PLAIN,
+  );
   const attributes = JSON.stringify([...f.root().querySelectorAll('*')].map((e) => [...e.attributes]));
   for (const field of COCREATION_TARGET_FIELDS) {
     assert.ok(!f.root().textContent.includes(field), `${field} is hidden from players`);
-    // The free card’s own id is “free”; every other field name must not appear in any attribute either.
-    if (field !== 'free') assert.ok(!attributes.includes(field), `${field} is not in any attribute`);
+    assert.ok(!attributes.includes(`"${field}"`), `${field} is not in any attribute`);
   }
   for (const label of Object.values(COCREATION_FIELD_LABELS)) assert.ok(!f.root().textContent.includes(label), label);
+  for (const old of ['生气时', '怎么安慰人', '被夸时', '小秘密', '怪癖', '随便写点什么', '来一段对话'])
+    assert.ok(!f.root().textContent.includes(old), `the old card “${old}” is gone`);
 });
 
-test('the sheet opens with one shuffled batch of cards plus the free card, and a gentle progress hint', (t) => {
+test('the sheet opens with the five themes and a gentle progress hint; ↻ replaces 换一批', async (t) => {
   const f = setup(t);
+  await flush();
   assert.equal(f.root().getAttribute('role'), 'dialog');
   assert.equal(f.root().querySelector('.cc-title')!.textContent, '让瓜瓜更像瓜瓜');
-  const ids = f.ids();
-  assert.equal(ids.length, BATCH_SIZE + 1);
-  assert.equal(ids.at(-1), 'free', '“随便写点什么” is always the last card');
-  assert.equal(new Set(ids).size, ids.length);
-  assert.notDeepEqual(
-    firstTextCards(ids),
-    COCREATION_CARDS.filter((c) => firstTextCards(ids).includes(c.id)).map((c) => c.id),
-    'shuffled, not in list order',
-  );
+  assert.equal(f.ids().length, 6);
   assert.equal(f.progress(), '0 / 6');
   assert.equal(f.send().disabled, true, 'nothing written yet');
   assert.equal(f.send().textContent, '交给瓜瓜');
-  assert.equal(f.root().querySelector('.cc-shuffle')!.textContent, '换一批');
+  assert.equal(f.root().querySelector('.cc-shuffle')!.getAttribute('aria-label'), '换一换');
   assert.ok(f.doc.documentElement.classList.contains('cc-open'));
   assert.equal(f.doc.body.children.length, 1);
+});
+
+test('each theme shows ONE question picked at random from the character’s ENABLED wordings; ↻ picks again; a written card keeps its question', async (t) => {
+  const pool = {
+    'theme-know': ['{name}给你的第一印象？', '{name}是个怎样的人？', '说说{name}的性格'],
+    'theme-experience': [],
+    'theme-habit': ['{name}睡前会做什么？'],
+    'theme-catchphrase': [],
+    'theme-recent': [],
+  };
+  const asked: string[] = [];
+  const f = setup(t, {
+    api: {
+      cocreationWordings: async (characterId: string) => {
+        asked.push(characterId);
+        return { themes: pool };
+      },
+    },
+  });
+  // Until the pool has answered no question flashes: the cards show nothing, then the real question.
+  assert.equal(promptOf(f, 'theme-know'), '');
+  await flush();
+  assert.deepEqual(asked, ['wei-guagua']);
+  assert.ok(['瓜瓜给你的第一印象？', '瓜瓜是个怎样的人？', '说说瓜瓜的性格'].includes(promptOf(f, 'theme-know')));
+  assert.equal(promptOf(f, 'theme-habit'), '瓜瓜睡前会做什么？', 'a pool of one shows that one');
+  assert.equal(promptOf(f, 'theme-experience'), PLAIN[1], 'an empty pool falls back to the plain default');
+  assert.equal(promptOf(f, 'theme-catchphrase'), PLAIN[3]);
+  assert.equal(promptOf(f, 'theme-recent'), PLAIN[4]);
+  // ↻ visits every wording of a pool in time, and never anything outside it.
+  const seen = new Set<string>();
+  for (let i = 0; i < 40; i++) {
+    f.root().querySelector('.cc-shuffle')!.click();
+    seen.add(promptOf(f, 'theme-know'));
+  }
+  assert.deepEqual([...seen].sort(), ['瓜瓜是个怎样的人？', '瓜瓜给你的第一印象？', '说说瓜瓜的性格'].sort());
+  // A written card keeps the question it answers; the others change.
+  const kept = promptOf(f, 'theme-know');
+  f.write('theme-know', '写了');
+  for (let i = 0; i < 10; i++) {
+    f.root().querySelector('.cc-shuffle')!.click();
+    assert.equal(promptOf(f, 'theme-know'), kept);
+  }
+});
+
+test('a failing wording lookup changes nothing: the plain defaults are shown', async (t) => {
+  const f = setup(t, {
+    api: {
+      cocreationWordings: async () => {
+        throw new ProviderApiError(0, 'NETWORK');
+      },
+    },
+  });
+  await flush();
+  assert.deepEqual(
+    COCREATION_THEME_IDS.map((id) => promptOf(f, id)),
+    PLAIN,
+  );
+});
+
+test('a theme answer carries its theme and the exact question that was shown', async (t) => {
+  const f = setup(t, {
+    api: { cocreationWordings: async () => ({ themes: { 'theme-know': ['{name}给你的第一印象？'] } as never }) },
+  });
+  await flush();
+  f.write('theme-know', '很会逗人');
+  f.write('theme-recent', '在练鼓');
+  f.send().click();
+  await flush();
+  assert.deepEqual(f.calls[0]!.answers, [
+    { cardId: 'theme-know', text: '很会逗人', wording: '瓜瓜给你的第一印象？' },
+    { cardId: 'theme-recent', text: '在练鼓', wording: '瓜瓜最近在忙什么？' },
+  ]);
 });
 
 test('tapping a card opens an inline editor with a character counter; writing marks it 已写 and counts it', (t) => {
@@ -144,10 +227,6 @@ test('tapping a card opens an inline editor with a character counter; writing ma
   card.querySelector('.cc-done')!.click();
   assert.equal(editor.hidden, true, 'closing the editor keeps the text');
   assert.ok(card.classList.contains('is-written'));
-  // Only the free card takes a thousand.
-  f.card('free')!.querySelector('.cc-face')!.click();
-  assert.equal(f.card('free')!.querySelector('textarea')!.getAttribute('maxlength'), '1000');
-  assert.equal(f.card('free')!.querySelector('.cc-count')!.textContent, '0/1000');
 });
 
 test('line breaks and control characters become spaces, as chat input would refuse them; whitespace alone is not 已写', (t) => {
@@ -180,17 +259,18 @@ test('skipping is always fine, and clearing a written card takes it back out', (
 
 test('one button hands over everything written so far; partial is fine and unwritten cards are simply absent', async (t) => {
   const f = setup(t);
-  const [a, b] = firstTextCards(f.ids()) as [string, string];
+  await flush();
+  const [a, b, c] = firstTextCards(f.ids()) as [string, string, string];
   f.write(a, '  头一张  ');
-  f.write('free', '随便说说');
+  f.write(c, '随便说说');
   f.send().click();
   assert.equal(f.send().textContent, '正在交出去…');
   assert.equal(f.send().disabled, true, 'no double submit');
   await flush();
   assert.equal(f.calls.length, 1);
   assert.deepEqual(f.calls[0]!.answers, [
-    { cardId: a, text: '头一张' },
-    { cardId: 'free', text: '随便说说' },
+    { cardId: a, text: '头一张', wording: PLAIN[0] },
+    { cardId: c, text: '随便说说', wording: PLAIN[2] },
   ]);
   assert.ok(!f.calls[0]!.answers.some((answer) => answer.cardId === b));
   assert.equal(f.calls[0]!.characterId, 'wei-guagua');
@@ -218,7 +298,7 @@ test('drafts survive closing the sheet while the page is open, live in memory on
   const f = setup(t);
   const id = firstTextCards(f.ids())[0]!;
   f.write(id, '先放在这里');
-  f.write('free', '还有一点');
+  f.write('theme-recent', '还有一点');
   f.root().querySelector('.cc-close')!.click();
   assert.equal(f.doc.body.children.length, 0);
   assert.equal(f.calls.length, 0, 'closing submits nothing');
@@ -226,12 +306,7 @@ test('drafts survive closing the sheet while the page is open, live in memory on
   const root = again.element as unknown as FakeElement;
   assert.equal(root.querySelector('.cc-progress')!.textContent, '2 / 6');
   assert.equal(root.querySelector(`[data-card="${id}"] textarea`)!.value, '先放在这里');
-  assert.equal(root.querySelector('[data-card="free"] textarea')!.value, '还有一点');
-  assert.deepEqual(
-    [...root.querySelectorAll('.cc-card')].map((c) => c.getAttribute('data-card')).slice(0, 2),
-    [id, 'free'],
-    'written cards come first, in the order written',
-  );
+  assert.equal(root.querySelector('[data-card="theme-recent"] textarea')!.value, '还有一点');
   assert.deepEqual(f.storage, [], 'nothing touched localStorage');
 });
 
@@ -240,92 +315,6 @@ test('Escape closes the sheet', (t) => {
   f.doc.fire('keydown', { key: 'Escape' });
   assert.equal(f.doc.body.children.length, 0);
   assert.equal(f.sheet.isOpen(), false);
-});
-
-test('换一批 draws a fresh set of cards, keeps what is written, and cycles through the whole list', (t) => {
-  const f = setup(t);
-  const first = f.ids();
-  const kept = firstTextCards(first)[0]!;
-  f.write(kept, '留下来');
-  const before = f.ids();
-  f.root().querySelector('.cc-shuffle')!.click();
-  const second = f.ids();
-  assert.equal(second[0], kept, 'a written card stays at the front');
-  assert.equal(f.card(kept)!.querySelector('textarea')!.value, '留下来');
-  assert.equal(second.at(-1), 'free');
-  const fresh = (list: string[]) => list.filter((id) => id !== kept && id !== 'free');
-  assert.ok(
-    fresh(second).every((id) => !fresh(before).includes(id)),
-    'a new batch shows cards that were not in the last one',
-  );
-  assert.equal(fresh(second).length, BATCH_SIZE);
-  f.root().querySelector('.cc-shuffle')!.click();
-  const third = f.ids();
-  const seen = new Set([...first, ...second, ...third]);
-  for (const card of COCREATION_CARDS) assert.ok(seen.has(card.id), `${card.id} shows up within a few batches`);
-  assert.equal(f.progress(), '1 / 7', 'one written card plus a fresh batch of five and the free card');
-});
-
-test('“对话卡” is two real chat bubbles; both sides are needed, up to two reply bubbles', async (t) => {
-  const f = setup(t);
-  while (!f.ids().includes('dialogue')) f.root().querySelector('.cc-shuffle')!.click();
-  const card = f.card('dialogue')!;
-  assert.ok(card.classList.contains('is-dialogue'));
-  card.querySelector('.cc-face')!.click();
-  assert.equal(card.querySelectorAll('.message-row.outgoing').length, 1, 'the player’s own bubble sits on the right');
-  assert.equal(card.querySelectorAll('.message-row.incoming').length, 2, 'the character’s bubbles sit on the left');
-  assert.equal(card.querySelector('.message-row.incoming .avatar')!.textContent, '瓜');
-  const [you, reply, second] = card.querySelectorAll('textarea') as [FakeElement, FakeElement, FakeElement];
-  assert.equal(you.getAttribute('aria-label'), '你说：');
-  assert.equal(reply.getAttribute('aria-label'), '瓜瓜会回：1');
-  assert.equal(you.getAttribute('maxlength'), '120');
-  assert.equal(reply.getAttribute('maxlength'), '120');
-  const secondRow = card.querySelectorAll('.message-row.incoming')[1]!;
-  assert.equal(secondRow.hidden, true, 'one reply bubble to start with');
-
-  you.type_('你今天好厉害');
-  assert.equal(f.progress(), '0 / 6', 'one side is not a card yet');
-  assert.equal(card.querySelector('.cc-hint')!.hidden, false);
-  assert.equal(f.send().disabled, true);
-  reply.type_('才没有');
-  assert.equal(f.progress(), '1 / 6');
-  assert.equal(card.querySelector('.cc-hint')!.hidden, true);
-
-  const add = card.querySelectorAll('.cc-link').find((b) => b.textContent === cocreationCopy.addReply)!;
-  add.click();
-  assert.equal(secondRow.hidden, false);
-  assert.equal(add.hidden, true, 'no third reply bubble');
-  second.type_('哼');
-  f.send().click();
-  await flush();
-  assert.deepEqual(f.calls[0]!.answers, [{ cardId: 'dialogue', player: '你今天好厉害', replies: ['才没有', '哼'] }]);
-
-  const again = f.open();
-  assert.equal(again.isOpen(), true);
-});
-
-test('a dialogue reply bubble can be dropped again; an empty second reply is never sent', async (t) => {
-  const f = setup(t);
-  while (!f.ids().includes('dialogue')) f.root().querySelector('.cc-shuffle')!.click();
-  const card = f.card('dialogue')!;
-  card.querySelector('.cc-face')!.click();
-  const [you, reply, second] = card.querySelectorAll('textarea') as [FakeElement, FakeElement, FakeElement];
-  you.type_('在吗');
-  reply.type_('在');
-  card
-    .querySelectorAll('.cc-link')
-    .find((b) => b.textContent === cocreationCopy.addReply)!
-    .click();
-  second.type_('又怎么了');
-  card
-    .querySelectorAll('.cc-link')
-    .find((b) => b.textContent === cocreationCopy.dropReply)!
-    .click();
-  assert.equal(second.value, '');
-  assert.equal(card.querySelectorAll('.message-row.incoming')[1]!.hidden, true);
-  f.send().click();
-  await flush();
-  assert.deepEqual(f.calls[0]!.answers, [{ cardId: 'dialogue', player: '在吗', replies: ['在'] }]);
 });
 
 test('a failed send keeps the draft, explains itself, and a retry of the same content reuses the request id', async (t) => {
@@ -502,19 +491,19 @@ test('the sheet disables the cards already answered today and keeps the rest ope
       submitCocreation: async () => ({ submissionId: 's', answered: 1, duplicate: false }),
       cocreationToday: async (characterId: string) => {
         asked.push(characterId);
-        return { cardIds: ['catchphrase', 'free'] };
+        return { cardIds: ['theme-catchphrase', 'theme-recent'] };
       },
     },
   });
   await flush();
   assert.equal(asked.length, 1);
-  const spent = ['catchphrase', 'free'].map((id) => f.card(id)!);
+  const spent = ['theme-catchphrase', 'theme-recent'].map((id) => f.card(id)!);
   for (const card of spent) {
     assert.equal(card.querySelector('.cc-face')!.disabled, true);
     assert.equal(card.querySelector('.cc-cta')!.textContent, '今天已回答，明天再来');
     assert.ok(card.classList.contains('is-used'));
   }
-  const open = firstTextCards(f.ids()).filter((id) => id !== 'catchphrase');
+  const open = firstTextCards(f.ids()).filter((id) => id !== 'theme-catchphrase' && id !== 'theme-recent');
   assert.ok(open.length >= 1, 'other cards are still on the deck');
   assert.equal(f.card(open[0]!)!.querySelector('.cc-face')!.disabled, false);
   assert.equal(f.card(open[0]!)!.querySelector('.cc-cta')!.textContent, '写下来');
@@ -527,7 +516,7 @@ test('when every card was answered today the sheet says so and cannot send', asy
   const f = setup(t, {
     api: {
       submitCocreation: async () => ({ submissionId: 's', answered: 1, duplicate: false }),
-      cocreationToday: async () => ({ cardIds: COCREATION_CARDS.map((card) => card.id) }),
+      cocreationToday: async () => ({ cardIds: [...COCREATION_THEME_IDS, 'day-morning'] }),
     },
   });
   await flush();
@@ -569,7 +558,7 @@ test('ProviderApi.submitCocreation posts the exact body to the provider route wi
     requests.push({ url: String(url), init: init! });
     return Response.json({ submissionId: 's1', answered: 1, duplicate: false }, { status: 201 });
   });
-  const answers: CocreationAnswer[] = [{ cardId: 'free', text: '嗯' }];
+  const answers: CocreationAnswer[] = [{ cardId: 'theme-know', text: '嗯', wording: '你眼中的瓜瓜是什么样的人？' }];
   assert.deepEqual(await api.submitCocreation({ characterId: 'jojo', requestId: 'r1', answers }), {
     submissionId: 's1',
     answered: 1,
@@ -587,4 +576,135 @@ test('ProviderApi.submitCocreation posts the exact body to the provider route wi
     limited.submitCocreation({ characterId: 'jojo', requestId: 'r', answers }),
     (error: ProviderApiError) => error.code === 'COCREATION_DAILY_LIMIT' && error.status === 429,
   );
+});
+
+test('ProviderApi.cocreationWordings posts the character and parses all five themes strictly', async () => {
+  const seen: { url: string; body: string }[] = [];
+  const themes = Object.fromEntries(
+    COCREATION_THEME_IDS.map((id) => [id, id === 'theme-know' ? ['{name}怎么样'] : []]),
+  );
+  const api = new ProviderApi(async (url, init) => {
+    seen.push({ url: String(url), body: String(init?.body) });
+    return Response.json({ themes });
+  });
+  assert.deepEqual(await api.cocreationWordings('jojo'), { themes });
+  assert.equal(seen[0]!.url, '/api/web/provider/cocreation/wordings');
+  assert.deepEqual(JSON.parse(seen[0]!.body), { characterId: 'jojo' });
+  const missing = new ProviderApi(async () => Response.json({ themes: { 'theme-know': [] } }));
+  await assert.rejects(missing.cocreationWordings('jojo'), /PROTOCOL_INVALID/);
+});
+
+// ---- Part 44: one ONLINE wording per theme, a new random pick each time the cards open ----
+const openWith = (t: test.TestContext, themes: Record<string, string[]>, random: () => number) => {
+  const doc = installFakeDom(t);
+  resetCocreationDrafts();
+  t.after(resetCocreationDrafts);
+  const api: CocreationApi = {
+    submitCocreation: async (input) => ({ submissionId: 's', answered: input.answers.length, duplicate: false }),
+    cocreationWordings: async () => ({ themes }),
+  };
+  const open = () =>
+    openCocreationSheet({
+      api,
+      characterId: 'wei-guagua',
+      name: NAME,
+      mount: doc.body as unknown as HTMLElement,
+      random,
+    });
+  return { open, doc };
+};
+const shown = (sheet: { element: unknown }, id: string) =>
+  (sheet.element as FakeElement).querySelector(`[data-card="${id}"] .cc-prompt`)?.textContent ?? null;
+
+test('Part 44: a theme shows exactly ONE of its online wordings, and a new pick is made each time the cards open', async (t) => {
+  const themes = {
+    'theme-know': ['{name}一', '{name}二', '{name}三', '{name}四'],
+    'theme-experience': [],
+    'theme-habit': ['{name}甲', '{name}乙'],
+    'theme-catchphrase': [],
+    'theme-recent': [],
+  };
+  const f = openWith(t, themes, seeded(11));
+  const seen = new Set<string>();
+  for (let i = 0; i < 40; i++) {
+    const sheet = f.open();
+    await flush();
+    const root = sheet.element as unknown as FakeElement;
+    // one card per theme (a theme with no online wording shows its plain default), each with exactly one question
+    const ids = root
+      .querySelectorAll('.cc-card')
+      .map((c) => c.getAttribute('data-card')!)
+      .filter((id) => id.startsWith('theme-'));
+    assert.deepEqual(ids, [...COCREATION_THEME_IDS]);
+    assert.equal(shown(sheet, 'theme-experience'), PLAIN[1], 'no online wording: the plain default');
+    assert.equal(root.querySelectorAll('[data-card="theme-know"] .cc-prompt').length, 1);
+    const know = shown(sheet, 'theme-know')!;
+    assert.ok(['瓜瓜一', '瓜瓜二', '瓜瓜三', '瓜瓜四'].includes(know), know);
+    assert.ok(['瓜瓜甲', '瓜瓜乙'].includes(shown(sheet, 'theme-habit')!));
+    seen.add(know);
+    sheet.close();
+  }
+  assert.ok(seen.size >= 3, `a new pick on each open visits the pool (${[...seen]})`);
+});
+
+test('Part 44: a note already written keeps its wording after the wording goes offline, and across opens', async (t) => {
+  let pool: Record<string, string[]> = {
+    'theme-know': ['{name}原来的问题'],
+    'theme-experience': [],
+    'theme-habit': ['{name}另一个'],
+    'theme-catchphrase': [],
+    'theme-recent': [],
+  };
+  const doc = installFakeDom(t);
+  resetCocreationDrafts();
+  t.after(resetCocreationDrafts);
+  const sent: CocreationAnswer[][] = [];
+  const api: CocreationApi = {
+    submitCocreation: async (input) => {
+      sent.push(structuredClone(input.answers));
+      return { submissionId: 's', answered: input.answers.length, duplicate: false };
+    },
+    cocreationWordings: async () => ({ themes: pool }),
+  };
+  const open = () =>
+    openCocreationSheet({
+      api,
+      characterId: 'wei-guagua',
+      name: NAME,
+      mount: doc.body as unknown as HTMLElement,
+      random: seeded(5),
+      thanksMs: 0,
+    });
+  let sheet = open();
+  await flush();
+  let root = sheet.element as unknown as FakeElement;
+  root.querySelector('[data-card="theme-know"] .cc-face')!.click();
+  root.querySelector('[data-card="theme-know"] textarea')!.type_('写好了');
+  sheet.close();
+  // the wording goes offline; the note stays tied to it, and still has its card
+  pool = { ...pool, 'theme-know': [] };
+  sheet = open();
+  await flush();
+  root = sheet.element as unknown as FakeElement;
+  assert.equal(shown(sheet, 'theme-know'), '瓜瓜原来的问题', 'the written card keeps the question it answered');
+  root.querySelector('.cc-send')!.click();
+  await flush();
+  assert.deepEqual(sent[0], [{ cardId: 'theme-know', text: '写好了', wording: '瓜瓜原来的问题' }]);
+});
+
+test('Part 44: a wording that went offline is not in the pool the sheet gets, so it is never shown; the theme falls back to its default', async (t) => {
+  const f = openWith(
+    t,
+    { 'theme-know': [], 'theme-experience': [], 'theme-habit': [], 'theme-catchphrase': [], 'theme-recent': [] },
+    seeded(3),
+  );
+  for (let i = 0; i < 5; i++) {
+    const sheet = f.open();
+    await flush();
+    assert.deepEqual(
+      COCREATION_THEME_IDS.map((id) => shown(sheet, id)),
+      PLAIN,
+    );
+    sheet.close();
+  }
 });

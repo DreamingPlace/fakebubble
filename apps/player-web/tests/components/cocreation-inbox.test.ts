@@ -79,6 +79,11 @@ type Options = {
   pages?: InboxItem[][];
   /** Part 24b-6, round 4: gives the inbox 取消采用 and 加入关系与故事 (a cast draft at revision 5). */
   cast?: boolean;
+  /** Part 55: keep the real default (新). */
+  opensOnNew?: boolean;
+  leaveMs?: number;
+  /** Part 55: the page's 采纳 (the server writes the draft). */
+  adoptAnswers?: (items: { id: string; ordinal: number; destination?: unknown }[]) => unknown;
 };
 function setup(t: test.TestContext, options: Options = {}) {
   const doc = installFakeDom(t);
@@ -117,14 +122,22 @@ function setup(t: test.TestContext, options: Options = {}) {
       if (options.adoptError) throw options.adoptError;
       return { ordinal, status: 'processed' as const };
     },
+    ...(options.adoptAnswers
+      ? {
+          adoptAnswers: async (entries: { id: string; ordinal: number; destination?: unknown }[]) => {
+            log('adoptAnswers', structuredClone(entries));
+            return options.adoptAnswers!(entries) as never;
+          },
+        }
+      : {}),
     ...(options.cast
       ? {
           unadopt: async (id: string, ordinal: number) => {
             log('unadopt', id, ordinal);
           },
-          addToCastStory: async (id: string, ordinal: number, revision: number) => {
-            log('addToCastStory', id, ordinal, revision);
-            return { ordinal, castRevision: revision };
+          addToCastStory: async (id: string, ordinal: number) => {
+            log('addToCastStory', id, ordinal);
+            return { ordinal, castRevision: 5 };
           },
         }
       : {}),
@@ -164,6 +177,7 @@ function setup(t: test.TestContext, options: Options = {}) {
     characters: characters as never,
     canManage: () => options.manage !== false,
     ...(options.cast ? { castRevision: async () => 5 } : {}),
+    ...(options.leaveMs !== undefined ? { leaveMs: options.leaveMs } : {}),
     run: async (work) => {
       try {
         await work();
@@ -176,6 +190,8 @@ function setup(t: test.TestContext, options: Options = {}) {
     onChanged: () => changed++,
     copy: async (text) => void copied.push(text),
   });
+  // Part 55: the list opens on 新 (what is processed leaves it); the older tests below read the whole inbox, so they start on 全部.
+  if (!options.opensOnNew) inbox.showStatus(null);
   inbox.activate();
   t.after(() => inbox.dispose());
   const q = (selector: string) => root.querySelector(selector);
@@ -813,7 +829,8 @@ test('24b-4 several rows ticked show a bulk bar with labelled actions; 标为已
       .q('.cc-bulk')!
       .querySelectorAll('button')
       .map((b) => b.textContent),
-    ['标为已处理（2）', '归档所选（2）', '取消选择'],
+    // Part 59 (named exception): the whole-note action is worded 整条标为已处理 (the per-item one is 标为已处理).
+    ['整条标为已处理（2）', '归档所选（2）', '取消选择'],
   );
   f.q('.cc-process-selected')!.click();
   await flush();
@@ -840,7 +857,8 @@ test('24b-4 every row starts with the character colour dot and the full name; no
       .q('.cc-detail-actions')!
       .querySelectorAll('button')
       .map((b) => b.textContent),
-    ['☆ 星标', '标为已处理', '归档'],
+    // Part 59 (named exception): 整条标为已处理 (the per-item buttons are on each answer).
+    ['☆ 星标', '整条标为已处理', '归档'],
   );
 });
 
@@ -892,4 +910,159 @@ test('a pair note that is added to 关系与故事 has that button disabled too,
   f.answer(0).querySelector('.cc-unadopt')!.click();
   await flush();
   assert.equal(story().disabled, false);
+});
+
+// ---- Part 55: 采纳 (one answer, every answer of a card, every ticked card), the cards that leave 新 -------------------------------
+const okAll = (entries: { id: string; ordinal: number }[]) => ({
+  results: entries.map((entry) => ({ id: entry.id, ordinal: entry.ordinal, ok: true })),
+  adopted: entries.length,
+});
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test('55 the list opens on 新; every answer has 采纳; it sends no revision and the card leaves 新 and the next one opens', async (t) => {
+  const f = setup(t, { opensOnNew: true, adoptAnswers: okAll });
+  await f.inbox.load();
+  assert.equal(f.filters[0]!.filter.status, 'new');
+  assert.deepEqual(rowIds(f), ['s1', 's2', 's3']);
+  // Each answer of the open card has one: the five themes, 一天, relations alike are answers of the same list.
+  assert.equal(f.all('.cc-adopt-now').length, 4);
+  f.answer(1).querySelector('.cc-adopt-now')!.click();
+  await flush();
+  await flush();
+  assert.deepEqual(callsOf(f, 'adoptAnswers')[0]!.args, [[{ id: 's1', ordinal: 1 }]]);
+  assert.deepEqual(rowIds(f), ['s2', 's3'], 'processed: gone from 新 at once');
+  assert.equal(f.inbox.snapshot().detail!.id, 's2', 'the next one moved up and opened');
+  assert.match(f.statuses.at(-1)!, /已采纳 1 条/);
+  // Not a single call sent a revision.
+  assert.doesNotMatch(JSON.stringify(f.calls), /expectedRevision/);
+});
+
+test('55 the card leaves with a short motion first (is-leaving), unless it is switched off', async (t) => {
+  const f = setup(t, { opensOnNew: true, adoptAnswers: okAll, leaveMs: 30 });
+  await f.inbox.load();
+  f.answer(1).querySelector('.cc-adopt-now')!.click();
+  await flush();
+  assert.ok(f.all('.cc-row')[0]!.classList.contains('is-leaving'), 'the card fades first');
+  assert.deepEqual(rowIds(f), ['s1', 's2', 's3']);
+  await sleep(80);
+  await flush();
+  assert.deepEqual(rowIds(f), ['s2', 's3']);
+  assert.equal(f.inbox.snapshot().detail!.id, 's2');
+});
+
+test('55 采纳全部 adopts every answer of the open card, each into its own destination (a picked field is sent)', async (t) => {
+  const f = setup(t, { opensOnNew: true, adoptAnswers: okAll });
+  await f.inbox.load();
+  const all = f.q('.cc-adopt-all')!;
+  assert.equal(all.textContent, '采纳全部（4）');
+  // A free note with a picked field sends that field; the others send nothing (the card's default).
+  f.answer(3).querySelector('.cc-adopt-open')!.click();
+  await flush();
+  const pick = f.q('.cc-target select')!;
+  pick.value = 'interests';
+  pick.dispatch('change');
+  await flush();
+  f.q('.cc-adopt-all')!.click();
+  await flush();
+  const sent = callsOf(f, 'adoptAnswers')[0]!.args[0] as {
+    id: string;
+    ordinal: number;
+    destination?: { field: string };
+  }[];
+  assert.deepEqual(
+    sent.map((entry) => entry.ordinal),
+    [0, 1, 2, 3],
+  );
+  assert.ok(sent.every((entry) => entry.id === 's1'));
+  assert.deepEqual(
+    sent.map((entry) => entry.destination ?? null),
+    [null, null, null, { field: 'interests' }],
+  );
+  assert.deepEqual(rowIds(f), ['s2', 's3']);
+});
+
+test('55 采纳所选: every ticked card in one action; a memo is named, a failed answer is named, nothing is silent', async (t) => {
+  const items = [
+    item('s1', { answerCount: 1 }),
+    item('s2', { answerCount: 2, firstLine: '第二条' }),
+    item('m1', { kind: 'memo', answerCount: 1, firstLine: '给制作组' }),
+  ];
+  const f = setup(t, {
+    opensOnNew: true,
+    items,
+    details: { s1: detail('s1'), s2: detail('s2'), m1: detail('m1', { kind: 'memo' } as never) },
+    adoptAnswers: (entries) => ({
+      results: entries.map((entry) =>
+        entry.id === 's2' && entry.ordinal === 1
+          ? { id: 's2', ordinal: 1, ok: false, code: 'PROFILE_CARD_TOO_LONG' }
+          : { id: entry.id, ordinal: entry.ordinal, ok: true },
+      ),
+      adopted: 2,
+    }),
+  });
+  await f.inbox.load();
+  f.q('.cc-select-all')!.click();
+  assert.equal(f.q('.cc-bulk-count')!.textContent, '已选 3 条');
+  assert.equal(f.q('.cc-adopt-selected')!.textContent, '采纳所选（3）');
+  f.q('.cc-adopt-selected')!.click();
+  await flush();
+  await flush();
+  assert.deepEqual(callsOf(f, 'adoptAnswers')[0]!.args, [
+    [
+      { id: 's1', ordinal: 0 },
+      { id: 's2', ordinal: 0 },
+      { id: 's2', ordinal: 1 },
+    ],
+  ]);
+  const report = f.q('.cc-adopt-report')!;
+  assert.equal(report.hidden, false);
+  const lines = report.querySelectorAll('li').map((li) => li.textContent);
+  assert.equal(lines.length, 2);
+  assert.match(lines[0]!, /第 2 条：这一栏最多 300 字/);
+  assert.match(lines[1]!, /留言条没有采纳/);
+  assert.doesNotMatch(report.textContent, /PROFILE_|ADOPT_/, 'never a raw code');
+  // The cards that were adopted left 新; the memo stays (nothing was adopted from it).
+  assert.deepEqual(rowIds(f), ['m1']);
+});
+
+test('55 a field both sides changed is named in the sentence', async (t) => {
+  const f = setup(t, {
+    opensOnNew: true,
+    adoptAnswers: (entries) => ({
+      results: entries.map((entry) => ({
+        ...entry,
+        ok: false,
+        code: 'DRAFT_FIELD_CONFLICT',
+        fields: ['说话风格 · 口头禅'],
+      })),
+      adopted: 0,
+    }),
+  });
+  await f.inbox.load();
+  f.answer(1).querySelector('.cc-adopt-now')!.click();
+  await flush();
+  assert.match(f.q('.cc-adopt-report')!.textContent, /「说话风格 · 口头禅」在草稿和正式版本里都改过/);
+  assert.deepEqual(rowIds(f), ['s1', 's2', 's3'], 'nothing was adopted, nothing leaves');
+});
+
+test('55 archiving and 标为已处理 take the card out of 新 too; they stay under their filters', async (t) => {
+  const f = setup(t, { opensOnNew: true, adoptAnswers: okAll });
+  await f.inbox.load();
+  f.q('.cc-set-archived')!.click();
+  await flush();
+  await flush();
+  assert.deepEqual(rowIds(f), ['s2', 's3']);
+  assert.equal(f.inbox.snapshot().detail!.id, 's2');
+  const status = f.all('.cc-filter-chip').find((chip) => chip.textContent === '已归档')!;
+  status.click();
+  await flush();
+  assert.equal(f.filters.at(-1)!.filter.status, 'archived');
+});
+
+test('55 without adoptAnswers (an older server) there is no 采纳 and nothing else changes', async (t) => {
+  const f = setup(t, { opensOnNew: true });
+  await f.inbox.load();
+  assert.equal(f.q('.cc-adopt-now'), null);
+  assert.equal(f.q('.cc-adopt-all'), null);
+  assert.equal(f.q('.cc-select-all'), null);
 });

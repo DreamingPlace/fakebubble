@@ -13,6 +13,13 @@ export interface WebConcurrency {
   readonly maxGlobalReservedOperations: number;
   /** A voice request that cannot get an audio slot within this wait is published as text. */
   readonly audioFallbackWaitMs: number;
+  /**
+   * Part 54: the limit of EACH provider call (a text call, a voice call). It is enforced by the generation Worker, below the
+   * stage lease (text 90 s, audio 120 s) and below the RPC limit, so generation always returns a structured result. The
+   * business object waits for the whole text call at most 2 x textCallTimeoutMs + 10 s, and for a voice call speechCallTimeoutMs + 10 s.
+   */
+  readonly textCallTimeoutMs: number;
+  readonly speechCallTimeoutMs: number;
 }
 
 export const WEB_CONCURRENCY_BOUNDS = Object.freeze({
@@ -20,15 +27,27 @@ export const WEB_CONCURRENCY_BOUNDS = Object.freeze({
   audio: { min: 1, max: 48 },
   waiting: { min: 1, max: 4096 },
   audioFallbackWaitMs: { min: 1_000, max: 60_000 },
+  // 2 x 35 s + 10 s = 80 s < the 90 s text lease; 100 s + 10 s = 110 s < the 120 s audio lease.
+  textCallTimeoutMs: { min: 1_000, max: 35_000 },
+  speechCallTimeoutMs: { min: 1_000, max: 100_000 },
 });
 
-function build(text: number, audio: number, waiting: number, fallbackMs: number): WebConcurrency {
+function build(
+  text: number,
+  audio: number,
+  waiting: number,
+  fallbackMs: number,
+  textCallMs = 35_000,
+  speechCallMs = 50_000,
+): WebConcurrency {
   return Object.freeze({
     maxTextRunning: text,
     maxAudioRunning: audio,
     maxWaitingOperations: waiting,
     maxGlobalReservedOperations: text + audio + waiting,
     audioFallbackWaitMs: fallbackMs,
+    textCallTimeoutMs: textCallMs,
+    speechCallTimeoutMs: speechCallMs,
   });
 }
 
@@ -41,7 +60,15 @@ export const WEB_CONCURRENCY_DEPLOYMENT_DEFAULT = build(20, 4, 104, 8_000);
 export const WEB_CONCURRENCY_LIBRARY_DEFAULT = build(4, 4, 120, 8_000);
 
 type Raw = Partial<
-  Record<'maxTextRunning' | 'maxAudioRunning' | 'maxWaitingOperations' | 'audioFallbackWaitMs', unknown>
+  Record<
+    | 'maxTextRunning'
+    | 'maxAudioRunning'
+    | 'maxWaitingOperations'
+    | 'audioFallbackWaitMs'
+    | 'textCallTimeoutMs'
+    | 'speechCallTimeoutMs',
+    unknown
+  >
 >;
 
 function integer(name: string, value: unknown, bounds: { min: number; max: number }, fallback: number): number {
@@ -66,16 +93,25 @@ export function parseWebConcurrency(raw: Raw | undefined): WebConcurrency {
       WEB_CONCURRENCY_BOUNDS.audioFallbackWaitMs,
       d.audioFallbackWaitMs,
     ),
+    integer('TEXT_CALL_TIMEOUT', raw.textCallTimeoutMs, WEB_CONCURRENCY_BOUNDS.textCallTimeoutMs, d.textCallTimeoutMs),
+    integer(
+      'SPEECH_CALL_TIMEOUT',
+      raw.speechCallTimeoutMs,
+      WEB_CONCURRENCY_BOUNDS.speechCallTimeoutMs,
+      d.speechCallTimeoutMs,
+    ),
   );
 }
 
-/** Worker vars are strings: MAX_TEXT_RUNNING, MAX_AUDIO_RUNNING, MAX_WAITING_OPERATIONS, AUDIO_FALLBACK_WAIT_MS. */
+/** Worker vars are strings: MAX_TEXT_RUNNING, MAX_AUDIO_RUNNING, MAX_WAITING_OPERATIONS, AUDIO_FALLBACK_WAIT_MS, TEXT_CALL_TIMEOUT_MS, SPEECH_CALL_TIMEOUT_MS. */
 export function webConcurrencyFromEnv(env: Record<string, unknown>): WebConcurrency {
   return parseWebConcurrency({
     maxTextRunning: env.MAX_TEXT_RUNNING,
     maxAudioRunning: env.MAX_AUDIO_RUNNING,
     maxWaitingOperations: env.MAX_WAITING_OPERATIONS,
     audioFallbackWaitMs: env.AUDIO_FALLBACK_WAIT_MS,
+    textCallTimeoutMs: env.TEXT_CALL_TIMEOUT_MS,
+    speechCallTimeoutMs: env.SPEECH_CALL_TIMEOUT_MS,
   });
 }
 

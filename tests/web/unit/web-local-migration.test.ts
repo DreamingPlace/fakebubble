@@ -245,7 +245,7 @@ for (const migrationMoment of ['before-dispatch', 'after-unknown', 'after-known'
     } else {
       now += 31_000;
       const nextCoordinator = queue.acquireCoordinator('second');
-      assert.equal(ledger.recover(nextCoordinator, ledger.fence(admitted.operationId)).status, 'unknown');
+      assert.equal(ledger.recover(nextCoordinator, ledger.fence(admitted.operationId)).status, 'failed'); // Part 54 NAMED EXCEPTION: an UNKNOWN reply now ends as failed at once (money held, never retried); it was 'unknown' until its deadline.
     }
     if (migrationMoment === 'after-unknown') store.migrateLocalTransport();
     if (migrationMoment === 'after-known') store.migrateLocalTransport();
@@ -253,7 +253,7 @@ for (const migrationMoment of ['before-dispatch', 'after-unknown', 'after-known'
     assert.equal(ledger.confirm(key, result).duplicate, true);
     assert.equal(
       store.get<{ status: string }>('SELECT status FROM web_operations WHERE id=?', admitted.operationId)!.status,
-      migrationMoment === 'after-known' ? 'failed' : 'unknown',
+      'failed', // Part 54 NAMED EXCEPTION: an UNKNOWN reply ends as failed at once (it was 'unknown').
     );
     assert.equal(store.get<{ n: number }>('SELECT count(*) n FROM web_local_text_outputs')!.n, 0);
   });

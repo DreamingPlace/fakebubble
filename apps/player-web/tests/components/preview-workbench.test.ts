@@ -66,6 +66,7 @@ function row(over: Partial<PreviewRow> & { ordinal: number; input: string }): Pr
       mode: 'casual',
       endsSession: false,
       reviewChanged: true,
+      plan: { read: '想被陪着', aim: '被接住：先暖一句', aims: ['被接住'] },
       coverage: [{ messageId: 'm1', status: 'answered' }],
       topics: [],
       factOps: [],

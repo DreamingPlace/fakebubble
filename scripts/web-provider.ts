@@ -44,6 +44,8 @@ import { WebAccountAdmin } from '../apps/server/admin/web-account-admin.ts';
 import { FishAudio } from '../workers/audio/fish.ts';
 import { randomUUID } from 'node:crypto';
 import { WebClipDirection } from '../apps/server/characters/web-clip-direction.ts';
+import { WebCocreationTidy } from '../apps/server/cocreation/web-cocreation-tidy.ts';
+import { WebCocreationWordingGen } from '../apps/server/cocreation/web-cocreation-wordings-gen.ts';
 import { WebAdminSpeech } from '../apps/server/characters/web-admin-speech.ts';
 import { DEFAULT_SITE_VOICE_MODEL } from '../packages/contracts/audio.ts';
 import { WebProviderBudget } from '../apps/server/budget/web-provider-budget.ts';
@@ -564,6 +566,10 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
         );
         // Part 30: 按反馈重录 asks the draft text model for direction markup, through the same shared budget.
         previews.useDirection(new WebClipDirection(store, clock, live.text, budget));
+        // Part 39: 整理 in the co-creation inbox, same text model and budget.
+        previews.useTidy(new WebCocreationTidy(store, clock, live.text, budget));
+        // Part 39b: 生成 of the co-creation wording pool, same text model and budget.
+        previews.useWordingGen(new WebCocreationWordingGen(store, clock, live.text, budget));
         return previews;
       })(),
     );

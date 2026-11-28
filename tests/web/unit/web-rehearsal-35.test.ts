@@ -237,9 +237,55 @@ test('built-in sets: 日常闲聊 and 重复检测 are 6 to 20 turns, there is n
   const sets = builtinSets();
   assert.deepEqual(
     sets.map((s) => s.label),
-    ['日常闲聊', '重复检测'],
+    // NAMED EXCEPTION (Part 37a-2): the owner asked for a built-in 「开场」 set, listed after the two that were here.
+    // NAMED EXCEPTION (Part 37b): the eight 说话档案 situation sets follow.
+    [
+      '日常闲聊',
+      '重复检测',
+      '开场',
+      '档案 · 日常',
+      '档案 · 调侃',
+      '档案 · 抱怨',
+      '档案 · 安慰',
+      '档案 · 吵架',
+      '档案 · 分享日常',
+      '档案 · 内部梗',
+      '档案 · 认真',
+      // NAMED EXCEPTION (Part 37c-1): the four 网络梗 sets (players using 2022+ internet memes) follow.
+      '网络梗 · 日常',
+      '网络梗 · 职场',
+      '网络梗 · 出游',
+      '网络梗 · 情绪',
+      // NAMED EXCEPTION (Part 51): the fixed 「v8 规则 51」 script follows.
+      'v8 规则 51',
+      // NAMED EXCEPTION (Part 51, rule 5): three 名字 scripts and four 黑称 case scripts follow.
+      'v8 规则 51 · 名字 别名',
+      'v8 规则 51 · 名字 饰演过的角色',
+      'v8 规则 51 · 名字 黑称',
+      'v8 规则 51 · 黑称 a 叫错',
+      'v8 规则 51 · 黑称 b 转述',
+      'v8 规则 51 · 黑称 c 嘲讽',
+      'v8 规则 51 · 黑称 d 一直叫',
+      // NAMED EXCEPTION (Part 51, rule 6): four 情绪 scripts follow.
+      'v8 规则 51 · 情绪 小事 晚点的公交',
+      'v8 规则 51 · 情绪 小事 凉了的咖啡',
+      'v8 规则 51 · 情绪 小事 忙了一天',
+      'v8 规则 51 · 情绪 大事 考试成绩',
+      // NAMED EXCEPTION (Part 56): the fixed 「v8 规则 56」 script is listed last.
+      'v8 规则 56',
+      // NAMED EXCEPTION (Part 58): the fixed 「v8 规则 58」 script follows.
+      'v8 规则 58',
+    ],
   );
-  for (const set of sets) assert.ok(set.turns.length >= 6 && set.turns.length <= 20, set.label);
+  // NAMED EXCEPTION (Part 37a-2): 开场 is 5 player follow-ups (the welcome line is the first, character, message); every other set still needs 6.
+  // NAMED EXCEPTION (Part 37b): a 说话档案 situation script is 4 turns.
+  for (const set of sets)
+    assert.ok(
+      set.turns.length >=
+        (set.set === 'opening' ? 5 : set.set.startsWith('profile-') || set.set.startsWith('rules-51-') ? 4 : 6) &&
+        set.turns.length <= 20,
+      set.label,
+    );
   const plan = memeTurnPlan(['a', 'b', 'c']);
   assert.equal(plan.length, 9);
   for (let i = 1; i < plan.length; i++) assert.notEqual(plan[i]!.item, plan[i - 1]!.item);
@@ -393,7 +439,43 @@ test('scripts: save, rename and delete are idempotent per request id; 6 to 20 tu
   );
   assert.deepEqual(
     library.sets.map((s) => s.label),
-    ['日常闲聊', '重复检测'],
+    // NAMED EXCEPTION (Part 37a-2): the library lists the built-in 开场 set too.
+    // NAMED EXCEPTION (Part 37b): and the eight 说话档案 situation sets.
+    [
+      '日常闲聊',
+      '重复检测',
+      '开场',
+      '档案 · 日常',
+      '档案 · 调侃',
+      '档案 · 抱怨',
+      '档案 · 安慰',
+      '档案 · 吵架',
+      '档案 · 分享日常',
+      '档案 · 内部梗',
+      '档案 · 认真',
+      // NAMED EXCEPTION (Part 37c-1): the four 网络梗 sets (players using 2022+ internet memes) follow.
+      '网络梗 · 日常',
+      '网络梗 · 职场',
+      '网络梗 · 出游',
+      '网络梗 · 情绪',
+      // NAMED EXCEPTION (Part 51): the fixed 「v8 规则 51」 script follows, then (rules 5 and 6) its 名字, 黑称 and 情绪 scripts.
+      'v8 规则 51',
+      'v8 规则 51 · 名字 别名',
+      'v8 规则 51 · 名字 饰演过的角色',
+      'v8 规则 51 · 名字 黑称',
+      'v8 规则 51 · 黑称 a 叫错',
+      'v8 规则 51 · 黑称 b 转述',
+      'v8 规则 51 · 黑称 c 嘲讽',
+      'v8 规则 51 · 黑称 d 一直叫',
+      'v8 规则 51 · 情绪 小事 晚点的公交',
+      'v8 规则 51 · 情绪 小事 凉了的咖啡',
+      'v8 规则 51 · 情绪 小事 忙了一天',
+      'v8 规则 51 · 情绪 大事 考试成绩',
+      // NAMED EXCEPTION (Part 56): the fixed 「v8 规则 56」 script is listed last.
+      'v8 规则 56',
+      // NAMED EXCEPTION (Part 58): the fixed 「v8 规则 58」 script follows.
+      'v8 规则 58',
+    ],
   );
   assert.deepEqual(
     library.models.map((m) => [m.id, m.available]),

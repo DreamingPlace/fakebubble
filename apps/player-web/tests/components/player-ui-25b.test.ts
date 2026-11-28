@@ -26,7 +26,7 @@ import { cardFace } from '../../src/features/prototype/card-face.ts';
 import { providerPeople } from '../../src/features/prototype/provider-catalog-view.ts';
 import { formatDuration, voicePill } from '../../src/features/prototype/voice-pill.ts';
 import { stackCardWidth, swipeStep } from '../../src/features/prototype/mobile-layout.ts';
-import { renderSharedCard, type SharedCardData } from '../../src/features/share/shared-card.ts';
+import { sharedCardData, sharedCopy, type PublicShareAnswer } from '../../src/features/share/shared-card.ts';
 import { syntheticProviderBootstrap } from '../../../../packages/contracts/web-provider.ts';
 import { FakeElement, installFakeDom } from './fake-dom.ts';
 
@@ -316,16 +316,14 @@ test('a character’s frame comes from its colour (published main colour, else t
     assert.ok(entry.ring.every((c) => /^#[0-9A-F]{6}$/.test(c)));
   }
   // The CSS: ring, then a thin gap of the page's colour, then the fill - for characters and for the player.
-  for (const selector of [
-    '.page-shell .message-avatar,\n.page-shell .chat-mark',
-    '.page-shell .message-row.outgoing::after',
-  ])
+  for (const selector of ['.page-shell .message-avatar', '.page-shell .message-row.outgoing::after'])
     assert.match(rule(selector), /box-shadow: inset 0 0 0 1\.5px var\(--bb-paper\)/, selector);
   assert.match(rule('.page-shell .message-row.outgoing::after'), /var\(--own-a, #ffb295\)/);
-  assert.match(rule('.page-shell .message-avatar,\n.page-shell .chat-mark'), /var\(--frame-a\)/);
+  assert.match(rule('.page-shell .message-avatar'), /var\(--frame-a\)/);
 });
 
-test('the chat header is centred - back, avatar over name, ⋯ - and a phone’s top bar leaves with a fade and a lift, not at once', () => {
+// Named exception (Part 38a, owner decision 2026-11-14): the header has no avatar any more; it is back | name | ⋯.
+test('the chat header is centred - back, name, ⋯ - and a phone’s top bar leaves with a fade and a lift, not at once', () => {
   assert.match(rule('.page-shell .card-slot .chat-head'), /grid-template-columns: 56px minmax\(0, 1fr\) 56px/);
   assert.match(rule('.chat-title'), /align-items: center/);
   assert.match(
@@ -525,7 +523,10 @@ test('night mode covers home, chat, sheets and 我的信息 and touches nothing 
     '.cc-sheet',
     '.invite-dialog',
     '.bl-tables',
-    '.shared-face',
+    // Part 45 (named exception): the shared page is the home card now (it has its night rules through `.card-face`); its own
+    // night surfaces are the sticker and the share sheet's small card.
+    '.share-sticker',
+    '.share-mini',
   ])
     assert.ok(
       dark.some((selector) => selector.includes(surface)),
@@ -539,8 +540,11 @@ test('night mode covers home, chat, sheets and 我的信息 and touches nothing 
   const main = readFileSync(new URL('../../src/app/main.ts', import.meta.url), 'utf8');
   const player = main.slice(main.indexOf("mode === 'provider') {"));
   assert.match(player, /startTheme\(playerPrefs\(\)\)/);
-  assert.equal(main.match(/startTheme\(/g)?.length, 1, 'started once');
-  assert.ok(main.indexOf('startTheme(') > main.indexOf("mode === 'provider') {"), 'in the player branch only');
+  // Part 45 (named exception): the shared voice card page (/s/<token>) is a player page too, so it starts the theme as well; the
+  // administrator console branch never does.
+  assert.equal(main.match(/startTheme\(/g)?.length, 2, 'started by the two player pages');
+  const admin = main.slice(main.indexOf("mode === 'provider-admin') {"), main.indexOf("mode === 'provider') {"));
+  assert.doesNotMatch(admin, /startTheme/, 'never by the console');
   // The cross-fade is switched off for people who asked for less motion.
   assert.match(css, /html\.theme-fade \*,[\s\S]*?transition:[\s\S]*?600ms/);
 });
@@ -567,43 +571,53 @@ test('night colours: a character without a built-in night palette gets one from 
 
 // ---- 5. the shared voice card ------------------------------------------------------------------------------------------------
 
-const shared: SharedCardData = {
-  name: '陈吉米',
-  latin: 'chen jimi',
-  no: '0412',
-  quote: '别熬了，游戏明天还在。',
+// Part 45 (named exception, replaces the Part 25b test of the old renderer): the shared page is now the home card (avatar, name, Latin name,
+// number, colours, play bar) and the card has no text line. It is drawn from HTML like the home card, which the fake DOM refuses by design, so
+// the page itself is checked in a real browser (scripts/check-web-share-45-browser.ts); here the data it is drawn from.
+const answer: PublicShareAnswer = {
+  characterId: 'chen-jimi',
+  displayName: '陈吉米',
+  portraitUrl: null,
+  mainColor: null,
+  palette: null,
+  birthDate: null,
+  noRank: 3,
   durationMs: 11_000,
-  time: 'UTC+8 22:41',
-  date: '2026.10.12',
-  aura: ['#DCD2FF', '#FFD8EE', '#BBA4FF', '#7C4DEB'],
-  night: ['#8B5CFF', '#FF4FB8', '#4B2BC9', '#B18CFF'],
+  voiceUrl: '/api/web/provider/shares/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/audio',
 };
 
-test('the shared card says 收到一张语音小卡 and 来聊几句嘛～, names only the character, and has no nickname or id of the sender', (t) => {
-  const doc = installFakeDom(t);
-  const root = doc.createElement('div') as unknown as HTMLElement;
-  // Even if a host handed over more than the type allows, nothing but the known fields is ever drawn.
-  const leaky = { ...shared, nickname: '小林', playerNumber: 'FT7S1112', senderId: 'player-123', email: 'l@x.com' };
-  const page = renderSharedCard(root, leaky as SharedCardData, { play: () => {} }) as unknown as FakeElement;
-  const text = page.textContent;
-  assert.match(text, /收到一张语音小卡/);
-  assert.match(text, /来聊几句嘛～/);
-  assert.match(text, /也和陈吉米聊聊/);
-  assert.match(text, /VOICE CARD/);
-  assert.match(text, /No\.0412/);
-  assert.match(text, /0:11/);
-  for (const secret of ['小林', 'FT7S1112', 'player-123', 'l@x.com', 'nickname'])
+test('the shared card is the character: name, number, colours and the voice length; nothing about who shared it, and no text line', () => {
+  const data = sharedCardData({
+    ...answer,
+    nickname: '小林',
+    playerNumber: 'FT7S1112',
+    senderId: 'player-123',
+  } as PublicShareAnswer);
+  assert.deepEqual(Object.keys(data).sort(), ['durationMs', 'person']);
+  assert.equal(data.person.name, '陈吉米');
+  assert.equal(data.person.card.latin, 'chen jimi');
+  assert.equal(data.person.card.no, '003', "the number is the character's place in the catalog");
+  assert.equal(data.durationMs, 11_000);
+  assert.equal(data.person.welcomeMs, 11_000, 'the play bar shows the length');
+  assert.deepEqual(
+    data.person.card.aura,
+    ['#DCD2FF', '#FFD8EE', '#BBA4FF', '#7C4DEB'],
+    "the character's own built-in colours",
+  );
+  const text = JSON.stringify(data);
+  for (const secret of ['小林', 'FT7S1112', 'player-123', 'nickname', 'senderId', 'quote', 'transcript'])
     assert.equal(text.includes(secret), false, `no ${secret}`);
-  assert.equal(page.querySelector('.shared-sticker')!.textContent, '收到一张语音小卡');
-  assert.equal(page.querySelector('.shared-hint')!.textContent, '来聊几句嘛～');
-  assert.equal(page.querySelector('.shared-cta')!.getAttribute('href'), '/');
-  assert.equal(page.querySelector('.shared-play')!.getAttribute('aria-label'), '播放陈吉米的语音');
-  // Colours arrive as custom properties of the page, day and night.
-  assert.equal(page.style.getPropertyValue('--aura-3'), '#BBA4FF');
-  assert.equal(page.style.getPropertyValue('--n-accent'), '#B18CFF');
-  // Without a way to play, the pill is shown but cannot be pressed.
-  const quiet = renderSharedCard(root, shared) as unknown as FakeElement;
-  assert.equal(quiet.querySelector('.shared-play')!.disabled, true);
+  assert.equal(data.person.transcript, undefined, 'no text line of the message is carried');
+  // A birthday sets the number (month + day), like the home card.
+  assert.equal(sharedCardData({ ...answer, birthDate: '2001-04-12' }).person.card.no, '0412');
+});
+
+test('the shared page has exactly the words the owner approved', () => {
+  assert.equal(sharedCopy.received, '收到一张语音小卡');
+  assert.equal(sharedCopy.chat('瓜瓜'), '也和瓜瓜聊聊');
+  assert.equal(sharedCopy.expired, '链接已过期');
+  assert.equal(sharedCopy.chatAny, '也来聊聊', 'the expired page names nobody');
+  assert.equal(sharedCopy.hint, '来聊几句嘛～');
 });
 
 // ---- 6. sheets: motion -------------------------------------------------------------------------------------------------------

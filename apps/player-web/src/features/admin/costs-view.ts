@@ -15,6 +15,8 @@ import { exactCount, exactMoney, hoverValue } from './ui/hover-value.ts';
 import { openTable, type OpenColumn } from './ui/open-table.ts';
 import { segmented } from './ui/segmented.ts';
 import { xyChart, type XyMarker, type XySeries } from './ui/xy-chart.ts';
+import type { MakeExport } from './export/export-dialog.ts';
+import { STATS_SHEETS } from './export/export-sheets.ts';
 import { fillStatus, pageHead, statusLine } from './ui/page-head.ts';
 
 /** Four decimals: a reply costs a fraction of a cent. */
@@ -92,8 +94,8 @@ export type CostsDeps = {
   load: (range: StatsRange) => Promise<CostsView>;
   /** 22d spend by user type with the alert line and the price changes. Absent = no chart. */
   spend?: ((range: StatsRange) => Promise<SpendView>) | undefined;
-  exportCsv: (range: StatsRange) => Promise<{ csv: string; rows: number }>;
-  download: (filename: string, text: string) => void;
+  /** Part 57: the page's 导出 button (without it there is none). */
+  makeExport?: MakeExport | undefined;
   run: (work: () => Promise<void>) => Promise<void>;
   disposed: () => boolean;
 };
@@ -305,8 +307,17 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
     },
     'm',
   );
-  const exportButton = h('button', { text: '导出表格', attrs: { type: 'button' } });
-  exportButton.addEventListener('click', () => void deps.run(() => exportTable()));
+  const exportButton = deps.makeExport?.(() => [
+    {
+      id: 'stats',
+      label: '消耗',
+      kind: 'stats',
+      range: 'days',
+      sheets: STATS_SHEETS,
+      sheet: 5,
+      tip: '每天的消耗、按模型的明细和按玩家类型的拆分',
+    },
+  ]);
   const splitSwitch = segmented(
     '拆分方式',
     [
@@ -513,10 +524,6 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
     totals.setRows(aggregate(view.rows));
     spend = spent;
     paintChart(true);
-  }
-  async function exportTable() {
-    const { csv } = await deps.exportCsv(range);
-    if (!deps.disposed()) deps.download(`消耗表-最近${range}天.csv`, csv);
   }
   return {
     load,

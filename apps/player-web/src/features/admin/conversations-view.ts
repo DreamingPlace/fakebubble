@@ -1,4 +1,4 @@
-import { exactCount } from './ui/hover-value.ts';
+import { exactCount, hoverValue } from './ui/hover-value.ts';
 import type {
   ConversationsAdminClient,
   ReviewKey,
@@ -8,6 +8,9 @@ import type {
 } from '../../services/conversations-admin-api.ts';
 import { h } from '../cocreation/h.ts';
 import { downloadText } from './preview/export.ts';
+import type { MakeExport } from './export/export-dialog.ts';
+import { modelField, playersField, statusField, writerField } from './export/export-fields.ts';
+import { CONVERSATION_SHEETS } from './export/export-sheets.ts';
 import type { OwnerAdminClient } from '../../services/owner-admin-api.ts';
 import { dataTable } from './ui/data-table.ts';
 import { disclosureDetails } from './ui/disclosure.ts';
@@ -27,6 +30,7 @@ export const conversationsCopy = {
   exportOne: '导出此对话 CSV',
   exportCharacter: '导出该角色全部对话 CSV',
   changed: '审核改动',
+  plan: '她的想法（只有你看得到）',
   failedReply: '这条回复没有成功',
   speaker: { player: '玩家', character: '角色', proactive: '角色（主动）' } as const,
   prev: '上一页',
@@ -81,6 +85,10 @@ export function conversationsView(
     isOwner?: () => boolean;
     confirm?: ConfirmInPlace;
     toast?: (text: string, tone?: 'ok' | 'info' | 'warn' | 'danger') => void;
+    /** Part 37b: ⭐ on a character line opens the 说话档案 adopt box for that character's draft. Absent = no ⭐. */
+    adoptLine?: (input: { characterId: string; player: string; reply: string }) => void;
+    /** Part 57: the page's 导出 button, top right of its title row (without it there is none). */
+    makeExport?: MakeExport;
   },
 ) {
   const save = deps.save ?? ((name: string, csv: string) => downloadText(name, csv, 'text/csv'));
@@ -168,6 +176,28 @@ export function conversationsView(
       void deps.run(() => load());
     },
   });
+  // Part 57: 导出 (the owner only: the server refuses anyone else). The dialog starts from the character and the scope on screen.
+  const exportButton = deps.makeExport?.(() => [
+    {
+      id: 'messages',
+      label: '对话消息',
+      kind: 'conversations',
+      range: 'dates',
+      sheets: CONVERSATION_SHEETS,
+      filters: () => ({ ...(characterId ? { characterId } : {}), ...(scope ? { scope } : {}) }),
+      fields: [writerField, modelField, statusField, playersField],
+      tip: '每条消息一行；另有一张按对话汇总的表。',
+    },
+    {
+      id: 'failures',
+      label: '失败的回复',
+      kind: 'failures',
+      range: 'dates',
+      filters: () => (characterId ? { characterId } : {}),
+      fields: [writerField, modelField],
+    },
+  ]);
+  if (exportButton) characterFilter.root.append(h('span', { class: 'admin-bar-spacer' }), exportButton);
   const closedNode = deps.owner ? closedPanel() : null;
   if (closedNode) closedNode.hidden = true;
   const listArea = h('div', { class: 'review-list' }, characterFilter.root, confirmHost, plainTable.root, closedNode);
@@ -291,6 +321,8 @@ export function conversationsView(
     const result = await deps.api.list({ characterId, scope, page: listPage });
     if (deps.disposed()) return;
     const owned = !!deps.owner && deps.isOwner?.() === true;
+    // Part 57: the export is the owner's (a delegated reader of 测试对话 does not see the button; the server refuses them anyway).
+    if (exportButton) exportButton.hidden = !owned;
     if (owned && !ownerTable) {
       ownerTable = makeTable(true);
       plainTable.root.after(ownerTable.root);
@@ -340,8 +372,26 @@ export function conversationsView(
       renderDetail(detail);
     });
   }
-  const lineNode = (line: ReviewLine) => {
+  const lineNode = (line: ReviewLine, before: ReviewLine | null, characterOf: string) => {
     const failed = line.status === 'failed';
+    const star =
+      deps.adoptLine && line.speaker === 'character' && !failed
+        ? h('button', {
+            class: 'review-star',
+            text: '⭐',
+            attrs: { type: 'button', 'aria-label': '加入说话档案', 'data-star': '1' },
+          })
+        : null;
+    if (star) {
+      hoverValue(star, '加入说话档案');
+      star.addEventListener('click', () =>
+        deps.adoptLine!({
+          characterId: characterOf,
+          player: before && before.speaker === 'player' && before.status !== 'failed' ? before.text : '',
+          reply: line.text,
+        }),
+      );
+    }
     return h(
       'li',
       { class: `review-line is-${line.speaker}${failed ? ' is-failed' : ''}` },
@@ -354,6 +404,15 @@ export function conversationsView(
           })
         : h('span', { class: 'review-text', text: line.text }),
       line.reviewChanged ? h('span', { class: 'review-changed', text: conversationsCopy.changed }) : null,
+      star,
+      // Part 58: under the reply, small: what she read and what she aimed for. Never in a player's page.
+      line.plan
+        ? h('span', {
+            class: 'review-plan',
+            text: `读到：${line.plan.read}　目的：${line.plan.aim}`,
+            attrs: { title: conversationsCopy.plan, 'data-plan': '1' },
+          })
+        : null,
     );
   };
   function renderDetail(detail: Awaited<ReturnType<typeof deps.api.detail>>) {
@@ -420,7 +479,11 @@ export function conversationsView(
       ),
       detailConfirm,
       nav(),
-      h('ol', { class: 'review-lines' }, ...detail.lines.map(lineNode)),
+      h(
+        'ol',
+        { class: 'review-lines' },
+        ...detail.lines.map((line, index) => lineNode(line, detail.lines[index - 1] ?? null, detail.characterId)),
+      ),
       nav(),
     );
     listArea.hidden = true;

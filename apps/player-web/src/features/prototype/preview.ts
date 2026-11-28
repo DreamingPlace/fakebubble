@@ -2,14 +2,17 @@
 import { mountShapes, setSkinProperties } from '../brand/palette-render.ts';
 import { orbitStyle, ringOffset } from './orbit.js';
 import { appendLegalLinks, footerNote } from './legal-links.ts';
+import { pushBackLayer } from '../nav/back-layer.ts';
 import { followChatViewport, stackCardWidth, swipeStep, widthChanged } from './mobile-layout.js';
-import type { LiveBinding } from './provider-binding.js';
+import type { LiveBinding, Shell } from './provider-binding.js';
 import { providerPeople, escapeCardText, type Person } from './provider-catalog-view.js';
 import { wordmarkSvg } from '../brand/wordmark.js';
 import { characterFrame, playerFrame, setFrameProperties } from '../brand/avatar-frame.ts';
 import { playerPrefs } from '../prefs/player-prefs.ts';
 import { applyChatBackground } from './chat-look.ts';
 import { cardFace } from './card-face.ts';
+import { formatDuration } from './voice-pill.ts';
+import { styleCard } from './card-style.ts';
 import { mountPortrait } from '../brand/portrait.ts';
 import { landingIndex } from './landing.ts';
 
@@ -38,7 +41,7 @@ function createCard(person: Person) {
     <div class="card-shell">
       <div class="chat-head">
         <button class="back-button icon-button" type="button" aria-label="返回人物浏览">${icon('back')}</button>
-        <div class="chat-title"><span class="avatar chat-mark" aria-hidden="true">${mark}</span><strong role="status" aria-live="polite">${name}</strong></div>
+        <div class="chat-title"><strong role="status" aria-live="polite">${name}</strong></div>
         ${configured ? `<button class="chat-more icon-button" type="button" aria-label="更多" aria-haspopup="menu" aria-expanded="false">${icon('more')}</button>` : '<span class="chat-head-gap" aria-hidden="true"></span>'}
       </div>
       <div class="chat-body" role="log" aria-label="${name}的消息">
@@ -68,58 +71,58 @@ function createCard(person: Person) {
       </div>
       ${cardFace(person, configured)}
     </div>`;
-  const [aura1, aura2, aura3, accent] = person.card.aura;
-  card.style.setProperty('--aura-1', aura1);
-  card.style.setProperty('--aura-2', aura2);
-  card.style.setProperty('--aura-3', aura3);
-  card.style.setProperty('--accent', accent);
-  // Part 25b: the same aura at night, and the avatar frame every avatar of this character wears (from its colour).
-  const [night1, night2, night3, nightAccent] = person.card.night;
-  card.style.setProperty('--n-aura-1', night1);
-  card.style.setProperty('--n-aura-2', night2);
-  card.style.setProperty('--n-aura-3', night3);
-  card.style.setProperty('--n-accent', nightAccent);
-  setFrameProperties(card, characterFrame(person.card.aura), 'frame');
-  card.style.setProperty('--name-size', String(person.card.nameSize));
-  card.style.setProperty('--avatar-bg', person.color);
-  card.style.setProperty('--avatar-ink', person.ink);
-  card.style.setProperty('--card-color', person.color);
-  card.classList.toggle('is-reserve', !configured);
-  // Part 31b: the picture over the initials in the chat header, the welcome row and the card's face.
-  if (person.portrait) {
-    mountPortrait(card.querySelector<HTMLElement>('.chat-mark')!, person.portrait, { eager: true });
-    const welcomeAvatar = card.querySelector<HTMLElement>('.welcome-row .message-avatar');
-    if (welcomeAvatar) mountPortrait(welcomeAvatar, person.portrait);
-    const face = card.querySelector<HTMLElement>('.face-portrait');
-    if (face) mountPortrait(face, person.portrait, { eager: true });
-  }
-  // Part 24k-2: 主色 + 点缀 — the colours, and the soft shapes behind the home card and behind the chat.
-  if (person.skin && person.characterId && configured) {
-    setSkinProperties(card, person.skin);
-    // --accent / --n-accent feed the play button, the playing state and the status dot already; the main takes them over.
-    card.style.setProperty('--accent', person.skin.day.main);
-    card.style.setProperty('--n-accent', person.skin.night.main);
-    // the avatar ring takes the accents (a segment each) and the glow
-    setFrameProperties(
-      card,
-      {
-        ring: [person.skin.day.accents[0], person.skin.day.accents[1], person.skin.day.glow],
-        fill: [person.skin.day.accents[1], person.skin.day.glow],
-      },
-      'frame',
-    );
-    mountShapes(card.querySelector<HTMLElement>('.card-shell')!, person.characterId, 'chat');
-    mountShapes(card.querySelector<HTMLElement>('.card-face')!, person.characterId, 'card');
-  }
+  styleCard(card, person, configured);
   return card;
+}
+
+/**
+ * What the shell needs from the session side. The real binding (`LiveBinding`) is always ready; Part 48's first paint hands the shell a
+ * deferred one, whose session arrives later: until `ready`, every action that needs a session calls `request()` and waits for it.
+ */
+export interface ShellLive {
+  readonly ready: boolean;
+  /** Resolves when the session exists (the verification sheet shows while it does not); rejects if the player gave up waiting. */
+  request(): Promise<unknown>;
+  readonly freeTierEnabled: boolean;
+  readonly signedUpPlayer: boolean;
+  readonly legalEnabled: boolean;
+  stopVoice(): void;
+  open(characterId: string, card: HTMLElement): unknown;
+  playWelcome(characterId: string, button?: HTMLElement): void;
+  updateComposer(characterId: string): void;
+  send(characterId: string, text: string, card: HTMLElement, onAccepted?: () => void): Promise<void>;
+  attach(shell: Shell): void;
+}
+/** What the shell hands back: the session arrived, swap its data in (the cards stay where they are). */
+export interface ShellHandle {
+  adopt(real: LiveBinding): void;
 }
 
 export function startPrototype(root: HTMLElement, live: LiveBinding) {
   return startShell(root, providerPeople(live.catalog()), live);
 }
 
-function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
-  root.innerHTML = `
+/** Part 46: a touch starting within this many px of the screen's left or right edge is left to the system (edge-back). */
+const EDGE_GUTTER = 24;
+
+/** The cards from the PUBLIC catalog: the real shell with a session still to come (Part 48). */
+export function startFirstPaint(root: HTMLElement, people: Person[], live: ShellLive): ShellHandle {
+  return startShell(root, people, live);
+}
+
+/** The same cards in the same order with the same chat/placeholder kinds: only then can the session's data swap in place. */
+const samePeople = (a: Person[], b: Person[]) =>
+  a.length === b.length &&
+  a.every(
+    (person, index) =>
+      person.id === b[index]!.id &&
+      person.characterId === b[index]!.characterId &&
+      (person.transcript !== undefined) === (b[index]!.transcript !== undefined),
+  );
+
+function startShell(root: HTMLElement, people: Person[], live: ShellLive): ShellHandle {
+  const holder = document.createElement('div');
+  holder.innerHTML = `
     <div class="page-shell">
       <div class="aura-stack" aria-hidden="true"></div>
       <header class="site-head"><div class="brand">${wordmarkSvg({ size: 34, weight: 2, className: 'hand brand-hand' })}</div><span class="head-note">捡到一窝小四四</span></header>
@@ -128,16 +131,33 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
         <div class="carousel" aria-label="人物聊天卡片，可滑动切换" tabindex="0"><div class="card-deck"></div></div>
         <nav class="avatar-nav" aria-label="选择人物"></nav>
       </main>
-      <footer class="preview-note">${footerNote(live.freeTierEnabled, live.signedUpPlayer)}</footer>
+      <footer class="preview-note"></footer>
       <div class="toast" role="status" aria-live="polite"></div>
     </div>`;
-  const page = root.querySelector<HTMLElement>('.page-shell')!;
-  appendLegalLinks(root.querySelector('.preview-note'), live.legalEnabled);
+  const page = holder.firstElementChild as HTMLElement;
+  // Part 48: the first-paint skeleton (static markup in index.html) is replaced by the real page in the same frame: its cards are where
+  // the real ones are, so nothing moves; only the faces ease in over the same card shapes (no second `.page-shell` ever lingers).
+  // Anything else in the root goes, as it always did.
+  const skeleton = root.querySelector<HTMLElement>(':scope > .page-shell.is-skeleton');
+  for (const child of [...root.children]) child.remove();
+  root.prepend(page);
+  if (skeleton) {
+    page.classList.add('is-entering');
+    setTimeout(() => page.classList.remove('is-entering'), 500);
+  }
+  const fillFooter = () => {
+    const note = page.querySelector<HTMLElement>('.preview-note')!;
+    note.textContent = footerNote(live.freeTierEnabled, live.signedUpPlayer);
+    appendLegalLinks(note, live.legalEnabled);
+    note.classList.add('is-filled');
+  };
+  // Without a session the footer says nothing yet (its words depend on the player's tier); it fills in when the session arrives.
+  if (live.ready) fillFooter();
   followChatViewport(page);
-  const carousel = root.querySelector<HTMLElement>('.carousel')!;
-  const deck = root.querySelector<HTMLElement>('.card-deck')!;
-  const nav = root.querySelector<HTMLElement>('.avatar-nav')!;
-  const toast = root.querySelector<HTMLElement>('.toast')!;
+  const carousel = page.querySelector<HTMLElement>('.carousel')!;
+  const deck = page.querySelector<HTMLElement>('.card-deck')!;
+  const nav = page.querySelector<HTMLElement>('.avatar-nav')!;
+  const toast = page.querySelector<HTMLElement>('.toast')!;
   const cards = people.map((person) => createCard(person));
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   for (const card of cards) deck.append(card);
@@ -173,7 +193,7 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
   // Part 25a: one aura layer per character (and one for the empty slots). The page cross-fades between them; a drag blends the
   // two neighbours by how far the finger moved, like the solid colour did before.
   // Part 25b: every character has a day layer and a night layer; the theme fades one stack out and the other in.
-  const auraStack = root.querySelector<HTMLElement>('.aura-stack')!;
+  const auraStack = page.querySelector<HTMLElement>('.aura-stack')!;
   const auraKey = (person: Person) => (person.characterId ? person.id : 'neutral');
   const layers = new Map<string, HTMLElement[]>();
   const dayStack = document.createElement('div');
@@ -322,7 +342,7 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     restoreEditor(active);
     render();
     const selected = people[active]!.characterId;
-    if (selected) void live.open(selected, cards[active]!);
+    if (selected && live.ready) void live.open(selected, cards[active]!);
     if (phase === 'chat') cards[active]!.querySelector('textarea')!.focus({ preventScroll: true });
   };
   const spatial = (card: HTMLElement, before: DOMRect) => {
@@ -341,12 +361,30 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
       { duration: 340, easing: 'cubic-bezier(.2,.82,.24,1)' },
     );
   };
+  // Part 46: an open chat is a history layer: the system back closes it, and closing it here takes its entry off again
+  let releaseChat: (() => void) | null = null;
   const openChat = (focus = false) => {
     if (phase === 'chat' || phase === 'expanding') return;
     if (!people[active]!.transcript) {
       say('这个位置还没有新朋友');
       return;
     }
+    // Part 48: a chat needs the session. Until it exists the verification sheet shows (with its retry); when the session arrives the
+    // chat opens by itself, on the card the player tapped (if they have not moved on).
+    if (!live.ready) {
+      const wanted = active;
+      void live.request().then(
+        () => {
+          if (active === wanted) openChat(focus);
+        },
+        () => {},
+      );
+      return;
+    }
+    releaseChat = pushBackLayer(() => {
+      releaseChat = null; // the system back already took the entry off
+      closeChat();
+    });
     if (dragStart && carousel.hasPointerCapture(dragStart.pointerId))
       carousel.releasePointerCapture(dragStart.pointerId);
     dragStart = undefined;
@@ -373,6 +411,9 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
   };
   const closeChat = () => {
     if (phase !== 'chat' && phase !== 'expanding') return;
+    const release = releaseChat;
+    releaseChat = null;
+    release?.();
     clearTimeout(settleTimer);
     settleTimer = 0;
     live.stopVoice();
@@ -534,10 +575,11 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
       if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
       const dominant = event.deltaX;
       if (Math.abs(dominant) < 4) return;
-      event.preventDefault();
       const now = performance.now();
       if (now - lastWheel < 310) return;
       lastWheel = now;
+      // Part 46: only an input that moves the swiper is taken (the page's overscroll-behavior-x keeps the rest from being a "back")
+      event.preventDefault();
       switchTo(active + Math.sign(dominant));
     },
     { passive: false },
@@ -545,6 +587,12 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
   carousel.addEventListener('pointerdown', (event) => {
     if (phase === 'chat' || phase === 'expanding' || phase === 'collapsing') return;
     if (event.target instanceof Element && event.target.closest('textarea,button')) return;
+    // Part 46: a touch that starts in the edge gutters belongs to the system's edge-back gesture, not to the swiper
+    if (
+      event.pointerType === 'touch' &&
+      (event.clientX < EDGE_GUTTER || event.clientX > window.innerWidth - EDGE_GUTTER)
+    )
+      return;
     dragStart = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
     dragged = false;
   });
@@ -598,12 +646,47 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     else relayout();
   });
   render();
+  // Part 48: the session arrived. The same cards in the same order take its data in place (the welcome line, the pill's length, the
+  // footer); if the server's catalog changed in between (a different card set), the page is built again from the session's own.
+  const adopt = (real: LiveBinding) => {
+    const next = providerPeople(real.catalog());
+    if (!samePeople(people, next)) {
+      startShell(root, next, real);
+      return;
+    }
+    people.forEach((person, index) => {
+      const fresh = next[index]!;
+      if (person.transcript !== undefined) person.transcript = fresh.transcript ?? '';
+      if (fresh.welcomeMs !== undefined) person.welcomeMs = fresh.welcomeMs;
+      setPillDuration(cards[index]!, person.welcomeMs);
+      cards[index]!.dataset.ready = 'true';
+    });
+    fillFooter();
+    const here = people[active]!.characterId;
+    if (here) void live.open(here, cards[active]!);
+  };
   live.attach({
     say,
-    head: root.querySelector<HTMLElement>('.site-head')!,
+    head: page.querySelector<HTMLElement>('.site-head')!,
     card: (characterId) => cards[people.findIndex((person) => person.characterId === characterId)]!,
     mark: (characterId) => people.find((person) => person.characterId === characterId)!.mark,
     portrait: (characterId) => people.find((person) => person.characterId === characterId)?.portrait ?? null,
     name: (characterId) => people.find((person) => person.characterId === characterId)?.name ?? '',
+    cardNo: (characterId) => people.find((person) => person.characterId === characterId)?.card.no ?? '',
   });
+  return { adopt };
+}
+
+/** The welcome pill's length, once it is known (the public catalog only says that a clip exists): it fades in, nothing else moves. */
+function setPillDuration(card: HTMLElement, ms: number | null | undefined) {
+  const pill = card.querySelector<HTMLElement>('.face-voice');
+  if (!pill || typeof ms !== 'number' || ms <= 0) return;
+  const time = formatDuration(ms);
+  let label = pill.querySelector<HTMLElement>('.face-dur');
+  if (!label) {
+    label = document.createElement('span');
+    label.className = 'face-dur is-new';
+    pill.append(label);
+  }
+  label.textContent = time;
 }

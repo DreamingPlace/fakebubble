@@ -7,6 +7,7 @@ import { WebClipDirection } from '../../../apps/server/characters/web-clip-direc
 import {
   WebCloudTextGenerator,
   webCloudDirection,
+  webCloudJudge,
   webCloudSpeech,
 } from '../../../apps/server/cloudflare/web-generators.ts';
 import type { WebGenerationBinding } from '../../../packages/contracts/web-generation-rpc.ts';
@@ -51,6 +52,7 @@ export class PreviewBudgetFixture extends WebBudgetObject {
   }
 }
 import { WebBusinessFixture, fixtureClock } from './cloudflare-business-worker.ts';
+import { renewProviderPrices } from '../../../apps/server/generation/web-provider-configuration.ts';
 import { WebStats } from '../../../apps/server/stats/web-stats.ts';
 import type { DurableSQLStorage } from '../../../apps/server/cloudflare/store.ts';
 import type { AlarmStorage } from '../../../apps/server/cloudflare/queue-alarm.ts';
@@ -76,6 +78,8 @@ import { syntheticCharacterReview } from './character-review.ts';
 
 /** Part 29: a fixture worker module switches the admin speech path on (as business.ts builds it) before its objects are made. */
 export const fixtureSpeech = { on: false, direction: false };
+/** Part 40: a fixture module switches on what business.ts builds for 多轮预演: the judge, and the Grok / Gemini prices, bounds and ceiling. */
+export const fixtureRehearsal = { on: false };
 /** Real HTTP, SQL, R2 and Alarm with synthetic transports; these operator routes never ship. */
 export class WebHTTPFixture extends WebBusinessFixture {
   private app: WebProviderApplication;
@@ -166,6 +170,11 @@ export class WebHTTPFixture extends WebBusinessFixture {
         },
       });
     }
+    if (fixtureRehearsal.on && previews && env.GENERATION) {
+      previews.useRehearsalJudge(webCloudJudge(env.GENERATION));
+      Object.assign(this.store, { playerModelChoice: ['deepseek', 'gemini', 'xai'] });
+      renewProviderPrices(this.store, this.clock.now());
+    }
     if (fixtureSpeech.on && env.PREVIEW_BUDGET && env.GENERATION) {
       // The production wiring: business object -> WebAdminSpeech -> webCloudSpeech(env.GENERATION) -> generation worker -> Fish.
       const budget = env.PREVIEW_BUDGET.get(env.PREVIEW_BUDGET.idFromName('budget'));
@@ -178,7 +187,16 @@ export class WebHTTPFixture extends WebBusinessFixture {
           new WebClipDirection(this.store, this.clock, webCloudDirection(env.GENERATION), budget),
         );
     }
-    this.execution = new WebCloudExecutor(ctx, this.store, this.clock, this.createRunner(), undefined, previews);
+    // Part 42: 广播 is started and delivered by this alarm, as business.ts wires it.
+    this.execution = new WebCloudExecutor(
+      ctx,
+      this.store,
+      this.clock,
+      this.createRunner(),
+      undefined,
+      previews,
+      this.app.broadcast,
+    );
     this.http = this.transport();
   }
   /** Part 17 test switches (set through /fixture/players). The Turnstile verifier is fake: no network, ever. */
@@ -297,6 +315,29 @@ export class WebHTTPFixture extends WebBusinessFixture {
         ),
         jobs: this.store.all('SELECT id,status,error_code FROM admin_previews'),
       });
+    if (path === '/fixture/rehearsal/stats')
+      return Response.json({
+        units: this.store.all('SELECT kind,model_key,turn,status,error_code FROM web_rehearsal_units ORDER BY seq'),
+        calls: await this.generation!.stats(),
+        spending: this.store.all('SELECT provider,limit_micros,spent_micros,held_micros FROM web_provider_spending'),
+      });
+    if (path === '/fixture/rehearsal/limit') {
+      const { provider, micros } = (await request.json()) as { provider: string; micros: number };
+      this.store.run('UPDATE web_provider_spending SET limit_micros=? WHERE provider=?', micros, provider);
+      return Response.json({ configured: true });
+    }
+    if (path === '/fixture/rehearsal/capacity') {
+      // Part 40: every Gemini draft ticket taken (full right now) or given back.
+      const { full } = (await request.json()) as { full: boolean };
+      this.store.run(
+        "UPDATE web_external_budgets SET reserved=? WHERE provider='gemini' AND stage='text' AND phase='draft'",
+        full ? 1 : 0,
+      );
+      this.store.run(
+        "UPDATE web_external_budgets SET capacity=1 WHERE provider='gemini' AND stage='text' AND phase='draft'",
+      );
+      return Response.json({ configured: true });
+    }
     if (path === '/fixture/speech/mode') {
       // Part 29: how the fake Fish answers (the generation worker's synthetic modes); the worker itself is the real session.
       await (this.generation as unknown as { configure(mode: string): Promise<void> }).configure(
@@ -586,6 +627,33 @@ export class WebHTTPFixture extends WebBusinessFixture {
       if (on) this.store.run('INSERT INTO web_retention_purge_gate VALUES (?,?,1)', principalId, world);
       else this.store.run('DELETE FROM web_retention_purge_gate WHERE principal_id=?', principalId);
       return Response.json({ configured: true });
+    }
+    // Part 42: counts only (no player, no content). A read of the object that never goes through the HTTP transport, so it cannot
+    // wake the executor: a broadcast that moves while a test only calls this was moved by the alarm alone.
+    if (path === '/fixture/broadcast/state') {
+      const n = (sql: string, ...args: string[]) => this.store.get<{ n: number }>(sql, ...args)!.n;
+      return Response.json({
+        broadcasts: this.store.all(
+          'SELECT state,revision,recipients,total,delivered,cursor,send_at,started_at FROM web_broadcasts ORDER BY created_at',
+        ),
+        messages: n('SELECT count(*) n FROM web_broadcast_messages'),
+        recipients: n('SELECT count(*) n FROM web_broadcast_recipients'),
+        clips: n('SELECT count(*) n FROM web_broadcast_characters WHERE audio IS NOT NULL'),
+        now: this.clock.now(),
+      });
+    }
+    if (path === '/fixture/broadcast/world') {
+      const { principalId } = (await request.json()) as { principalId: string };
+      const world = this.store.get<{ world_id: string }>(
+        'SELECT world_id FROM web_principals WHERE id=?',
+        principalId,
+      )!.world_id;
+      const n = (sql: string, ...args: string[]) => this.store.get<{ n: number }>(sql, ...args)!.n;
+      return Response.json({
+        messages: n('SELECT count(*) n FROM messages WHERE world_id=?', world),
+        links: n('SELECT count(*) n FROM web_broadcast_messages WHERE world_id=?', world),
+        recipients: n('SELECT count(*) n FROM web_broadcast_recipients WHERE principal_id=?', principalId),
+      });
     }
     if (path === '/fixture/run-alarm') {
       await this.alarm();

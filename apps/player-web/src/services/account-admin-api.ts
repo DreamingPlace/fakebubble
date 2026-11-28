@@ -1,3 +1,4 @@
+import { BroadcastAdminClient } from './broadcast-admin-api.ts';
 import { isWriterChoice } from '../../../../packages/contracts/web-writer.ts';
 import type { WriterChoice, WriterSaveResult, WriterSettingView } from '../../../../packages/contracts/web-writer.ts';
 import { CharacterAdminClient } from './character-admin-api.ts';
@@ -11,9 +12,11 @@ import {
 import { cocreationPointsOk, type CocreationPointsSettings } from '../../../../packages/contracts/cocreation-cards.ts';
 import { CastAdminClient } from './cast-admin-api.ts';
 import { ProfileImportClient } from './profile-import-api.ts';
-import { CocreationAdminClient } from './cocreation-admin-api.ts';
+import { CocreationAdminClient, CocreationRelationsClient, CocreationWordingsClient } from './cocreation-admin-api.ts';
 import { OwnerAdminClient } from './owner-admin-api.ts';
 import { ConversationsAdminClient } from './conversations-admin-api.ts';
+import { FeedbackAdminClient } from './feedback-admin-api.ts';
+import { ExportAdminClient } from './export-admin-api.ts';
 import { PreviewAdminClient } from './preview-admin-api.ts';
 import { InviteAdminApi } from './invite-admin-api.ts';
 import { InviteLocalApiError } from './invite-local-api.ts';
@@ -35,8 +38,11 @@ import type {
   SystemPriceRow,
   SystemRetention,
   SystemSecurity,
+  SystemShares,
   SystemUnknownKind,
   SystemWarnings,
+  UnknownCallsView,
+  UnknownResolveResult,
 } from '../../../../packages/contracts/web-system.ts';
 import type {
   ChartMetric,
@@ -114,6 +120,8 @@ export type SystemStatusView = {
   retention: SystemRetention;
   metrics: StageLatencyDay[];
   security: SystemSecurity;
+  /** Part 45: shareable voice-card links, counts only; absent where the share tables are not wired. */
+  shares?: SystemShares;
   warnings: SystemWarnings;
 };
 /** 邀请与额度 (Part 22a): one batch as the list shows it - counts only, no player. */
@@ -209,6 +217,8 @@ function parseCocreationPoints(value: unknown): CocreationPointsView {
 }
 
 export class AccountAdminApi extends InviteAdminApi {
+  /** Part 42: 广播. */
+  readonly broadcast = new BroadcastAdminClient((path, body) => this.request('/broadcast/' + path, body));
   readonly characters = new CharacterAdminClient((path, body) => this.request('/characters/' + path, body));
   readonly previews = new PreviewAdminClient(
     (path, body) => this.request('/characters/' + path, body),
@@ -220,7 +230,17 @@ export class AccountAdminApi extends InviteAdminApi {
   /** Part 24j: 导入角色资料. */
   readonly profileImport = new ProfileImportClient((path, body) => this.request('/profile-import/' + path, body));
   readonly cocreation = new CocreationAdminClient((path, body) => this.request('/cocreation/' + path, body));
+  /** Part 39: relation notes, 玩家眼中的关系 (same routes, same session). */
+  readonly cocreationRelations = new CocreationRelationsClient((path, body) =>
+    this.request('/cocreation/' + path, body),
+  );
+  /** Part 39b: 题目, the wording pool of the co-creation themes (same routes, same session). */
+  readonly cocreationWordings = new CocreationWordingsClient((path, body) => this.request('/cocreation/' + path, body));
   readonly conversations = new ConversationsAdminClient((path, body) => this.request('/conversations/' + path, body));
+  /** Part 36: 语音反馈 (the owner's counts and 👎 list). */
+  readonly feedback = new FeedbackAdminClient((path, body) => this.request('/feedback/' + path, body));
+  /** Part 57: 导出, one button per page. */
+  readonly exports = new ExportAdminClient((path, body) => this.request('/export/' + path, body));
   /** Part 31: the owner's operations (home arc order, deleting test records, closed accounts). */
   readonly owner = new OwnerAdminClient((path, body) => this.request('/owner/' + path, body));
   constructor(fetcher?: typeof fetch) {
@@ -268,6 +288,7 @@ export class AccountAdminApi extends InviteAdminApi {
       ...(object(row.features ?? {}).chatReview === true ? { features: { chatReview: true as const } } : {}),
     };
     this.csrf = active.csrf;
+    this.signedIn = true;
     return active;
   }
   override async login(token: string) {
@@ -434,6 +455,18 @@ export class AccountAdminApi extends InviteAdminApi {
     const row = object(await this.request('/system/budget-topup', input));
     if (!Number.isSafeInteger(row.allowanceMicros) || typeof row.duplicate !== 'boolean') throw invalid();
     return row as unknown as BudgetTopUpResult;
+  }
+  /** Part 54: 未确认的调用 (owner or system.read). */
+  async unknownCalls(): Promise<UnknownCallsView> {
+    const row = object(await this.request('/system/unknown-calls', {}));
+    if (!Array.isArray(row.calls) || !Number.isSafeInteger(row.resolved)) throw invalid();
+    return row as unknown as UnknownCallsView;
+  }
+  /** Part 54, owner only: 已按账单核对 one call, at the held amount or a lower amount (USD micros) from the provider's bill. */
+  async resolveUnknownCall(input: { requestId: string; code: string; settledMicros: number | 'held' }) {
+    const row = object(await this.request('/system/unknown-resolve', input));
+    if (!Number.isSafeInteger(row.settledMicros) || typeof row.code !== 'string') throw invalid();
+    return row as unknown as UnknownResolveResult;
   }
   /** What a grant would do, and the one lookup (an email answers 玩家编号, tier and balance only). */
   async pointsPreview(target: PointsTarget, amount: number): Promise<PointsPreview> {

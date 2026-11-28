@@ -41,10 +41,20 @@ const ASKING = ['怎么办', '怎么', '建议', '该不该', '要不要', '能�
 const TRAIL = /[\s。.…~～!！,，、☆★♥❤😊😂🙂🥺😭😅🤣]+$/u;
 const PUNCT = /[\s\p{P}\p{S}]/gu;
 
+/**
+ * Part 58: a dismissive filler opens a bubble: 行 / 行吧 / 行啊 / 行行行 / 行了行了 / 好吧好吧 / 随你(吧) / 得了, followed by a break (a
+ * punctuation mark, the end, a space), not by another character of a word (行李, 行不行, 行动 are not fillers). Plain 行 inside a
+ * normal sentence is never counted.
+ */
+const FILLER = /^[\s\p{P}\p{S}]*(?:行[吧啊了呗行]*|好吧好吧|好吧|随你(?:吧|便)?|得了)(?![\p{Script=Han}A-Za-z0-9])/u;
+export const hasFiller = (bubbles: readonly string[]) => bubbles.some((bubble) => FILLER.test(bubble));
+
 export interface AnalysedReply {
   /** The player's message of the turn. */
   player: string;
   bubbles: string[];
+  /** Part 58: the closed-list purposes of a 新 reply's hidden plan ([] for 旧 or no plan). */
+  aims?: readonly string[];
   /** The reply covers the turn's message and defers nothing. null: a v8 reply (the writer does not track it). */
   answered: boolean | null;
 }
@@ -85,10 +95,17 @@ export function repeatedReplies(replies: readonly AnalysedReply[]) {
   return repeated;
 }
 
+/** How many replies aimed at each purpose (a reply that names two counts for both), in the order the purposes are listed. */
+function aimCounts(replies: readonly AnalysedReply[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const reply of replies) for (const aim of reply.aims ?? []) out[aim] = (out[aim] ?? 0) + 1;
+  return out;
+}
+
 export function countReplies(
   replies: readonly AnalysedReply[],
   lists: RehearsalPhrases,
-  extra: { unconfirmed: number; failed: number },
+  extra: { unconfirmed: number; failed: number; codes?: Record<string, number> },
 ): RehearsalCounts {
   const n = replies.length;
   const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
@@ -102,8 +119,11 @@ export function countReplies(
     avgBubbles: avg(replies.map((r) => r.bubbles.length)),
     customerService: replies.filter((r) => hasPhrase(flat(r.bubbles), lists.customerService)).length,
     repeated: repeatedReplies(replies),
+    fillers: replies.filter((r) => hasFiller(r.bubbles)).length,
+    aims: aimCounts(replies),
     unconfirmed: extra.unconfirmed,
     failed: extra.failed,
+    codes: extra.codes ?? {},
   };
 }
 

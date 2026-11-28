@@ -3,8 +3,17 @@ import { CloudWebAssets } from '../../apps/server/cloudflare/web-assets.ts';
 import type { AssetBinding } from '../../apps/server/cloudflare/admin-assets.ts';
 import { safeError } from '../../apps/server/cloudflare/safe-error.ts';
 import { WEB_EDGE_PEER_HEADER } from '../../apps/server/cloudflare/web-edge-request.ts';
+import { SHARE_PAGE } from '../../apps/server/share/web-share-path.ts';
 
 export const WEB_CLOUD_COMPATIBILITY_FLAGS = ['nodejs_compat', 'enable_request_signal'] as const;
+/** The slice of the Workers execution context and Cache API the edge uses (both are absent in some test and local runtimes). */
+export interface WebEdgeContext {
+  waitUntil(promise: Promise<unknown>): void;
+}
+export interface WebEdgeCache {
+  match(request: Request): Promise<Response | undefined>;
+  put(request: Request, response: Response): Promise<void>;
+}
 export interface WebBusinessEndpoint {
   fetch(request: Request): Promise<Response>;
 }
@@ -26,6 +35,18 @@ const headers = {
   'referrer-policy': 'no-referrer',
   'strict-transport-security': 'max-age=31536000',
 };
+/** Part 48: hashed, immutable build files, exactly the paths the player build content-addresses (see playerAssetCacheControl). */
+const IMMUTABLE = 'public, max-age=31536000, immutable';
+const hashedAsset =
+  /^\/assets\/(?:[A-Za-z0-9_-]+-[A-Z0-9]{8}\.js|static-[a-f0-9]{64}\.(?:css|svg|png|jpe?g|webp|woff2))$/;
+function edgeCache(): WebEdgeCache | null {
+  try {
+    const store = (globalThis as { caches?: { default?: WebEdgeCache } }).caches?.default;
+    return store && typeof store.match === 'function' && typeof store.put === 'function' ? store : null;
+  } catch {
+    return null;
+  }
+}
 function staticAsset(request: Request, env: WebEdgeEnvironment) {
   const turnstile = env.TURNSTILE_ENABLED === 'true',
     legalPages = env.LEGAL_PAGES_ENABLED === 'true';
@@ -43,7 +64,7 @@ function staticAsset(request: Request, env: WebEdgeEnvironment) {
 
 /** Sole public entry. No credentials, database or generation binding, and no operator route. */
 export default {
-  async fetch(request: Request, env: WebEdgeEnvironment): Promise<Response> {
+  async fetch(request: Request, env: WebEdgeEnvironment, context?: WebEdgeContext): Promise<Response> {
     let response: Response;
     let assetCache: string | null = null;
     try {
@@ -89,7 +110,10 @@ export default {
             key.startsWith('cf-')
           )
             clean.delete(key);
-        if (picture) clean.delete('cookie');
+        // Part 48: the public catalog (the home cards before any session) is read without the visitor's cookies, like a picture:
+        // nothing downstream can read a session from it, and the business object sets none.
+        const catalog = request.method === 'GET' && url.pathname === `${api}catalog`;
+        if (picture || catalog) clean.delete('cookie');
         clean.set(WEB_EDGE_PEER_HEADER, peer);
         // Native DO Fetch carries HTTP cancellation; a generic RPC Response did not
         // release the remote SSE slot on disconnect in actual workerd verification.
@@ -104,20 +128,54 @@ export default {
       } else {
         ensure(!url.pathname.startsWith('/api'), 'NOT_FOUND');
         ensure(request.method === 'GET' || request.method === 'HEAD', 'NOT_FOUND');
-        if (url.pathname === '/' || url.pathname === '/index.html') {
+        if (SHARE_PAGE.test(url.pathname)) {
+          // Part 45: a share link's page is the player's own index (the page reads the token from its address). Nothing is read or
+          // stored here; there is no mode redirect, so the link stays exactly as it was shared.
+          ensure(!url.search, 'NOT_FOUND');
+          response = await staticAsset(new Request(new URL('/', url.origin), request), env);
+          assetCache = response.headers.get('cache-control');
+        } else if (url.pathname === '/' || url.pathname === '/index.html') {
           const modes = url.searchParams.getAll('mode');
           ensure(
             modes.length <= 1 && (!modes.length || ['provider', 'provider-admin'].includes(modes[0]!)),
             'NOT_FOUND',
           );
-          if (!modes.length) {
-            url.searchParams.set('mode', 'provider');
-            response = new Response(null, { status: 302, headers: { location: url.pathname + url.search } });
-          } else response = await staticAsset(request, env);
+          // Part 48: the bare address serves the player at once (it used to answer a 302 to ?mode=provider, one more round trip on a
+          // phone before anything could paint). The page treats "no mode" as the player; ?mode=provider and ?mode=provider-admin
+          // are unchanged.
+          response = await staticAsset(request, env);
           assetCache = response.headers.get('cache-control');
         } else {
           ensure(!url.search, 'NOT_FOUND');
-          response = await staticAsset(request, env);
+          // Part 48: a hashed, immutable build file is kept in the edge's Cache API. Why this is safe: the path names the content
+          // (a SHA-256 in the file name, or esbuild's content hash), the response comes from the manifest-verified reader (its bytes were
+          // hashed against the signed manifest before they got here), the key also carries the manifest digest and the Turnstile switch
+          // (the only things that change a build file's headers), and nothing here is per visitor: no cookie, no query, no API, no
+          // HTML. A miss, a missing Cache API (workers.dev) or any cache error falls through to the verified reader.
+          const cache = request.method === 'GET' && hashedAsset.test(url.pathname) ? edgeCache() : null;
+          const key = cache
+            ? new Request(
+                `${env.ORIGIN}/__edge-asset/${env.ASSET_MANIFEST_SHA256}/${env.TURNSTILE_ENABLED === 'true'}${url.pathname}`,
+              )
+            : null;
+          let hit: Response | undefined;
+          if (cache && key) {
+            try {
+              hit = await cache.match(key);
+            } catch {
+              hit = undefined;
+            }
+          }
+          if (hit && hit.status === 200 && hit.headers.get('cache-control') === IMMUTABLE) {
+            response = new Response(hit.body, hit);
+            response.headers.set('x-edge-asset-cache', 'hit');
+          } else {
+            response = await staticAsset(request, env);
+            if (cache && key && response.status === 200 && response.headers.get('cache-control') === IMMUTABLE) {
+              const stored = cache.put(key, response.clone()).catch(() => undefined);
+              context?.waitUntil(stored);
+            }
+          }
           assetCache = response.headers.get('cache-control');
         }
       }

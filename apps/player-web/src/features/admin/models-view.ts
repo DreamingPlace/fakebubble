@@ -25,6 +25,7 @@ import { h } from '../cocreation/h.ts';
 import { segmented } from './ui/segmented.ts';
 import { statusBadge } from './ui/status-badge.ts';
 import { hoverValue } from './ui/hover-value.ts';
+import { errorLine } from './ui/error-line.ts';
 import type { ConfirmInPlace } from './ui/inline-confirm.ts';
 import { fillStatus, pageHead } from './ui/page-head.ts';
 import { markDirty, unsavedText } from './ui/unsaved.ts';
@@ -256,8 +257,10 @@ export function modelsView(
   }
 
   // ---- 回复写法 (Part 37a, owner only) --------------------------------------------------------------------------
-  const WRITER_LABELS: Record<WriterChoice, string> = { v7: '旧写法', v8: '新写法' };
+  const WRITER_LABELS: Record<WriterChoice, string> = { v7: '旧写法', v8: '新写法', v8p: '新+档案', v8m: '新+档案+梗' };
   let writerView: WriterSettingView | null = null;
+  /** Part 41: the code of a failed read of the setting. The owner sees it in the card (never a hidden card); anyone else sees no card. */
+  let writerFault: string | null = null;
   let writerPending: { id: string; to: WriterChoice } | null = null;
   const writerHost = h('section', {
     class: 'models-card models-writer',
@@ -266,10 +269,34 @@ export function modelsView(
   });
   const writerConfirm = h('div', { class: 'models-confirm' });
   let writerSwitch: ReturnType<typeof segmented<WriterChoice>> | null = null;
+  const codeOf = (error: unknown) => {
+    const code = (error as { code?: unknown } | null)?.code;
+    return typeof code === 'string' && code ? code : 'ADMIN_WRITER_UNAVAILABLE';
+  };
   function paintWriter() {
     const w = writerView;
-    writerHost.hidden = !w || !w.available || !deps.isOwner?.();
-    if (!w) return;
+    const owner = deps.isOwner?.() === true;
+    // Hidden only for anyone but the owner (or before the setting was asked for): for the owner a failed read is said in the card.
+    writerHost.hidden = !owner || (!w && !writerFault);
+    if (!owner) return;
+    if (!w || !w.available) {
+      const code = writerFault ?? (w ? 'WEB_WRITER_SCHEMA_MISMATCH' : null);
+      if (!code) return;
+      const retry = h('button', { class: 'admin-secondary', text: '重试', attrs: { type: 'button' } });
+      retry.addEventListener('click', () => void deps.run(loadWriter));
+      writerHost.replaceChildren(
+        h(
+          'div',
+          { class: 'models-writer-head' },
+          h('h3', { text: '回复写法' }),
+          h('span', { class: 'models-pill', text: '没能读取' }),
+          retry,
+        ),
+        h('p', { class: 'admin-hint models-writer-note', attrs: { role: 'alert' } }, errorLine(code)),
+      );
+      writerSwitch = null;
+      return;
+    }
     writerSwitch = segmented<WriterChoice>(
       '回复写法',
       WRITER_CHOICES.map((id) => ({ id, label: WRITER_LABELS[id] })),
@@ -288,6 +315,26 @@ export function modelsView(
       ),
       writerConfirm,
     );
+  }
+  /** Reads the setting on its own: neither the price table nor the review switch failing can keep the owner from it. */
+  async function loadWriter() {
+    if (!deps.writer || deps.isOwner?.() !== true) {
+      writerView = null;
+      writerFault = null;
+      paintWriter();
+      return;
+    }
+    try {
+      const next = await deps.writer.load();
+      if (deps.disposed()) return;
+      writerView = next;
+      writerFault = null;
+    } catch (error) {
+      if (deps.disposed()) return;
+      writerView = null;
+      writerFault = codeOf(error);
+    }
+    paintWriter();
   }
   async function chooseWriter(to: WriterChoice) {
     const w = writerView;
@@ -310,10 +357,7 @@ export function modelsView(
       await deps.writer!.save({ requestId: writerPending.id, writer: to });
       writerPending = null;
       deps.toast('已切换回复写法');
-      const next = await deps.writer!.load();
-      if (deps.disposed()) return;
-      writerView = next;
-      paintWriter();
+      await loadWriter();
     });
     if (writerView && writerSwitch && writerSwitch.value !== writerView.writer) writerSwitch.set(writerView.writer);
   }
@@ -478,26 +522,28 @@ export function modelsView(
   });
 
   async function load() {
-    const next = await deps.load();
-    if (deps.disposed()) return;
-    view = next;
-    draft = copy(next);
-    pending = null;
-    paint();
-    if (deps.review) {
-      const review = await deps.review.load();
+    // The writer card is read whatever happens to the price table or the review switch: a failure of either is reported after.
+    let failure: unknown = null;
+    try {
+      const next = await deps.load();
       if (deps.disposed()) return;
-      reviewView = review;
-      // One revision for the whole page: the switch and the table quote the same one.
-      if (view) view.revision = review.revision;
-      paintReview();
+      view = next;
+      draft = copy(next);
+      pending = null;
+      paint();
+      if (deps.review) {
+        const review = await deps.review.load();
+        if (deps.disposed()) return;
+        reviewView = review;
+        // One revision for the whole page: the switch and the table quote the same one.
+        if (view) view.revision = review.revision;
+        paintReview();
+      }
+    } catch (error) {
+      failure = error;
     }
-    if (deps.writer && deps.isOwner?.()) {
-      const next = await deps.writer.load();
-      if (deps.disposed()) return;
-      writerView = next;
-      paintWriter();
-    }
+    await loadWriter();
+    if (failure) throw failure;
   }
   saveButton.addEventListener(
     'click',
@@ -535,6 +581,7 @@ export function modelsView(
       reviewPending = null;
       reviewHost.hidden = true;
       writerView = null;
+      writerFault = null;
       writerPending = null;
       writerHost.hidden = true;
       view = null;

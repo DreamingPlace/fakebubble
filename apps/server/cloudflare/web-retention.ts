@@ -1,3 +1,7 @@
+import { purgeBroadcastWorld } from '../broadcast/web-broadcast-schema.ts';
+import { purgeShareWorld } from '../share/web-share-schema.ts';
+import { purgeTurnsWorld } from '../turns/web-turn-schema.ts';
+import { purgeFeedbackWorld } from '../turns/web-feedback-schema.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { DetailedError, DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { emptySession } from '../../../packages/domain/schedule.ts';
@@ -26,6 +30,7 @@ import {
 import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from '../admission/web-retention.ts';
 import { checkAudioReference, speechObjectScope } from '../audio/web-provider-media.ts';
 import type { MediaObjectReference } from './media-objects.ts';
+import { markExternalAttemptsUnknown } from '../budget/web-external-tickets.ts';
 import {
   ageBucket,
   backoffDelay,
@@ -634,13 +639,11 @@ export class WebCloudRetention {
         if (attempt.state === 'not_sent') ledger.releaseUnsent(key, scope);
         else {
           ledger.markUnknown(key, scope);
-          this.store.run(
-            `UPDATE web_external_attempts SET dispatch_state='unknown'
-            WHERE operation_id=? AND phase=? AND ordinal=? AND dispatch_state='sent'`,
-            attempt.operation_id,
-            attempt.phase,
-            attempt.ordinal,
-          );
+          markExternalAttemptsUnknown(this.store, {
+            operationId: attempt.operation_id,
+            phase: attempt.phase,
+            ordinal: attempt.ordinal,
+          });
         }
       }
     });
@@ -781,6 +784,13 @@ export class WebCloudRetention {
           attempt.phase,
           attempt.ordinal,
         );
+      this.sub = 'broadcast';
+      purgeBroadcastWorld(this.store, world);
+      // Part 45: the world's share links and their requests.
+      purgeShareWorld(this.store, world);
+      // Part 36: the world's turn rows, ratings and their request rows.
+      purgeTurnsWorld(this.store, world);
+      purgeFeedbackWorld(this.store, world);
       this.sub = 'messages';
       this.store.run('DELETE FROM messages WHERE world_id=?', world);
       this.sub = 'contacts';

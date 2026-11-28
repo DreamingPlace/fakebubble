@@ -245,6 +245,8 @@ try {
     // =================== 关系与故事: an opened version shows its content and its difference from live ===================
     await page.goto(`${f.origin}/?mode=provider-admin#/cast`);
     await page.reload();
+    // Part 59 (named exception): the version list sits in the 「版本」 panel, opened first.
+    await page.locator('.cs-versions-btn').click();
     await page.locator('.cs-versions .ot-item').first().waitFor({ timeout: 20_000 });
     await wait(900);
     const vrows = page.locator('.cs-versions .ot-item');

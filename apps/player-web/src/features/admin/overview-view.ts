@@ -18,6 +18,8 @@ import { exactCount, exactMoney, hoverValue, partsText } from './ui/hover-value.
 import { rollNumber } from './ui/number-roll.ts';
 import { buildSplit, figureOf, SPLITS, type Split, type SplitData } from './overview-split.ts';
 import { openTable, type OpenColumn } from './ui/open-table.ts';
+import type { MakeExport } from './export/export-dialog.ts';
+import { STATS_SHEETS } from './export/export-sheets.ts';
 import { fillStatus, pageHead } from './ui/page-head.ts';
 import { pieChart, type PieEntry } from './ui/pie-chart.ts';
 import { segmented } from './ui/segmented.ts';
@@ -86,6 +88,8 @@ export type OverviewDeps = {
   load: () => Promise<OverviewView>;
   run: (work: () => Promise<void>) => Promise<void>;
   disposed: () => boolean;
+  /** Part 57: the page's 导出 button (without it there is none). */
+  makeExport?: MakeExport | undefined;
   /** 24H and the people per character: the 22d chart endpoint (the owner and stats.read). */
   chart?:
     | {
@@ -97,8 +101,6 @@ export type OverviewDeps = {
   stats?:
     | {
         load: (range: StatsRange) => Promise<PlayerStatsView>;
-        exportCsv: (range: StatsRange) => Promise<{ csv: string; rows: number }>;
-        download: (filename: string, text: string) => void;
         available?: () => boolean;
       }
     | undefined;
@@ -136,8 +138,17 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     },
     'm',
   );
-  const exportButton = h('button', { text: '导出表格', attrs: { type: 'button' } });
-  exportButton.addEventListener('click', () => void deps.run(exportTable));
+  // Part 57: the page's one 导出 button: the daily and hourly numbers and the spend, for the range chosen in its own dialog.
+  const exportButton = deps.makeExport?.(() => [
+    {
+      id: 'stats',
+      label: '统计',
+      kind: 'stats',
+      range: 'days',
+      sheets: STATS_SHEETS,
+      tip: '每天、每小时的回复和人数，以及消耗',
+    },
+  ]);
   const head = pageHead('总览', status, rangeSwitch.root, exportButton);
 
   // ---- tiles ----
@@ -1063,7 +1074,7 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     trend.hidden = !statsOn() && !chartOn();
     tiles.dataset.full = String(!!view.stats);
     daysCard.hidden = !statsOn();
-    exportButton.hidden = !statsOn();
+    if (exportButton) exportButton.hidden = !statsOn();
     if (!statsOn()) {
       stats = null;
       paintAll();
@@ -1071,11 +1082,6 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
       return;
     }
     await loadRange();
-  }
-  async function exportTable() {
-    if (!deps.stats) return;
-    const { csv } = await deps.stats.exportCsv(statsRange());
-    if (!deps.disposed()) deps.stats.download(`玩家统计-最近${statsRange()}天.csv`, csv);
   }
   paintMetricTabs();
   return {

@@ -244,7 +244,12 @@ function welcomes(d: Record<string, unknown>): WelcomeLine[] {
   return list.map((entry) => {
     const l = object(entry);
     if (!Number.isInteger(l.weight)) throw invalid();
-    return { id: string(l.id), text: string(l.text), weight: l.weight as number };
+    return {
+      id: string(l.id),
+      text: string(l.text),
+      weight: l.weight as number,
+      ...(typeof l.context === 'string' && l.context ? { context: l.context } : {}),
+    };
   });
 }
 function profile(v: unknown): CharacterProfile {
@@ -378,6 +383,10 @@ export class CharacterAdminClient {
   private call(id: string, action: string, body: Record<string, unknown> = {}) {
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw invalid();
     return this.request(`${id}/${action}`, body);
+  }
+  /** Part 39: every character id in the console's order (首页顺序), live first. */
+  async homeOrder(): Promise<string[]> {
+    return rows(object(await this.request('home-order', {})).order).map(string);
   }
   async list() {
     const r = object(await this.request('list', {}));

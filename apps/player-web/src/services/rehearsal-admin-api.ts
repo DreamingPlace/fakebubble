@@ -1,5 +1,6 @@
 import {
   REHEARSAL_MODEL_IDS,
+  REHEARSAL_SETS,
   parseRehearsalColumn,
   type RehearsalCell,
   type RehearsalCellState,
@@ -7,6 +8,7 @@ import {
   type RehearsalEstimate,
   type RehearsalItems,
   type RehearsalLibrary,
+  type RehearsalMemeCounts,
   type RehearsalMemeCell,
   type RehearsalMemeRow,
   type RehearsalPhrases,
@@ -14,6 +16,7 @@ import {
   type RehearsalRunInfo,
   type RehearsalScriptView,
   type RehearsalSource,
+  type RehearsalStyle,
   type RehearsalStartInput,
   type RehearsalTurn,
 } from '../../../../packages/contracts/web-rehearsal.ts';
@@ -106,12 +109,23 @@ const cell = (v: unknown): RehearsalCell => {
     errorCode: nstring(o.errorCode),
     bubbles: o.bubbles === null ? null : strings(o.bubbles),
     answered: nbool(o.answered),
+    plan:
+      o.plan === null || o.plan === undefined
+        ? null
+        : { read: string(object(o.plan).read), aim: string(object(o.plan).aim), aims: strings(object(o.plan).aims) },
   };
 };
 const nnum = (v: unknown) => {
   if (v === null) return null;
   if (typeof v !== 'number' || !Number.isFinite(v)) throw invalid();
   return v;
+};
+const codes = (v: unknown): Record<string, number> => {
+  if (v === undefined) return {};
+  const o = object(v);
+  const out: Record<string, number> = {};
+  for (const [key, n] of Object.entries(o)) out[key] = int(n);
+  return out;
 };
 const counts = (v: unknown): RehearsalCounts => {
   const o = object(v);
@@ -124,8 +138,26 @@ const counts = (v: unknown): RehearsalCounts => {
     avgBubbles: nnum(o.avgBubbles),
     customerService: int(o.customerService),
     repeated: int(o.repeated),
+    fillers: o.fillers === undefined ? 0 : int(o.fillers),
+    aims: codes(o.aims),
     unconfirmed: int(o.unconfirmed),
     failed: int(o.failed),
+    codes: codes(o.codes),
+  };
+};
+const netMemes = (v: unknown): RehearsalMemeCounts => {
+  const o = object(v);
+  return { matched: int(o.matched), given: int(o.given), use: int(o.use), know: int(o.know), avoid: int(o.avoid) };
+};
+const STYLE_STATES = ['none', 'pending', 'judged', 'unconfirmed', 'failed', 'skipped'] as const;
+const style = (v: unknown): RehearsalStyle => {
+  const o = object(v);
+  const n = (x: unknown) => (x === null ? null : int(x));
+  return {
+    state: oneOf<RehearsalStyle['state']>(o.state, STYLE_STATES),
+    sharedOwn: n(o.sharedOwn),
+    startedTopic: n(o.startedTopic),
+    showedEmotion: n(o.showedEmotion),
   };
 };
 const memeCell = (v: unknown): RehearsalMemeCell => {
@@ -151,7 +183,11 @@ export class RehearsalAdminClient {
       scripts: rows(o.scripts).map(script),
       sets: rows(o.sets).map((s) => {
         const x = object(s);
-        return { set: oneOf(x.set, ['chat', 'repeat'] as const), label: string(x.label), turns: strings(x.turns) };
+        return {
+          set: oneOf(x.set, REHEARSAL_SETS),
+          label: string(x.label),
+          turns: strings(x.turns),
+        };
       }),
       phrases: phrases(o.phrases),
       defaultPhrases: phrases(o.defaultPhrases),
@@ -192,6 +228,7 @@ export class RehearsalAdminClient {
       source: input.source as RehearsalSource,
       models: input.models,
       withCast: input.withCast,
+      ...(input.style ? { style: true } : {}),
     };
   }
   async estimate(
@@ -236,6 +273,8 @@ export class RehearsalAdminClient {
           label: string(x.label),
           cells: rows(x.cells).map(cell),
           counts: counts(x.counts),
+          style: style(x.style),
+          netMemes: x.netMemes === null ? null : netMemes(x.netMemes),
         };
       }),
       memes:

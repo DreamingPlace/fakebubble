@@ -57,6 +57,13 @@ export class SyntheticWriterService extends WorkerEntrypoint {
   open() {
     return new SyntheticWriterSession();
   }
+  /** Part 54: the single-call entries the business object uses for a reply, backed by the same synthetic session. */
+  runText(job: Parameters<WebIsolatedGenerationSession['runText']>[0]) {
+    return new SyntheticWriterSession().runText(job);
+  }
+  runSpeech(job: { wire: Parameters<WebIsolatedGenerationSession['speech']>[0]; callTimeoutMs: number }) {
+    return new SyntheticWriterSession().speech(job.wire, async () => {}, job.callTimeoutMs);
+  }
   reset() {
     calls = [];
   }

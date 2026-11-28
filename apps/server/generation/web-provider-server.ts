@@ -25,10 +25,14 @@ import { localTls, type WebLocalConfig } from '../platform/web-local-config.ts';
 import { serveLocalStatic } from '../platform/web-local-static.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
+import { routeWebAdminExport } from '../export/web-export-routes.ts';
+import { routeWebFeedbackAdmin } from '../turns/web-feedback-routes.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
 import { OWNER_BODY_LIMIT } from '../admin/web-owner-ops.ts';
+import { BROADCAST_UPLOAD_BODY_LIMIT, broadcastAudio } from '../broadcast/web-broadcast-read.ts';
+import { SHARE_PAGE } from '../share/web-share-path.ts';
 import { AVATAR_BODY_LIMIT, avatarHeaders } from '../characters/web-avatar.ts';
 import { webWelcomeLinesInstalled } from '../characters/web-welcome-schema.ts';
 import { routeWebBilling } from '../admission/web-billing-routes.ts';
@@ -45,6 +49,8 @@ import { logRefusal } from '../platform/web-refusal-status.ts';
 import { peerIpHash } from '../admission/ip-key-input.ts';
 
 const privateHeaders = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+/** Part 45: a share's public answers are never cached and never name the page they were opened from. */
+const shareHeaders = { ...privateHeaders, 'Referrer-Policy': 'no-referrer' };
 const API = '/api/web/provider';
 type Principal = ReturnType<WebIdentity['authenticate']>;
 const characterId = isWebProviderCharacterId;
@@ -80,10 +86,15 @@ export class WebProviderServer {
   private readonly activeStreams = new Set<ServerResponse>();
   private readonly host: string;
   private deletionTimer: NodeJS.Timeout | null = null;
+  private broadcastTimer: NodeJS.Timeout | null = null;
+  /** Part 36: closes the batches whose quiet period is over (the turn is the business object's own, not the open page's). */
+  private turnTimer: NodeJS.Timeout | null = null;
+  private broadcastTask: Promise<void> | null = null;
   private deletionError: string | null = null;
   private deletionTask: Promise<void> | null = null;
   private readonly application: WebProviderApplication;
 
+  private readonly playerRoot: string;
   constructor(
     store: WebStore,
     config: WebLocalConfig,
@@ -92,7 +103,10 @@ export class WebProviderServer {
     network?: ProviderNetwork,
     previews?: WebCharacterPreviewRunner,
     players?: WebPlayerAccountsConfig,
+    /** Where the built player site is served from; the built site by default (a test may point it at a stub). */
+    playerRoot = fileURLToPath(new URL('../../player-web/dist', import.meta.url)),
   ) {
+    this.playerRoot = playerRoot;
     store.requireProviderRuntime();
     ensure(
       config.mode === 'provider-local' &&
@@ -119,6 +133,8 @@ export class WebProviderServer {
       // Part 24k-1: the admin speech path the runner was given (the runner drives its recovery).
       if (previews.speech) this.application.characterAdmin.enableSpeech(previews.speech);
       if (previews.direction) this.application.characterAdmin.enableDirection(previews.direction);
+      if (previews.tidy) this.application.cocreation.enableTidy(previews.tidy);
+      if (previews.wordingGen) this.application.cocreation.enableWordingGen(previews.wordingGen);
       this.previews = new WebCharacterPreviewExecutor(previews);
     }
     this.identity = this.application.identity;
@@ -176,6 +192,19 @@ export class WebProviderServer {
             });
       }, 1000);
       this.deletionTimer.unref();
+      // Part 42: a scheduled broadcast is started and delivered by the server's own timer, with no other request.
+      this.broadcastTimer = setInterval(() => this.kickBroadcast(), 1000);
+      this.broadcastTimer.unref();
+      this.turnTimer = setInterval(() => {
+        try {
+          this.application.turns.pass();
+        } catch (error) {
+          console.error(
+            JSON.stringify({ event: 'web_turn_pass_failed', code: (error as { code?: string }).code ?? 'ERROR' }),
+          );
+        }
+      }, 250);
+      this.turnTimer.unref();
       if (this.previews) {
         this.previewTimer = setInterval(() => this.previews!.kick(), 1000);
         this.previewTimer.unref();
@@ -184,6 +213,24 @@ export class WebProviderServer {
       this.executor.stop();
       throw error;
     }
+  }
+
+  /** Part 42: one pass of 广播 (start what is due, deliver a few batches). Never two at once. */
+  private kickBroadcast() {
+    if (this.broadcastTask) return;
+    this.broadcastTask = this.application.broadcast
+      .pass()
+      .then(
+        () => undefined,
+        (error) => {
+          console.error(
+            JSON.stringify({ event: 'web_broadcast_pass_failed', code: (error as { code?: string }).code ?? 'ERROR' }),
+          );
+        },
+      )
+      .finally(() => {
+        this.broadcastTask = null;
+      });
   }
 
   private portOccupied() {
@@ -201,6 +248,9 @@ export class WebProviderServer {
 
   async close() {
     if (this.deletionTimer) clearInterval(this.deletionTimer);
+    if (this.broadcastTimer) clearInterval(this.broadcastTimer);
+    if (this.turnTimer) clearInterval(this.turnTimer);
+    await this.broadcastTask;
     await this.deletionTask;
     if (this.previewTimer) clearInterval(this.previewTimer);
     await this.previews?.close();
@@ -421,16 +471,42 @@ export class WebProviderServer {
       }
       if ((req.method === 'GET' || req.method === 'HEAD') && (path === '/' || path === '/index.html')) {
         const modes = url.searchParams.getAll('mode');
-        if (modes.length === 0) {
-          url.searchParams.set('mode', 'provider');
-          res.writeHead(302, { ...privateHeaders, Location: url.pathname + url.search });
-          res.end();
+        // Part 48: the bare address serves the player directly (no 302 to ?mode=provider); the page treats "no mode" as the player.
+        // Local demos remain available on the synthetic listener, not on the live service.
+        ensure(
+          modes.length <= 1 && (modes.length === 0 || ['provider', 'provider-admin'].includes(modes[0]!)),
+          'NOT_FOUND',
+        );
+      }
+      // Part 45: a share link's page is the player's own page; the page reads the token from its address and asks the public route.
+      if ((req.method === 'GET' || req.method === 'HEAD') && SHARE_PAGE.test(path) && !url.search) {
+        req.url = '/';
+        res.setHeader('Referrer-Policy', 'no-referrer');
+      }
+      if (serveLocalStatic(req, res, this.playerRoot)) return;
+      // Part 45: the two public share reads (no session, no cookie is read): the card, and the voice. Unknown, expired and purged
+      // links answer identically (NOT_FOUND). Only the token is in the address.
+      const shareRead = path.match(new RegExp(`^${API}/shares/([^/]{1,128})(/audio)?$`));
+      if (req.method === 'GET' && shareRead) {
+        const card = shareRead[2] ? null : this.application.shares.open(shareRead[1]!);
+        if (shareRead[2]) {
+          const bytes = await this.application.shares.audio(shareRead[1]!);
+          ensure(bytes, 'NOT_FOUND');
+          res.writeHead(200, { ...shareHeaders, 'Content-Type': 'audio/wav', 'Content-Length': bytes.length });
+          res.end(Buffer.from(bytes));
           return;
         }
-        // Local demos remain available on the synthetic listener, not on the live service.
-        ensure(modes.length === 1 && ['provider', 'provider-admin'].includes(modes[0]!), 'NOT_FOUND');
+        ensure(card, 'NOT_FOUND');
+        res.writeHead(200, { ...shareHeaders, 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(card));
+        return;
       }
-      if (serveLocalStatic(req, res, fileURLToPath(new URL('../../player-web/dist', import.meta.url)))) return;
+      // Part 48: the public catalog (the home cards before any session): no cookie is read or set, public card fields only.
+      if (req.method === 'GET' && path === `${API}/catalog`) {
+        res.writeHead(200, { ...shareHeaders, 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(this.application.publicCatalog()));
+        return;
+      }
       const welcome = path.match(new RegExp(`^${API}/public-audio/([A-Za-z0-9_-]{1,128})$`));
       if (req.method === 'GET' && welcome) {
         this.publicAudio(res, welcome[1]!);
@@ -481,7 +557,7 @@ export class WebProviderServer {
             avatarUpload[1]!,
           );
         const characterWrite =
-          /^\/api\/web\/provider\/admin\/(characters\/[A-Za-z0-9_-]{1,128}\/(save|review-start|run-start)|eval-sets\/save|cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply)|characters\/[A-Za-z0-9_-]{1,128}\/(?:code-save|checklist-dismiss))$/.test(
+          /^\/api\/web\/provider\/admin\/(characters\/[A-Za-z0-9_-]{1,128}\/(save|review-start|run-start)|eval-sets\/save|cast\/(?:save|import-preview|import-file|memes-import-preview|memes-import)|profile-import\/(?:preview|apply)|characters\/[A-Za-z0-9_-]{1,128}\/(?:code-save|checklist-dismiss))$/.test(
             path,
           );
         // A run (up to 50 inputs of 4000 characters) and an eval set are larger than a profile save.
@@ -506,17 +582,21 @@ export class WebProviderServer {
               ? AVATAR_BODY_LIMIT
               : materialUpload
                 ? 8_001_024
-                : /\/admin\/(?:cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply))$/.test(path)
-                  ? CAST_BODY_LIMIT
-                  : bulkWrite
-                    ? 786_432
-                    : characterWrite
-                      ? PROFILE_BODY_LIMIT
-                      : path.startsWith(`${API}/admin/owner/`)
-                        ? OWNER_BODY_LIMIT
-                        : path.startsWith(`${API}/cocreation/`)
-                          ? COCREATION_BODY_LIMIT
-                          : 8192,
+                : path === `${API}/admin/broadcast/upload`
+                  ? BROADCAST_UPLOAD_BODY_LIMIT
+                  : /\/admin\/(?:cast\/(?:save|import-preview|import-file|memes-import-preview|memes-import)|profile-import\/(?:preview|apply))$/.test(
+                        path,
+                      )
+                    ? CAST_BODY_LIMIT
+                    : bulkWrite
+                      ? 786_432
+                      : characterWrite
+                        ? PROFILE_BODY_LIMIT
+                        : path.startsWith(`${API}/admin/owner/`)
+                          ? OWNER_BODY_LIMIT
+                          : path.startsWith(`${API}/cocreation/`)
+                            ? COCREATION_BODY_LIMIT
+                            : 8192,
           ),
         };
         const result =
@@ -524,6 +604,8 @@ export class WebProviderServer {
             path.startsWith(`${API}/account/`) ? this.application.playerAccounts : null,
             input,
           )) ??
+          (await routeWebFeedbackAdmin(this.application.feedbackAdmin, input)) ??
+          routeWebAdminExport(this.application.exporter, input) ??
           (await routeWebAccountAdmin(
             this.inviteAdmin,
             input,
@@ -533,10 +615,13 @@ export class WebProviderServer {
             this.application.system,
             this.application.cast,
             this.application.ownerOps,
+            this.application.broadcast,
           )) ??
           routeWebCocreation(this.application.cocreation, input) ??
           routeWebBilling(this.application.billing, input) ??
           routeWebInvite(this.inviteActions, input, this.inviteAdmin);
+        // Part 40/42: a route that queues work says so itself; the executor is woken now rather than at its next tick.
+        if (result.queuesWork) this.kickBroadcast();
         if (result.issuedToken) this.setCookie(res, result.issuedToken, true);
         else if (result.clearPlayerCookie)
           res.setHeader('Set-Cookie', `${this.config.cookieName}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`);
@@ -593,6 +678,86 @@ export class WebProviderServer {
           operation: this.operation(principal, admitted.operationId),
           duplicate: admitted.duplicate,
         });
+        return;
+      }
+      // Part 36: one bubble of a batch (the reply is one turn), where the turn is, and 👍 / 👎.
+      const bubble = path.match(new RegExp(`^${API}/characters/([A-Za-z0-9_-]{1,128})/bubbles$`));
+      if (req.method === 'POST' && bubble) {
+        ensure(characterId(bubble[1]!), 'NOT_FOUND');
+        this.authorizeWrite(req);
+        const body = await this.body(req);
+        ensure(
+          typeof body.requestId === 'string' &&
+            typeof body.text === 'string' &&
+            (body.quoteMessageId === undefined || typeof body.quoteMessageId === 'string') &&
+            Object.keys(body).every((key) => ['requestId', 'text', 'quoteMessageId'].includes(key)),
+          'INVALID_REQUEST',
+        );
+        const ipHash = this.ipHash(req);
+        const result = this.store.transaction(() =>
+          this.application.turns.addBubble(this.authorizeWrite(req).principal, {
+            requestId: body.requestId as string,
+            characterId: bubble[1]!,
+            text: body.text as string,
+            quoteMessageId: (body.quoteMessageId as string | undefined) ?? null,
+            ipHash,
+          }),
+        );
+        this.json(res, result.duplicate ? 200 : 202, result);
+        return;
+      }
+      const turn = path.match(new RegExp(`^${API}/characters/([A-Za-z0-9_-]{1,128})/turn$`));
+      if (req.method === 'GET' && turn) {
+        ensure(characterId(turn[1]!), 'NOT_FOUND');
+        const cookie = this.cookie(req);
+        ensure(cookie, 'AUTH_REQUIRED');
+        const current = this.identity.authenticate(cookie);
+        this.json(res, 200, this.application.turns.view(current, turn[1]!));
+        return;
+      }
+      if (req.method === 'POST' && path === `${API}/ratings`) {
+        this.authorizeWrite(req);
+        const body = await this.body(req);
+        ensure(
+          typeof body.requestId === 'string' &&
+            typeof body.conversationId === 'string' &&
+            typeof body.messageId === 'string' &&
+            typeof body.rating === 'string' &&
+            Object.keys(body).every((key) =>
+              ['requestId', 'conversationId', 'messageId', 'rating', 'target'].includes(key),
+            ),
+          'INVALID_REQUEST',
+        );
+        const rated = this.store.transaction(() =>
+          this.application.feedback.rate(this.authorizeWrite(req).principal, {
+            requestId: body.requestId as string,
+            conversationId: body.conversationId as string,
+            messageId: body.messageId as string,
+            rating: body.rating as 'up' | 'down' | 'none',
+            ...(body.target === undefined ? {} : { target: body.target as 'voice' | 'content' }),
+          }),
+        );
+        this.json(res, 200, rated);
+        return;
+      }
+      if (req.method === 'POST' && path === `${API}/shares`) {
+        this.authorizeWrite(req);
+        const body = await this.body(req);
+        ensure(
+          typeof body.requestId === 'string' &&
+            typeof body.conversationId === 'string' &&
+            typeof body.messageId === 'string' &&
+            Object.keys(body).sort().join(',') === 'conversationId,messageId,requestId',
+          'INVALID_REQUEST',
+        );
+        const made = this.store.transaction(() =>
+          this.application.shares.create(this.authorizeWrite(req).principal, {
+            requestId: body.requestId as string,
+            conversationId: body.conversationId as string,
+            messageId: body.messageId as string,
+          }),
+        );
+        this.json(res, 200, { token: made.token, expiresAt: made.expiresAt });
         return;
       }
       const token = this.cookie(req);
@@ -661,6 +826,18 @@ export class WebProviderServer {
       );
       if (req.method === 'GET' && audio) {
         requireWebContent(this.store, this.clock, principal.principalId, principal.world_id, 'read');
+        // Part 42: a broadcast's voice clip, read only by the player it was delivered to.
+        const broadcast = broadcastAudio(
+          this.store,
+          { principalId: principal.principalId, worldId: principal.world_id, conversationId: audio[1]! },
+          audio[2]!,
+          audio[3]!,
+        );
+        if (broadcast) {
+          res.writeHead(200, { ...privateHeaders, 'Content-Type': 'audio/wav', 'Content-Length': broadcast.length });
+          res.end(broadcast);
+          return;
+        }
         const row = this.store.get<{ character_id: string }>(
           `SELECT p.character_id FROM web_publication_items i
           JOIN web_publications p ON p.operation_id=i.operation_id WHERE i.message_id=? AND i.media_id=?

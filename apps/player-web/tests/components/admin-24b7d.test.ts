@@ -291,8 +291,6 @@ function mountOverview(t: test.TestContext) {
     disposed: () => false,
     stats: {
       load: async (range: StatsRange) => stats(range),
-      exportCsv: async () => ({ csv: '', rows: 0 }),
-      download: () => {},
     },
     chart: {
       load: async (metric: ChartMetric, range: ChartRange) => {

@@ -46,9 +46,12 @@ import { growBox } from '../ui/grow-box.ts';
 import { reviewCompareView } from './review-compare-view.ts';
 import { rehearsalView } from '../rehearsal/rehearsal-view.ts';
 import { STAGE_LABEL, isFinished, progressText, stageOf, type Stage } from './stage.ts';
+import type { MakeExport } from '../export/export-dialog.ts';
 
 export const RUN_MAX = 50;
 const INPUT_MAX = 4000;
+/** Part 41: how long the editor must be still before the 预演 half reads the character and its estimate again. */
+const SECOND_HALF_QUIET_MS = 500;
 export type PreviewToastAction = { label: string; run: () => void };
 export type PreviewWorkbenchHost = {
   api: PreviewAdminClient;
@@ -74,6 +77,10 @@ export type PreviewWorkbenchHost = {
   /** Part 31 (owner): deleting 预演 records. Absent (any other administrator, or a page without it) = nothing of it is drawn. */
   owner?: Pick<OwnerAdminClient, 'deletePreviews' | 'deleteRehearsals'>;
   confirm?: ConfirmInPlace;
+  /** Part 37b: ⭐ on a 多轮预演 line (the 说话档案 adopt box). */
+  adopt?: (input: { characterId: string; player: string; reply: string }) => void;
+  /** Part 57: 多轮预演's 导出 button. */
+  makeExport?: MakeExport;
 };
 const defaultHidden = () => (globalThis as { document?: { hidden?: boolean } }).document?.hidden === true;
 const defaultOnVisible = (fn: () => void) => {
@@ -247,6 +254,8 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
         toast: host.toast,
         disposed: () => disposed || host.disposed(),
         modalParent: host.modalParent,
+        ...(host.adopt ? { adopt: host.adopt } : {}),
+        ...(host.makeExport ? { makeExport: host.makeExport } : {}),
         ...(rehearsalHalf ? { inline: rehearsalHalf } : {}),
         ...(host.owner && host.confirm
           ? { owner: host.owner, confirm: host.confirm, isOwner: () => host.member()?.role === 'owner' }
@@ -285,7 +294,30 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     empty,
     reviewSection,
   );
-  root.append(rehearsalHalf ? h('div', { class: 'pw-split' }, page, rehearsalHalf) : page);
+  const splitBox = rehearsalHalf ? h('div', { class: 'pw-split' }, page, rehearsalHalf) : null;
+  root.append(splitBox ?? page);
+  // Part 40: the two halves fill the height from where the split starts to the bottom of the window and scroll on their own
+  // (the CSS takes this one number); measured once drawn and again when the window changes.
+  let splitObserver: ResizeObserver | null = null;
+  const fitSplit = () => {
+    if (!splitBox || !splitBox.isConnected) return;
+    splitBox.style.setProperty(
+      '--pw-split-top',
+      `${Math.max(0, Math.round(splitBox.getBoundingClientRect().top + (globalThis.scrollY ?? 0)))}px`,
+    );
+  };
+  if (splitBox) {
+    globalThis.addEventListener?.('resize', fitSplit);
+    globalThis.requestAnimationFrame?.(() => {
+      fitSplit();
+      setTimeout(fitSplit, 400);
+    });
+    // what is above the split can change height after it is drawn (the tab bar, a banner): measure again whenever the page does
+    if (typeof ResizeObserver === 'function') {
+      splitObserver = new ResizeObserver(fitSplit);
+      splitObserver.observe(document.body);
+    }
+  }
   const reviewCompare = reviewApi
     ? reviewCompareView(reviewHost, {
         api: reviewApi,
@@ -800,6 +832,12 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       h('pre', { class: 'pw-pre', text: p.input ?? '' }),
       p.note ? h('p', { class: 'admin-hint', text: `备注：${p.note}` }) : (null as never),
     );
+    if (p.final?.plan)
+      section(
+        '她的想法（只有你看得到，玩家看不到）',
+        h('p', { class: 'pw-plan', text: `读到：${p.final.plan.read}` }),
+        h('p', { class: 'pw-plan', text: `想让对方感到：${p.final.plan.aim}` }),
+      );
     const draftTexts = p.draft?.bubbles?.map((b) => b.text) ?? [];
     const finalTexts = p.final?.bubbles.map((b) => b.text) ?? [];
     if (p.final) {
@@ -1578,10 +1616,30 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     // the second half reads this character's scripts and runs (the drawer reads them when it is opened)
     if (rehearsalHalf) rehearsal?.open();
   }
+  let secondHalfTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The second half estimates on its own: a saved draft is a new revision, so the character is read again first (a stale one would
+   * be refused as a conflict); an unsaved edit blocks the run anyway. */
+  function refreshSecondHalf() {
+    if (id && host.draftUnsaved?.() !== true) {
+      const mine = id;
+      void host.characters
+        .detail(mine)
+        .then((fresh) => {
+          if (gone() || id !== mine) return;
+          detail = fresh;
+          paintAll();
+          rehearsal?.refresh();
+        })
+        .catch(() => rehearsal?.refresh());
+      return;
+    }
+    rehearsal?.refresh();
+  }
   const focusInput = () => {
     paintSettings();
     input.focus?.();
-    page.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+    // the split (its halves scroll on their own) or the page comes to the top of the window
+    (splitBox ?? page).scrollIntoView?.({ block: 'start', behavior: 'auto' });
   };
   root.addEventListener('pw-focus', focusInput);
   return {
@@ -1593,26 +1651,21 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     /** The editor beside this panel changed (saved / unsaved): the reason line follows. */
     refresh: () => {
       paintAll();
-      // the second half estimates on its own: a saved draft is a new revision, so the character is read again first (a stale one would
-      // be refused as a conflict); an unsaved edit blocks the run anyway
-      if (rehearsalHalf && id && host.draftUnsaved?.() !== true) {
-        const mine = id;
-        void host.characters
-          .detail(mine)
-          .then((fresh) => {
-            if (gone() || id !== mine) return;
-            detail = fresh;
-            paintAll();
-            rehearsal?.refresh();
-          })
-          .catch(() => rehearsal?.refresh());
-        return;
-      }
-      rehearsal?.refresh();
+      // Part 41: the reads below (the character, then the estimate) go out once the editor has been quiet, not on every flip of
+      // its saved / unsaved state: a form being typed into flips it on every edit that makes it equal to, or unlike, the saved one.
+      if (!rehearsalHalf) return rehearsal?.refresh();
+      if (secondHalfTimer !== null) clearTimeout(secondHalfTimer);
+      secondHalfTimer = setTimeout(() => {
+        secondHalfTimer = null;
+        if (gone()) return;
+        refreshSecondHalf();
+      }, SECOND_HALF_QUIET_MS);
     },
     focusInput,
     clear() {
       view++;
+      if (secondHalfTimer !== null) clearTimeout(secondHalfTimer);
+      secondHalfTimer = null;
       id = null;
       detail = null;
       reset();
@@ -1620,6 +1673,9 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     },
     dispose() {
       disposed = true;
+      if (secondHalfTimer !== null) clearTimeout(secondHalfTimer);
+      globalThis.removeEventListener?.('resize', fitSplit);
+      splitObserver?.disconnect();
       resetTitle();
       poller.dispose();
       send.dispose();

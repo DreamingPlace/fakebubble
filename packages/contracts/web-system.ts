@@ -112,6 +112,8 @@ export type SystemFlags = {
   alertMailBindingPresent: boolean;
   alertRecipientSet: boolean;
 };
+/** Part 45: shareable voice-card links, counts only (never a token, an id or content). `expired` = links that passed their day. */
+export type SystemShares = { created: number; opened: number; expired: number; active: number };
 export type SystemSecurity = {
   turnstile: boolean;
   /** UTC today / the last 7 UTC days including today. `unavailable` = siteverify could not be reached. */
@@ -150,3 +152,30 @@ export type OverviewView = {
   /** Absent or null for an administrator without stats.read (and on a database older than migration 128). */
   stats?: OverviewStats | null;
 };
+
+/**
+ * Part 54: 「未确认的调用」 on 系统状态. A call whose result is not known keeps its money held and is never retried; the owner
+ * settles each one after checking the provider's bill. `code` is a short pseudonymous code (U-XXXXX-XXXXX), nothing else
+ * identifies the call: no id, no email, no nickname, no IP hash, no message content.
+ */
+export interface UnknownCallRow {
+  code: string;
+  provider: string;
+  model: string;
+  stage: 'draft' | 'review' | 'speech';
+  heldMicros: number;
+  ageMs: number;
+  errorCode: string;
+}
+export interface UnknownCallsView {
+  calls: UnknownCallRow[];
+  /** UNKNOWN calls of another kind (memory embeddings): counted here, settled elsewhere. */
+  other: { embed: number };
+  /** How many have been settled so far. */
+  resolved: number;
+}
+export interface UnknownResolveResult {
+  code: string;
+  heldMicros: number;
+  settledMicros: number;
+}

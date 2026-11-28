@@ -3,10 +3,12 @@ import type { WebAccountAdmin } from './web-account-admin.ts';
 import type { WebInviteRequest, WebInviteResult } from '../invites/web-invite-routes.ts';
 import type { WebCharacterAdmin } from '../characters/web-character-admin.ts';
 import type { WebCocreation } from '../cocreation/web-cocreation.ts';
+import { WebCocreationRelations } from '../cocreation/web-cocreation-relations.ts';
 import type { WebChatReviewAdmin } from '../review/web-chat-review-admin.ts';
 import type { WebSystemAdmin } from './web-system-admin.ts';
 import type { WebCastAdmin } from './web-cast-admin.ts';
 import type { WebOwnerOps } from './web-owner-ops.ts';
+import type { WebBroadcast } from '../broadcast/web-broadcast.ts';
 
 export async function routeWebAccountAdmin(
   admin: WebAccountAdmin,
@@ -17,6 +19,7 @@ export async function routeWebAccountAdmin(
   system?: WebSystemAdmin | null,
   cast?: WebCastAdmin | null,
   ownerOps?: WebOwnerOps | null,
+  broadcast?: WebBroadcast | null,
 ): Promise<WebInviteResult | null> {
   const base = '/api/web/local/admin',
     path = req.path;
@@ -61,6 +64,25 @@ export async function routeWebAccountAdmin(
       return { status: 200, body: chatReview.export(actor, body(['characterId', 'code', 'archived']) as never) };
     ensure(false, 'NOT_FOUND');
   }
+  // Part 42: 广播. The permission (the owner or broadcast.send) is checked before the body is read. 发送, 修改 and the voice routes
+  // that spend money are the routes that queue work: the executor starts the send at its time (Part 40's queuesWork).
+  if (path.startsWith(`${base}/broadcast/`)) {
+    auth();
+    ensure(broadcast, 'NOT_FOUND');
+    const actor = { cookie: req.adminCookie, csrf: req.csrf, origin: req.origin };
+    const action = path.slice(`${base}/broadcast/`.length);
+    if (action === 'options') return { status: 200, body: broadcast.options(actor) };
+    if (action === 'list') return { status: 200, body: broadcast.list(actor) };
+    if (action === 'detail') return { status: 200, body: broadcast.detail(actor, req.body) };
+    if (action === 'estimate') return { status: 200, body: broadcast.estimate(actor, req.body) };
+    if (action === 'speak') return { status: 200, body: await broadcast.speak(actor, req.body) };
+    if (action === 'upload') return { status: 200, body: broadcast.upload(actor, req.body) };
+    if (action === 'take-audio') return { status: 200, body: broadcast.takeAudio(actor, req.body) };
+    if (action === 'send') return { status: 200, queuesWork: true, body: broadcast.create(actor, req.body) };
+    if (action === 'update') return { status: 200, queuesWork: true, body: broadcast.update(actor, req.body) };
+    if (action === 'cancel') return { status: 200, queuesWork: true, body: broadcast.cancel(actor, req.body) };
+    ensure(false, 'NOT_FOUND');
+  }
   // Part 31: the owner's operations. Each handler checks the owner (arc order: the 角色 grant too) and the body shape itself.
   if (ownerOps && path.startsWith(`${base}/owner/`)) {
     auth();
@@ -101,6 +123,9 @@ export async function routeWebAccountAdmin(
     if (action === 'system/writer-read') return { status: 200, body: system.writerRead(actor, req.body) };
     if (action === 'system/writer-save') return { status: 200, body: system.writerSave(actor, req.body) };
     if (action === 'system/budget-topup') return { status: 200, body: await system.budgetTopUp(actor, req.body) };
+    // Part 54: 未确认的调用 (read: owner or system.read) and 已按账单核对 (owner only, one call at a time).
+    if (action === 'system/unknown-calls') return { status: 200, body: system.unknownCalls(actor, req.body ?? {}) };
+    if (action === 'system/unknown-resolve') return { status: 200, body: await system.unknownResolve(actor, req.body) };
     if (action === 'points/preview')
       return { status: 200, body: system.pointsPreview(actor, req.body, req.trustedIpHash) };
     if (action === 'points/grant') return { status: 200, body: system.pointsGrant(actor, req.body, req.trustedIpHash) };
@@ -138,6 +163,20 @@ export async function routeWebAccountAdmin(
     if (action === 'export') return { status: 200, body: cast.exportFile(actor, req.body) };
     if (action === 'import-preview') return { status: 200, body: cast.importPreview(actor, req.body) };
     if (action === 'import-file') return { status: 200, body: cast.importFile(actor, req.body) };
+    // Part 37c-1: 网络梗 (the shipped dictionary's per-entry switch; cast.read / cast.edit).
+    if (action === 'memes-list') return { status: 200, body: cast.memesList(actor, req.body) };
+    if (action === 'memes-set') return { status: 200, body: cast.memesSet(actor, req.body) };
+    // Part 37c-1b: the editable library and the 待审 queue (reads: cast.read / the preview; writes: cast.edit).
+    if (action === 'memes-queue') return { status: 200, body: cast.memesQueue(actor, req.body) };
+    if (action === 'memes-add') return { status: 200, body: cast.memesAdd(actor, req.body) };
+    if (action === 'memes-edit') return { status: 200, body: cast.memesEdit(actor, req.body) };
+    if (action === 'memes-restore-original') return { status: 200, body: cast.memesRestoreOriginal(actor, req.body) };
+    if (action === 'memes-delete') return { status: 200, body: cast.memesDelete(actor, req.body) };
+    if (action === 'memes-restore') return { status: 200, body: cast.memesRestore(actor, req.body) };
+    if (action === 'memes-import-preview') return { status: 200, body: cast.memesImportPreview(actor, req.body) };
+    if (action === 'memes-import') return { status: 200, body: cast.memesImport(actor, req.body) };
+    if (action === 'memes-approve') return { status: 200, body: cast.memesApprove(actor, req.body) };
+    if (action === 'memes-dismiss') return { status: 200, body: cast.memesDismiss(actor, req.body) };
     ensure(false, 'NOT_FOUND');
   }
   if (path.startsWith(`${base}/cocreation/`)) {
@@ -171,15 +210,77 @@ export async function routeWebAccountAdmin(
       const value = body(['id', 'ordinal']);
       return { status: 200, body: cocreation.markAdopted(actor, value.id, value.ordinal) };
     }
+    // Part 59: 不采纳 / 复制 / 标为已处理 on one item (an answer, or the reason of a relation note).
+    if (action === 'mark-item') {
+      const value = body(['id', 'item', 'how']);
+      return { status: 200, body: cocreation.markItem(actor, value.id, value.item, value.how) };
+    }
     if (action === 'unadopt') {
       const value = body(['id', 'ordinal']);
       return { status: 200, body: cocreation.unadopt(actor, value.id, value.ordinal) };
     }
     // Part 24c: 加入关系与故事 - a pair note becomes a story of the cast draft (compare-and-swap on its revision; never publishes).
     if (action === 'cast-story') {
-      const value = body(['id', 'ordinal', 'expectedRevision']);
-      return { status: 200, body: cocreation.addToCastStory(actor, value.id, value.ordinal, value.expectedRevision) };
+      const value = body(['id', 'ordinal']);
+      return { status: 200, body: cocreation.addToCastStory(actor, value.id, value.ordinal) };
     }
+    // Part 39: relation notes (two to eight characters), 玩家眼中的关系, 不计入, 采纳 / 不采纳, 整理.
+    if (action.startsWith('relation/') || action === 'adopt-answers')
+      ensure(cocreation instanceof WebCocreationRelations, 'NOT_FOUND');
+    const relations = cocreation as WebCocreationRelations;
+    // Part 55: 采纳 of one or many answers, each into its own destination, written by the server at the draft's current revision.
+    if (action === 'adopt-answers')
+      return { status: 200, body: relations.adoptAnswers(actor, body(['items']) as never) };
+    if (action === 'relation/detail') return { status: 200, body: relations.relationDetail(actor, body(['id']).id) };
+    if (action === 'relation/stats') {
+      body([]);
+      return { status: 200, body: relations.relationStats(actor) };
+    }
+    if (action === 'relation/order') {
+      body([]);
+      return { status: 200, body: relations.consoleOrder(actor) };
+    }
+    if (action === 'relation/exclude') {
+      const value = body(['id', 'excluded']);
+      return { status: 200, body: relations.setExcluded(actor, value.id, value.excluded) };
+    }
+    if (action === 'relation/reject') return { status: 200, body: relations.rejectRelation(actor, body(['id']).id) };
+    if (action === 'relation/adopt')
+      return {
+        status: 200,
+        body: relations.adoptRelation(actor, body(['id', 'requestId', 'text', 'groupName']) as never),
+      };
+    // Part 59: the reason of a two-person note, adopted as that pair's 关系注解 in the cast draft.
+    if (action === 'relation/adopt-reason')
+      return { status: 200, body: relations.adoptReason(actor, body(['id', 'requestId', 'text']) as never) };
+    if (action === 'relation/tidy')
+      return { status: 200, body: await relations.tidy(actor, body(['id', 'requestId']) as never) };
+    // Part 39b: 「题目」, the wording pool of every character's themes, and its 生成.
+    if (action.startsWith('wordings/')) ensure(cocreation instanceof WebCocreationRelations, 'NOT_FOUND');
+    if (action === 'wordings/list') {
+      body([]);
+      return { status: 200, body: relations.wordingList(actor) };
+    }
+    if (action === 'wordings/add')
+      return {
+        status: 200,
+        body: relations.wordingAdd(actor, body(['characterId', 'themeId', 'text', 'enabled', 'requestId']) as never),
+      };
+    if (action === 'wordings/edit')
+      return { status: 200, body: relations.wordingEdit(actor, body(['id', 'text']) as never) };
+    if (action === 'wordings/toggle')
+      return { status: 200, body: relations.wordingToggle(actor, body(['id', 'enabled']) as never) };
+    if (action === 'wordings/set-enabled')
+      return { status: 200, body: relations.wordingSetEnabled(actor, body(['ids', 'enabled']) as never) };
+    if (action === 'wordings/delete')
+      return { status: 200, body: relations.wordingDelete(actor, body(['id']) as never) };
+    if (action === 'wordings/estimate')
+      return { status: 200, body: relations.wordingEstimate(actor, body(['characterIds']) as never) };
+    if (action === 'wordings/generate')
+      return {
+        status: 200,
+        body: await relations.wordingGenerate(actor, body(['characterId', 'requestId', 'acknowledgeMicros']) as never),
+      };
     ensure(false, 'NOT_FOUND');
   }
   // Part 26b: 审核对比 (V4 Pro against V4.1 Flash on a built-in set of synthetic cases), part of 预演.
@@ -197,7 +298,11 @@ export async function routeWebAccountAdmin(
       return { status: 200, body: characters.compareList(actor) };
     }
     if (action === 'start')
-      return { status: 200, body: characters.compareStart(actor, body(['requestId', 'confirmPaidCalls'])) };
+      return {
+        status: 200,
+        queuesWork: true,
+        body: characters.compareStart(actor, body(['requestId', 'confirmPaidCalls'])),
+      };
     if (action === 'mark')
       return { status: 200, body: characters.compareMark(actor, body(['runId', 'ordinal', 'side', 'mark'])) };
     if (action === 'detail') return { status: 200, body: characters.compareDetail(actor, body(['runId']).runId) };
@@ -243,6 +348,7 @@ export async function routeWebAccountAdmin(
         'source',
         'models',
         'withCast',
+        ...(optional('style').length ? ['style'] : []),
       ]);
       return { status: 200, body: characters.rehearsalEstimate(actor, characterId(id), rest) };
     }
@@ -254,9 +360,10 @@ export async function routeWebAccountAdmin(
         'source',
         'models',
         'withCast',
+        ...(optional('style').length ? ['style'] : []),
         'acknowledgeMicros',
       ]);
-      return { status: 200, body: characters.rehearsalStart(actor, characterId(id), rest) };
+      return { status: 200, queuesWork: true, body: characters.rehearsalStart(actor, characterId(id), rest) };
     }
     ensure(false, 'NOT_FOUND');
   }
@@ -295,6 +402,7 @@ export async function routeWebAccountAdmin(
       body([]);
       return { status: 200, body: characters.list(actor) };
     }
+    if (path === `${base}/characters/home-order`) return { status: 200, body: characters.homeOrder(actor) };
     if (path === `${base}/characters/order`) return { status: 200, body: characters.saveOrder(actor, req.body) };
     const match = path.match(
       new RegExp(
@@ -312,6 +420,7 @@ export async function routeWebAccountAdmin(
     if (match[2] === 'delete-start')
       return {
         status: 202,
+        queuesWork: true,
         body: characters.deletionStart(actor, id, body(['requestId', 'previewHash', 'acknowledgeDeleteAllChats'])),
       };
     if (match[2] === 'delete-status') {
@@ -449,6 +558,7 @@ export async function routeWebAccountAdmin(
     if (match[2] === 'review-start')
       return {
         status: 202,
+        queuesWork: true,
         body: characters.startPreview(
           actor,
           id,
@@ -467,6 +577,7 @@ export async function routeWebAccountAdmin(
     if (match[2] === 'run-start')
       return {
         status: 202,
+        queuesWork: true,
         body: characters.startRun(
           actor,
           id,

@@ -4,6 +4,7 @@
  * files: the hand-lettered wordmark, the 小卡 data, the login / signed-out pages, the model sheet in its states, the 共创 colours
  * and the stylesheet's own rules (player selectors only, data-URI images only, every animation switched off by reduced motion).
  */
+import { NAME_SIZE_MAX } from '../../src/features/prototype/card-name.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -94,9 +95,10 @@ test('every card has a serial number, an aura and (for a Latin-lettered name) th
   assert.deepEqual(byId('wei-guagua').card.aura, ['#FFD3B8', '#FFEBC9', '#FFB295', '#E8561E']);
   assert.deepEqual(byId('jojo').card.aura, ['#C6E4FF', '#D5F6EE', '#97C8F5', '#2F7BEA']);
   assert.deepEqual(byId('chen-jimi').card.aura, ['#DCD2FF', '#FFD8EE', '#BBA4FF', '#7C4DEB']);
-  // A name of two Chinese characters is the biggest; a longer name shrinks so it stays on one line.
-  assert.ok(byId('wei-guagua').card.nameSize > byId('chen-jimi').card.nameSize);
-  assert.ok(byId('wei-guagua').card.nameSize <= 0.36);
+  // Part 44 (named exception, owner decision): one fixed size for every name (the card then shrinks a name only to fit its width, see
+  // card-name.ts); the old rule (the shorter the name, the bigger) is gone.
+  assert.equal(byId('wei-guagua').card.nameSize, byId('chen-jimi').card.nameSize);
+  assert.equal(byId('wei-guagua').card.nameSize, NAME_SIZE_MAX);
   // An empty slot has a neutral aura and a number of its own; no text.
   const empty = people.find((person) => !person.characterId)!;
   assert.equal(empty.card.latin, null);

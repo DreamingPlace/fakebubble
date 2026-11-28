@@ -19,15 +19,19 @@ import { budgetHash } from '../budget/web-provider-budget-contract.ts';
 import { previewDigest, requirePreviewActor } from './web-character-preview.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { webCharacterPreviewsRunning } from './web-character-preview-schema.ts';
-import { rehearsalInstalled } from './web-rehearsal-schema.ts';
+import { rehearsalInstalled, rehearsalRunning } from './web-rehearsal-schema.ts';
 import { rehearsalRequest, type RehearsalFrozen } from './web-rehearsal-request.ts';
 import { forbiddenWords } from './web-rehearsal-sets.ts';
 import {
   parseHints,
+  parseStyleVerdict,
   parseVerdict,
   REHEARSAL_HINT_PROMPT,
   REHEARSAL_HINT_PROMPT_SHA256,
   REHEARSAL_JUDGE_OUTPUT_TOKENS,
+  REHEARSAL_STYLE_ITEM,
+  REHEARSAL_STYLE_PROMPT,
+  REHEARSAL_STYLE_PROMPT_SHA256,
   REHEARSAL_VERDICT_PROMPT,
   REHEARSAL_VERDICT_PROMPT_SHA256,
 } from './web-rehearsal-prompts.ts';
@@ -49,7 +53,7 @@ type Generator = Pick<
   'textProtocol' | 'policyHash' | 'generateAcceptedStages' | 'generateAcceptedReviewFromKnownDraft'
 > &
   // Part 37a: the v8 writer's policy hash (a generator without it cannot run a 新 column: it is refused before anything is sent).
-  Partial<Pick<DeepSeekTextGenerator, 'writerPolicyHash'>>;
+  Partial<Pick<DeepSeekTextGenerator, 'writerPolicyHash' | 'writerProfilePolicyHash' | 'writerMemesPolicyHash'>>;
 type Phase = 'draft' | 'review' | 'judge';
 interface Call {
   run_id: string;
@@ -104,6 +108,14 @@ export interface RehearsalClaim {
 }
 const natural = (n: unknown): n is number => Number.isSafeInteger(n) && Number(n) >= 0;
 const TERMINAL = ['done', 'failed', 'unconfirmed', 'skipped'];
+/** Part 40: calls of one run in flight at once (one per column). */
+const REHEARSAL_PARALLEL = 3;
+/**
+ * The refusals that go away by waiting: nothing is sent, nothing is held, and the same call is tried again later. Everything else
+ * that stops a call before it is sent (price missing, no capacity row, provider or writer not supported, pin mismatch, budget
+ * spent, key missing) does not change by waiting: the unit fails at once with its code.
+ */
+const TEMPORARY_REFUSALS: ReadonlySet<string> = new Set(['WEB_DISPATCH_CAPACITY']);
 
 /**
  * Part 35: runs a 多轮预演 one unit at a time inside the preview queue's single text slot. The guarantees are the preview's:
@@ -134,8 +146,15 @@ export class WebRehearsalRunner {
     this.nextId = nextId;
   }
   /** The policy hash a request is bound to: the v7 one, or the pinned v8 one for a 新 column. */
-  private policyHashOf(request: Pick<TextGenerationRequest, 'writer'>) {
-    const hash = request.writer === 'v8' ? this.generator.writerPolicyHash : this.generator.policyHash;
+  private policyHashOf(request: Pick<TextGenerationRequest, 'writer' | 'writerProfile' | 'writerMemes'>) {
+    const hash =
+      request.writer === 'v8'
+        ? request.writerMemes === true
+          ? this.generator.writerMemesPolicyHash
+          : request.writerProfile === true
+            ? this.generator.writerProfilePolicyHash
+            : this.generator.writerPolicyHash
+        : this.generator.policyHash;
     ensure(hash, 'WEB_WRITER_UNSUPPORTED');
     return hash;
   }
@@ -251,6 +270,21 @@ export class WebRehearsalRunner {
       }
       return { go: 'run' };
     }
+    if (row.item_key === REHEARSAL_STYLE_ITEM) {
+      // Part 37a-3: the style judge of a column reads every reply of that column, so it waits for all of them.
+      let replies = 0;
+      for (const turn of turns.filter((t) => t.text !== null)) {
+        const unit = this.store.get<Unit>(
+          "SELECT * FROM web_rehearsal_units WHERE run_id=? AND kind='cell' AND model_key=? AND turn=?",
+          row.run_id,
+          row.model_key,
+          turn.turn,
+        );
+        if (!unit || !TERMINAL.includes(unit.status)) return { go: 'wait' };
+        if (unit.status === 'done') replies++;
+      }
+      return replies > 0 ? { go: 'run' } : { go: 'skip', code: 'REHEARSAL_REPLY_MISSING' };
+    }
     const item = this.store.get<{ state: string }>(
       'SELECT state FROM web_rehearsal_items WHERE run_id=? AND item_key=?',
       row.run_id,
@@ -292,9 +326,13 @@ export class WebRehearsalRunner {
             u.seq,
           );
       }
+      // Part 40: the columns of a run go in parallel, at most REHEARSAL_PARALLEL in flight and never more than the text slots
+      // the live chat leaves (every console call counts against them). A preview of the administrator does not wait for these:
+      // its own gate ignores them.
       if (
-        webCharacterPreviewsRunning(this.store) >= 1 ||
-        this.store.get<{ n: number }>("SELECT count(*) n FROM web_operations WHERE status='text_running'")!.n >=
+        rehearsalRunning(this.store) >= REHEARSAL_PARALLEL ||
+        webCharacterPreviewsRunning(this.store) +
+          this.store.get<{ n: number }>("SELECT count(*) n FROM web_operations WHERE status='text_running'")!.n >=
           webConcurrency(this.store).maxTextRunning
       )
         return null;
@@ -313,6 +351,16 @@ export class WebRehearsalRunner {
           this.finish(row.run_id, row.seq, 'failed', 'CHARACTER_DELETED');
           continue;
         }
+        // One call in flight per column: its turns (and its judges) stay in order.
+        if (
+          row.model_key !== null &&
+          this.store.get(
+            "SELECT 1 FROM web_rehearsal_units WHERE status='generating' AND run_id=? AND model_key=? LIMIT 1",
+            row.run_id,
+            row.model_key,
+          )
+        )
+          continue;
         const ready = this.readiness(row);
         if (ready.go === 'wait') continue;
         if (ready.go === 'skip') {
@@ -413,15 +461,24 @@ export class WebRehearsalRunner {
       const max = Math.min(inputBound, bytes) + outputTokens,
         held = max * price.upper_micros_per_unit;
       ensure(natural(max) && max > 0 && natural(held) && held > 0, 'REHEARSAL_STAGE_INVALID');
-      ensure(
+      if (
         this.store.run(
           `UPDATE web_external_budgets SET reserved=reserved+1
           WHERE provider=? AND stage='text' AND phase=? AND reserved<capacity`,
           ref.provider,
           priceStage,
-        ).changes === 1,
-        'WEB_DISPATCH_CAPACITY',
-      );
+        ).changes !== 1
+      )
+        // Full right now goes away by waiting; no ticket row at all (or none with room ever) does not.
+        throw new DomainError(
+          this.store.get(
+            "SELECT 1 FROM web_external_budgets WHERE provider=? AND stage='text' AND phase=? AND capacity>0",
+            ref.provider,
+            priceStage,
+          )
+            ? 'WEB_DISPATCH_CAPACITY'
+            : 'WEB_PROVIDER_CAPACITY_MISSING',
+        );
       ensure(
         this.store.run(
           `UPDATE web_provider_spending SET held_micros=held_micros+?
@@ -532,6 +589,7 @@ export class WebRehearsalRunner {
     const index = turns.findIndex((t) => t.turn === row.turn);
     ensure(index >= 0, 'REHEARSAL_REQUEST_INVALID');
     const replies: string[][] = [];
+    const aims: string[] = [];
     for (const earlier of turns.slice(0, index)) {
       const unit = this.store.get<{ result_json: string | null; status: string }>(
         "SELECT result_json,status FROM web_rehearsal_units WHERE run_id=? AND kind='cell' AND model_key=? AND turn=?",
@@ -540,7 +598,11 @@ export class WebRehearsalRunner {
         earlier.turn,
       );
       ensure(unit?.status === 'done' && unit.result_json, 'REHEARSAL_REPLY_MISSING');
-      replies.push((JSON.parse(unit.result_json) as { bubbles: string[] }).bubbles);
+      const earlierResult = JSON.parse(unit.result_json) as { bubbles: string[]; plan?: { aims?: string[] } | null };
+      replies.push(earlierResult.bubbles);
+      // Part 58: the first purpose of each earlier reply that had a plan (rehearsalRequest keeps the last few).
+      const aim = earlierResult.plan?.aims?.[0];
+      if (aim) aims.push(aim);
     }
     const request = rehearsalRequest(
       this.frozenOf(row),
@@ -549,6 +611,7 @@ export class WebRehearsalRunner {
       index + 1,
       turns.map((t) => t.text!),
       replies,
+      aims,
     );
     const json = JSON.stringify(request);
     this.store.run(
@@ -790,6 +853,8 @@ export class WebRehearsalRunner {
           request.writer === 'v8'
             ? null
             : reply.coveredMessageIds.includes(required) && reply.deferredMessageIds.length === 0,
+        // Part 58: the hidden plan, kept on the unit (JSON, no schema change) for the owner's lines and counts.
+        ...(reply.plan ? { plan: reply.plan } : {}),
       });
     });
   }
@@ -939,11 +1004,41 @@ export class WebRehearsalRunner {
     });
   }
 
+  /** Part 37a-3: one call per column: the judge reads all of the column's replies and flags each for the three style readings. */
+  private async style(claim: RehearsalClaim, signal: AbortSignal) {
+    const row = this.live(claim);
+    const turns = this.playerTurns(claim.runId).flatMap((t) => {
+      if (t.text === null) return [];
+      const unit = this.store.get<{ status: string; result_json: string | null }>(
+        "SELECT status,result_json FROM web_rehearsal_units WHERE run_id=? AND kind='cell' AND model_key=? AND turn=?",
+        claim.runId,
+        row.model_key,
+        t.turn,
+      );
+      return unit?.status === 'done' && unit.result_json
+        ? [{ player: t.text, reply: (JSON.parse(unit.result_json) as { bubbles: string[] }).bubbles.join('\n') }]
+        : [];
+    });
+    const text = await this.judgeCall(
+      claim,
+      { system: REHEARSAL_STYLE_PROMPT, sha: REHEARSAL_STYLE_PROMPT_SHA256 },
+      JSON.stringify({ turns }),
+      signal,
+    );
+    const verdict = parseStyleVerdict(text, turns.length);
+    this.store.transaction(() => {
+      this.live(claim);
+      if (!verdict) return this.finish(claim.runId, claim.seq, 'failed', 'REHEARSAL_STYLE_INVALID');
+      this.finish(claim.runId, claim.seq, 'done', null, verdict);
+    });
+  }
+
   async run(claim: RehearsalClaim, signal: AbortSignal) {
     try {
       const row = this.live(claim);
       if (row.kind === 'cell') await this.cell(claim, signal);
       else if (row.kind === 'hint') await this.hint(claim, signal);
+      else if (row.item_key === REHEARSAL_STYLE_ITEM) await this.style(claim, signal);
       else await this.verdict(claim, signal);
       ensure(!signal.aborted, 'REHEARSAL_INTERRUPTED');
     } catch (error) {
@@ -961,8 +1056,13 @@ export class WebRehearsalRunner {
         const review = calls.find((c) => c.phase === 'review');
         if (review?.state === 'known' && review.outcome === 'failed')
           return this.finish(claim.runId, claim.seq, 'failed', 'REHEARSAL_REVIEW_FAILED');
-        // Nothing unresolved and a known draft: requeue until the deadline (a transient refusal), never when aborted.
-        if (!signal.aborted && calls.length > 0 && row.deadline_at > this.now()) {
+        // Part 40: only a refusal that waiting can lift (capacity full right now) goes back to the queue until the deadline.
+        if (
+          !signal.aborted &&
+          error instanceof DomainError &&
+          TEMPORARY_REFUSALS.has(error.code) &&
+          row.deadline_at > this.now()
+        ) {
           this.store.run(
             "UPDATE web_rehearsal_units SET status='queued',lease_until=NULL,retry_at=? WHERE run_id=? AND seq=?",
             this.now() + 10_000,

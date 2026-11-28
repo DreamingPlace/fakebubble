@@ -19,6 +19,8 @@ import { dateTimeText } from './system-format.ts';
 import { publishBlocker, slotLabel, slotState, type SlotState } from './publish-slots.ts';
 import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
 import { versionHistory } from './history/version-history.ts';
+import { speechPanel } from './speech-profile/speech-panel.ts';
+import { othersReader } from './speech-profile/profile-draft.ts';
 import { draftHistory } from './history/draft-history.ts';
 import { readableGroups, withoutIds } from './history/readable.ts';
 import { dangerZone } from './ui/danger-zone.ts';
@@ -30,6 +32,8 @@ import { hoverValue } from './ui/hover-value.ts';
 import { diffSideBySide, type Piece } from './preview/diff.ts';
 import { ERROR_SENTENCES } from './error-sentences.ts';
 import { unsavedText } from './ui/unsaved.ts';
+import { editKeeper, keepWhileEditing, overlayEdits, restoreBar } from './ui/edit-keeper.ts';
+import { adminConnection, isInterrupted } from '../../services/admin-connection.ts';
 import { leaveDialog } from './ui/leave-dialog.ts';
 import { sentenceOf } from './ui/error-line.ts';
 import { formatRoute } from './shell/admin-router.ts';
@@ -75,6 +79,8 @@ type Host = {
   /** Where the paid 预演 lives: shown as the last section when the role may be previewed. */
   previewMount?: HTMLElement;
   canPreview?: (characterId: string) => boolean;
+  /** Part 37c-1: does the dictionary hold exactly this term? Without it the 梗 部分 of 说话档案 cannot add a single-entry setting. */
+  memeLookup?: (term: string) => Promise<boolean>;
   /** Whether the role is 成长中 (seed), as the editor has it now: the rail's dashed ring follows. */
   onSeed?: (characterId: string, seed: boolean) => void;
   /** Where the leave dialog is drawn (default: the editor's own root). */
@@ -106,6 +112,15 @@ export function characterAdminError(error: unknown): string | null {
     if (code === 'CLIP_SLOT_NOT_APPROVED') return `${slot} 还没批准。`;
     if (code === 'CLIP_TAKE_UNUSABLE') return `${slot} 的选用版本已失效，请重录或另选。`;
   }
+  // Part 55: the server names the field both sides changed; the sentence puts it first.
+  const fields = (error as { detail?: { fields?: unknown } } | null)?.detail?.fields;
+  if (
+    code === 'DRAFT_FIELD_CONFLICT' &&
+    Array.isArray(fields) &&
+    fields.every((f) => typeof f === 'string') &&
+    fields.length
+  )
+    return `「${fields.join('」「')}」在别处也改过，不能自动合并。请重新载入，核对这一栏后再保存。`;
   return ERROR_SENTENCES[code] ?? null;
 }
 
@@ -157,6 +172,19 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
   // The console shows one section of the editor at a time; the one showing is kept across a save of the same role.
   let lastSection: { id: string; section: string } = { id: '', section: '' };
   let paintDirty: (() => void) | null = null;
+  // Part 59: the unsaved edits of the open role are also kept in this browser (see ui/edit-keeper.ts).
+  let keeper: ReturnType<typeof editKeeper<{ edited: CharacterProfile; base: CharacterProfile }>> | null = null;
+  let keptBase: CharacterProfile | null = null;
+  let writer: ReturnType<typeof keepWhileEditing> | null = null;
+  let initialProfile: CharacterProfile | null = null;
+  let offerRestore: () => void = () => {};
+  let restoredNow = false;
+  const keepNow = () => {
+    if (!keeper || !editor) return;
+    if (!dirty) return keeper.clear();
+    const snap = editor.snapshot();
+    if (snap && keptBase) keeper.put({ edited: snap, base: keptBase }, Math.max(editor.changed().length, 1));
+  };
   let saveCurrent: (() => Promise<boolean>) | null = null;
   let zones: Array<{ paint: () => void }> = [];
   /** The 发布 tab's summary of each slot's 选用 take follows the 声音 tab whenever it reads the slots. */
@@ -195,6 +223,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       host.onDirty?.(dirty);
     }
     editor?.setDisabled(busy || (detail ? !can('edit', id ?? '') : !canCreate()));
+    for (const panel of speechPanels) panel.refresh();
     for (const zone of zones) zone.paint();
     for (const c of controls) {
       if (c.text) c.node.textContent = c.text();
@@ -204,7 +233,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     }
   };
   /** 草稿已在别处更新: a bar above the editor with 重新载入 (reads the newer draft; the edits on this page are given up). */
-  const showConflict = (role: string) => {
+  const showConflict = (role: string, error?: unknown) => {
     root.querySelector('.wb-conflict')?.remove();
     const bar = el('div'),
       reload = el('button', '重新载入');
@@ -219,7 +248,13 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         await open(role);
       });
     });
-    bar.append(el('span', ERROR_SENTENCES.DRAFT_CONFLICT), reload);
+    // Part 55: a field changed here AND elsewhere is named; the rest of the draft was merged without a word.
+    const fields = (error as { detail?: { fields?: unknown } } | null)?.detail?.fields;
+    const named =
+      Array.isArray(fields) && fields.length && fields.every((f) => typeof f === 'string')
+        ? `草稿已在别处更新：「${fields.join('」「')}」你和别处都改过，不能自动合并。请重新载入；你在本页写的内容不会被覆盖保存。`
+        : ERROR_SENTENCES.DRAFT_CONFLICT;
+    bar.append(el('span', named), reload);
     root.prepend(bar);
   };
   const setDirty = () => {
@@ -228,6 +263,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     if (!editor || editor.changed().length === 0) {
       if (dirty) {
         dirty = false;
+        keeper?.clear();
         sync();
         paintDirty?.();
       }
@@ -235,6 +271,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     }
     const was = dirty;
     dirty = true;
+    writer?.schedule();
     // In the console the save bar and the rail's dots say it; the message is for the first change only.
     if (!embedded || !was) host.status('有未保存修改。');
     sync();
@@ -275,8 +312,13 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     return node;
   }
   const historyViews: { dispose: () => void }[] = [];
+  // Part 37b: the open 说话档案 section (its read-only state follows the form's unsaved changes) and the cache of the other roles.
+  const speechPanels: { refresh: () => void; dispose?: () => void }[] = [];
+  const otherRoles = othersReader(host.api);
   const clearView = () => {
     view++;
+    for (const panel of speechPanels) panel.dispose?.();
+    speechPanels.length = 0;
     for (const panel of historyViews.splice(0)) panel.dispose();
     revokeAudio();
     controls = [];
@@ -457,15 +499,41 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     renderDetail();
     host.status('请填写空白角色工作台；保存后仍须预演与批准才能发布。');
   }
-  function renderDetail() {
+  function renderDetail(restored?: CharacterProfile) {
     clearView();
     dirty = false;
     const snapshot = detail,
       target = id!;
-    const profile = snapshot
+    const original = snapshot
       ? structuredClone(snapshot.draft?.profile ?? snapshot.published!.profile)
       : emptyCharacter();
-    if (snapshot && !snapshot.draft) profile.template.version = snapshot.published!.version + 1;
+    if (snapshot && !snapshot.draft) original.template.version = snapshot.published!.version + 1;
+    // Part 59: kept edits of this role (any earlier revision of its draft), offered once; restoring opens the form on them.
+    writer?.stop();
+    keptBase = structuredClone(original);
+    keeper = editKeeper<{ edited: CharacterProfile; base: CharacterProfile }>({
+      page: 'characters',
+      character: target || 'new',
+      revision: snapshot?.draft?.revision ?? (snapshot ? `v${snapshot.published?.version ?? 0}` : null),
+    });
+    writer = keepWhileEditing(keepNow);
+    const profile = restored ?? structuredClone(original);
+    initialProfile = restored ? original : null;
+    restoredNow = !!restored;
+    offerRestore = () => {
+      const kept = restored || !keeper ? null : keeper.find();
+      if (!kept) return;
+      root.prepend(
+        restoreBar(
+          kept,
+          {
+            restore: () => renderDetail(overlayEdits(structuredClone(original), kept.value.base, kept.value.edited)),
+            discard: () => keeper?.clear(),
+          },
+          el,
+        ),
+      );
+    };
     const canEdit = () => (snapshot ? can('edit', target) : canCreate());
     /** Reads the form and saves it as a new draft revision. Resolves true only when the draft was saved (the page then shows it). */
     const saveDraft = async (): Promise<boolean> => {
@@ -488,14 +556,26 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         } catch (error) {
           // The draft moved on the server: the edits stay on the page, with a button that reads the newer draft instead. The bar
           // (an alert) says it; no toast repeats it.
-          if (error instanceof InviteLocalApiError && error.code === 'DRAFT_CONFLICT') {
-            showConflict(role);
+          if (
+            error instanceof InviteLocalApiError &&
+            (error.code === 'DRAFT_CONFLICT' || error.code === 'DRAFT_FIELD_CONFLICT')
+          ) {
+            showConflict(role, error);
             return;
+          }
+          // Part 59: a challenge page, a lost connection or an expired session is not a failed save: the edits stay (and are kept in
+          // this browser), and the save is sent again by itself once the owner has verified or signed in again.
+          if (isInterrupted(error)) {
+            keepNow();
+            writer?.flush();
+            adminConnection.retryAfterReauth(`workbench-save:${role}`, () => saveDraft());
           }
           throw error;
         }
         if (gone()) return;
         dirty = false;
+        keeper?.clear();
+        adminConnection.forget(`workbench-save:${role}`);
         await open(saved.characterId);
         host.status(`草稿 ${saved.revision} 已保存；尚未发布。`);
         saved_ = true;
@@ -507,6 +587,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     };
     saveCurrent = saveDraft;
     const discardLocal = () => {
+      keeper?.clear();
       renderDetail();
       host.status('已放弃本页修改；草稿和正式版本不变。');
     };
@@ -548,7 +629,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         () => profile.presentation.color ?? null,
         () => profile.presentation.displayName || profile.template.name,
       ),
+      initialProfile,
     );
+    offerRestore();
+    if (restored) setDirty();
     // A new ID must be enterable before its scoped edit permission can be evaluated.
     const actions = el('div');
     actions.className = 'admin-toolbar';
@@ -740,7 +824,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         () => profile.presentation.color ?? null,
         () => profile.presentation.displayName || profile.template.name,
       ),
+      initialProfile,
     );
+    offerRestore();
+    if (restoredNow) setDirty();
     const form = editor.form;
     form.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -798,6 +885,30 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       if (danger.children.length) {
         flow.append(danger);
         publish.push(danger);
+      }
+      // Part 37b: 说话档案 (核心卡 and 说话样本 of the draft), before 发布.
+      if (snapshot.draft || snapshot.published) {
+        const speechNode = el('div');
+        speechNode.className = 'wb-speech';
+        body.append(speechNode);
+        speechPanels.push(
+          speechPanel(speechNode, {
+            snapshot,
+            characters: host.api,
+            others: otherRoles,
+            nameOf: (characterId) => names.get(characterId) ?? '另一个角色',
+            canEdit: () => can('edit', target),
+            unsaved: () => dirty,
+            run: (work) => host.run(work),
+            toast: (text) => host.status(text),
+            errorText: characterAdminError,
+            disposed: gone,
+            reload: () => open(target),
+            ...(host.memeLookup ? { memeLookup: host.memeLookup } : {}),
+          }),
+        );
+        // (id 'profile', not 'speech': the form's own 说话方式 pane already is 'speech')
+        sections.push({ id: 'profile', label: '说话档案', nodes: [speechNode] });
       }
       sections.push({ id: 'publish', label: '发布', nodes: publish });
       // Part 24f: 版本历史 is one more entry of the section bar, after 发布 (and before 预演).
@@ -1005,8 +1116,11 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
           try {
             saved = await host.api.save(role, expected, structuredClone(profile));
           } catch (error) {
-            if (error instanceof InviteLocalApiError && error.code === 'DRAFT_CONFLICT') {
-              showConflict(role);
+            if (
+              error instanceof InviteLocalApiError &&
+              (error.code === 'DRAFT_CONFLICT' || error.code === 'DRAFT_FIELD_CONFLICT')
+            ) {
+              showConflict(role, error);
               return;
             }
             throw error;
@@ -1528,6 +1642,9 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       clearView();
     },
     dispose: () => {
+      // Part 59: whatever is still unsaved is kept in this browser before the page goes away.
+      writer?.flush();
+      writer?.stop();
       disposed = true;
       revokeAudio();
       pending.clear();

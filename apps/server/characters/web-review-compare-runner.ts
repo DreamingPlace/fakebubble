@@ -15,8 +15,8 @@ import { applyTextReview, DROP_INVALID_METADATA, parseTextDraft } from '../gener
 import { budgetHash } from '../budget/web-provider-budget-contract.ts';
 import { DEFAULT_TEXT_MODELS } from '../platform/config.ts';
 import { previewDigest } from './web-character-preview.ts';
-import { webCharacterPreviewsRunning } from './web-character-preview-schema.ts';
-import { reviewCompareInstalled } from './web-review-compare-schema.ts';
+import { webOwnPreviewsRunning } from './web-character-preview-schema.ts';
+import { reviewCompareInstalled, reviewCompareRunning } from './web-review-compare-schema.ts';
 import type { WebPreviewBudget } from './web-character-preview-runner.ts';
 
 /** The three provider calls of a case. Both review phases are the `review` stage of the protocol, for different models. */
@@ -201,7 +201,8 @@ export class WebReviewCompareRunner {
           );
       }
       if (
-        webCharacterPreviewsRunning(this.store) >= 1 ||
+        // Part 40: a 审核对比 case waits for a 预演 and for its own earlier case; a 多轮预演 in flight does not hold it.
+        webOwnPreviewsRunning(this.store) + reviewCompareRunning(this.store) >= 1 ||
         this.store.get<{ n: number }>("SELECT count(*) n FROM web_operations WHERE status='text_running'")!.n >=
           webConcurrency(this.store).maxTextRunning
       )

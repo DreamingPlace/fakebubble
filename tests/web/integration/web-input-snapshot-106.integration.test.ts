@@ -162,7 +162,7 @@ test('C-S3-003 safe 105→106 migration retains terminal known/UNKNOWN, old audi
   );
   assert.equal(
     f.store.get<{ reserved: number }>("SELECT reserved FROM web_external_budgets WHERE stage='text'")?.reserved,
-    1,
+    0, // Part 54 NAMED EXCEPTION: an UNKNOWN call no longer keeps its running-slot ticket (its money stays held).
   );
   assert.equal(f.queue.claimText(coordinator, 'new-worker')?.operationId, waiting.operationId);
   assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_input_snapshots')?.n, 1);

@@ -115,6 +115,8 @@ test('24b-3 角色工作台: a saved role gets a bar of sections, 发布 among t
     '其余设定',
     '声音',
     '资料改动',
+    // Named exception (Part 37b): 说话档案 is one more entry of the bar, before 发布 (the owner asked for the section).
+    '说话档案',
     '发布',
     // Named exception (Part 24f): 版本历史 is one more entry of the bar, after 发布.
     '版本历史',
@@ -143,6 +145,8 @@ test('24b-3 角色工作台: switching sections keeps what was typed, a dot mark
     '经历',
     '其余设定',
     '声音',
+    // Named exception (Part 37b): 说话档案 is one more entry of the bar, before 发布.
+    '说话档案',
     '发布',
     '版本历史',
   ]);
@@ -278,6 +282,8 @@ test('24b-3 the roles are one row of pills: colour dot, full name, one compact s
     { characterId: 'jojo', displayName: 'JOJO', publishedVersion: 2, draftRevision: 1 },
     { characterId: 'new-one', displayName: '新角色', publishedVersion: null, draftRevision: null },
   ]);
+  // Part 59 (named exception): the rail lists live characters by default; 「显示未上线」 shows the rest, so this test turns it on.
+  host.querySelector('.admin-pick-toggle')!.click();
   const rows = host.querySelectorAll('.admin-pick-row');
   assert.equal(rows.length, 2, 'every role is one pill');
   assert.match(rows[0]!.textContent, /JOJO/);

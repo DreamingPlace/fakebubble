@@ -11,6 +11,7 @@ import {
   type CocreationPointsSettings,
 } from '../../../../packages/contracts/cocreation-cards.ts';
 import { parseBillingPage, type BillingPage } from '../../../../packages/contracts/player-billing.ts';
+import { COCREATION_THEME_IDS } from '../../../../packages/contracts/cocreation-wordings.ts';
 import {
   parseWebProviderBootstrap,
   type WebProviderActions,
@@ -18,9 +19,13 @@ import {
   type WebProviderCharacterId,
   type WebProviderHistory,
   type WebProviderOperation,
+  type WebProviderBubbleSend,
+  type WebProviderRate,
   type WebProviderSend,
+  type WebProviderTurn,
   type WebProviderSync,
 } from '../../../../packages/contracts/web-provider.ts';
+import { parseWebPublicCatalog, type WebPublicCatalog } from '../../../../packages/contracts/web-public-catalog.ts';
 
 export class ProviderApiError extends Error {
   readonly status: number;
@@ -77,7 +82,12 @@ export type AccountInfo =
       tier?: AccountTier;
     };
 /** The bot check: resolves one fresh Turnstile token for an action, or throws. Installed only on the real page. */
-export type HumanCheck = (siteKey: string, action: 'guest' | 'code' | 'login') => Promise<string>;
+export type HumanCheck = (
+  siteKey: string,
+  action: 'guest' | 'code' | 'login',
+  /** Part 50: called the moment the widget has been rendered (its challenge frame starts). */
+  onRender?: () => void,
+) => Promise<string>;
 const humanAction = (path: string) =>
   path === '/bootstrap'
     ? 'guest'
@@ -131,18 +141,65 @@ const operation = (value: unknown): WebProviderOperation => {
   return row as unknown as WebProviderOperation;
 };
 
+const turnOf = (value: unknown): WebProviderTurn => {
+  const row = record(value);
+  if (
+    !['idle', 'collecting', 'replying', 'refused'].includes(row.state as string) ||
+    !Number.isSafeInteger(row.pending) ||
+    (row.dueAt !== null && !Number.isSafeInteger(row.dueAt))
+  )
+    throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+  return row as unknown as WebProviderTurn;
+};
+
+/** Part 50: a boolean hint (no id, no content) that a session was made on this device, so a returning visitor starts no early challenge. */
+const SESSION_SEEN = 'fakebubble.session-seen.v1';
+
 /** Same-origin, cookie-authenticated provider-local transport; CSRF stays in memory only. */
 export class ProviderApi implements WebProviderActions {
   private csrf = '';
   private readonly fetcher: typeof fetch;
   private human: HumanCheck | null = null;
   private siteKey: string | null = null;
+  private warm: (() => void) | null = null;
+  private early: Promise<string> | null = null;
   constructor(fetcher: typeof fetch = (input, init) => fetch(input, init)) {
     this.fetcher = fetcher;
   }
   /** Turnstile (only when the server asks for it): the page installs the widget-backed check once. */
   setHumanCheck(check: HumanCheck | null) {
     this.human = check;
+  }
+  /**
+   * Part 50: the public site key (from the public catalog). The check no longer needs a separate /account read, Cloudflare's script
+   * loads right away, and for a visitor who has not had a session on this device the invisible challenge starts NOW (a new guest will
+   * be refused without a token, so the token is wanted anyway) instead of after the bootstrap's refusal comes back. A returning
+   * visitor (a session was made here before) does not start one: their cookie normally makes it unnecessary. The token is only ever
+   * sent when the server has answered TURNSTILE_REQUIRED, exactly as before: nothing is created, and nothing that costs money runs.
+   */
+  primeHuman(siteKey: string): Promise<void> {
+    if (!/^[0-9A-Za-z_-]{1,64}$/.test(siteKey)) return Promise.resolve();
+    this.siteKey ??= siteKey;
+    this.warm?.();
+    if (!this.human || this.early || this.sessionSeen()) return Promise.resolve();
+    const human = this.human;
+    // Resolves when the widget has been rendered (or the check already failed), so the page can let it start before heavy drawing.
+    return new Promise<void>((started) => {
+      const early = human(siteKey, 'guest', started);
+      this.early = early;
+      early.catch(() => started()); // a failure is reported when (and only if) the token is needed
+    });
+  }
+  /** Part 50: what the page installs to start loading Cloudflare's script early (the widget module's own loader). */
+  setHumanWarmup(warm: (() => void) | null) {
+    this.warm = warm;
+  }
+  private sessionSeen(): boolean {
+    try {
+      return globalThis.localStorage?.getItem(SESSION_SEEN) === '1';
+    } catch {
+      return false;
+    }
   }
   /**
    * With Turnstile on, the server answers a new guest, a code request and a login without a token with
@@ -159,7 +216,11 @@ export class ProviderApi implements WebProviderActions {
       try {
         const siteKey = (this.siteKey ??= (await this.account()).features?.turnstileSiteKey ?? null);
         if (!siteKey) throw error;
-        token = await this.human(siteKey, action);
+        // Part 50: a token the page already started for this very request (a new guest) is used once; otherwise a fresh check runs.
+        const early = action === 'guest' ? this.early : null;
+        this.early = null;
+        // (a failed early check is NOT repeated here: the player's 重试 starts a fresh one, so a failure shows after ONE time limit)
+        token = early ? await early : await this.human(siteKey, action);
       } catch (failure) {
         if (failure === error) throw error;
         throw new ProviderApiError(0, 'TURNSTILE_FAILED');
@@ -195,9 +256,34 @@ export class ProviderApi implements WebProviderActions {
     }
     return payload;
   }
+  /**
+   * Part 48: the public catalog (GET /catalog): the home cards before any session. It carries no cookie of its own and no CSRF token,
+   * never reads a session and never writes; it is the only call the first paint makes. A short time limit: the page does not wait
+   * for it, so a slow answer just means the skeleton stays a little longer.
+   */
+  async publicCatalog(timeoutMs = 8000): Promise<WebPublicCatalog> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await this.fetcher(`/api/web/provider/catalog`, { signal: controller.signal });
+      if (!response.ok) throw new ProviderApiError(response.status, 'CATALOG_UNAVAILABLE');
+      try {
+        return parseWebPublicCatalog(await response.json());
+      } catch {
+        throw new ProviderApiError(response.status, 'PROTOCOL_INVALID');
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }
   async bootstrap(): Promise<WebProviderBootstrap> {
     const view = parseWebProviderBootstrap(await this.request('/bootstrap'));
     this.csrf = view.csrf;
+    try {
+      globalThis.localStorage?.setItem(SESSION_SEEN, '1');
+    } catch {
+      /* private mode: the page simply starts the check after the refusal, as before */
+    }
     return view;
   }
   /** A signed-in player's code adds an ENTITLEMENT: no new session, no receipt. Idempotent on requestId. */
@@ -250,6 +336,49 @@ export class ProviderApi implements WebProviderActions {
         }),
       }),
     );
+  }
+  /** Part 39: two to eight characters, a pair's whole-star ratings and reason, the story. Idempotent on requestId. */
+  async submitRelation(input: {
+    requestId: string;
+    characterIds: string[];
+    ratings: { from: string; to: string; stars: number }[] | null;
+    reason: string | null;
+    text: string;
+  }) {
+    return this.noteResult(
+      await this.request('/cocreation/relation', {
+        method: 'POST',
+        body: JSON.stringify({
+          requestId: input.requestId,
+          characterIds: input.characterIds,
+          ratings: input.ratings,
+          reason: input.reason,
+          text: input.text,
+        }),
+      }),
+    );
+  }
+  /** Part 39b: the ENABLED wordings of one character per theme (text only); the sheet picks one per theme at random. */
+  async cocreationWordings(characterId: string): Promise<{ themes: Record<string, string[]> }> {
+    const value = record(
+      await this.request('/cocreation/wordings', { method: 'POST', body: JSON.stringify({ characterId }) }),
+    );
+    const themes = record(value.themes);
+    const out: Record<string, string[]> = {};
+    for (const id of COCREATION_THEME_IDS) {
+      const list = themes[id];
+      if (!Array.isArray(list) || !list.every((entry) => typeof entry === 'string'))
+        throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+      out[id] = list as string[];
+    }
+    return { themes: out };
+  }
+  /** Part 39: the world background of the latest saved cast draft (plain text), or null. */
+  async worldBackground(): Promise<{ background: string | null }> {
+    const value = record(await this.request('/cocreation/world', { method: 'POST', body: JSON.stringify({}) }));
+    if (value.background !== null && typeof value.background !== 'string')
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return { background: value.background };
   }
   private noteResult(raw: unknown) {
     const value = record(raw);
@@ -426,6 +555,69 @@ export class ProviderApi implements WebProviderActions {
       }),
     );
     return { operation: operation(receipt.operation), duplicate: receipt.duplicate === true };
+  }
+  /** Part 36: stores one bubble. The reply is a turn that answers the whole batch once the player has been quiet (or at five). */
+  async sendBubble(input: WebProviderBubbleSend) {
+    const receipt = record(
+      await this.request(`/characters/${encodeURIComponent(input.characterId)}/bubbles`, {
+        method: 'POST',
+        body: JSON.stringify({
+          requestId: input.requestId,
+          text: input.text,
+          ...(input.quoteMessageId ? { quoteMessageId: input.quoteMessageId } : {}),
+        }),
+      }),
+    );
+    if (typeof receipt.messageId !== 'string' || typeof receipt.conversationId !== 'string')
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return {
+      messageId: receipt.messageId,
+      conversationId: receipt.conversationId,
+      duplicate: receipt.duplicate === true,
+      turn: turnOf(receipt.turn),
+    };
+  }
+  async turn(characterId: WebProviderCharacterId) {
+    return turnOf(await this.request(`/characters/${encodeURIComponent(characterId)}/turn`));
+  }
+  /** Part 36: 👍 / 👎 as a desired state; `none` removes the rating. */
+  async rate(input: WebProviderRate) {
+    const answer = record(
+      await this.request('/ratings', {
+        method: 'POST',
+        body: JSON.stringify({
+          requestId: input.requestId,
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          rating: input.rating,
+          ...(input.target ? { target: input.target } : {}),
+        }),
+      }),
+    );
+    const rating: 'up' | 'down' | null = answer.rating === 'up' || answer.rating === 'down' ? answer.rating : null;
+    if (answer.rating !== null && rating === null) throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    const target: 'voice' | 'content' | null =
+      answer.target === 'voice' || answer.target === 'content' ? answer.target : null;
+    return { rating, target };
+  }
+  /**
+   * Part 45: a link to one of the character's voice messages. One request id per sheet opening makes a repeat answer the same link;
+   * the answer is the token alone (the page builds the address from it).
+   */
+  async share(input: { requestId: string; conversationId: string; messageId: string }) {
+    const answer = record(
+      await this.request('/shares', {
+        method: 'POST',
+        body: JSON.stringify({
+          requestId: input.requestId,
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+        }),
+      }),
+    );
+    if (typeof answer.token !== 'string' || !/^[A-Za-z0-9_-]{32}$/.test(answer.token))
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return { token: answer.token };
   }
   async history(input: { characterId: WebProviderCharacterId; conversationId: string; before: string | null }) {
     const page = record(

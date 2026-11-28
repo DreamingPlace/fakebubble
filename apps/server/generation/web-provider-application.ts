@@ -9,6 +9,17 @@ import { billedModelAt } from '../admission/web-model-settings.ts';
 import { installWebCharacterDeletion } from '../characters/web-character-deletion-schema.ts';
 import { installWebConversationDeletion } from '../characters/web-conversation-deletion.ts';
 import { installWebOwnerOps } from '../admin/web-owner-ops-schema.ts';
+import { WebBroadcast } from '../broadcast/web-broadcast.ts';
+import { installWebBroadcast } from '../broadcast/web-broadcast-schema.ts';
+import { installMemeStore } from '../memes/web-meme-store.ts';
+import { installMemeLibrary } from '../memes/web-meme-library.ts';
+import { installCastDocs } from '../cast/cast-doc-store.ts';
+import { WebTurns } from '../turns/web-turns.ts';
+import { WebFeedback } from '../turns/web-feedback.ts';
+import { WebFeedbackAdmin } from '../turns/web-feedback-admin.ts';
+import { installWebShare } from '../share/web-share-schema.ts';
+import { WebShare } from '../share/web-share.ts';
+import { broadcastHistoryRows } from '../broadcast/web-broadcast-read.ts';
 import { WebAvatars, installWebAvatars } from '../characters/web-avatar.ts';
 import { WebOwnerOps } from '../admin/web-owner-ops.ts';
 import { WebCharacterDeletion } from '../characters/web-character-deletion.ts';
@@ -45,7 +56,9 @@ import { castTablesExist } from '../cast/cast-store.ts';
 import { WebSecurityCounters, installWebAdminActions } from '../admin/web-admin-actions.ts';
 import { WebInviteTiers } from '../invites/web-invite-tiers.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
-import { WebCocreation } from '../cocreation/web-cocreation.ts';
+import { cocreationSheets } from '../cocreation/web-cocreation-export.ts';
+import { WebExportAdmin } from '../export/web-export-admin.ts';
+import { WebCocreationRelations } from '../cocreation/web-cocreation-relations.ts';
 import { WebBilling } from '../admission/web-billing.ts';
 import { chatReviewTablesExist } from '../review/web-chat-review.ts';
 import { WebChatReviewAdmin } from '../review/web-chat-review-admin.ts';
@@ -60,7 +73,8 @@ import {
 import { requireWebContent, type WebRetentionRow } from '../admission/web-retention.ts';
 import { bonusRemaining, extraTrialRemaining, freeTier, isRegistered } from '../admission/web-free-tier.ts';
 import { lockedCharacterIds } from '../admission/web-guest-lock.ts';
-import { CATALOG_MAX } from '../../../packages/contracts/web-provider.ts';
+import { CATALOG_MAX, type WebProviderSlot } from '../../../packages/contracts/web-provider.ts';
+import type { WebPublicCatalog } from '../../../packages/contracts/web-public-catalog.ts';
 
 /** A cookie that names nothing recoverable: the transport expires it so the next visit starts from the signed-out page. */
 export class SessionClearedError extends DomainError {
@@ -94,6 +108,15 @@ export interface WebPlayerAccountsConfig {
 
 export const WEB_PROVIDER_API = '/api/web/provider';
 const API = WEB_PROVIDER_API;
+/** Exactly CATALOG_MAX visual slots: the characters first, then the "coming soon" places. The bootstrap and the public catalog share it. */
+const catalogSlots = (characters: { characterId: string }[]): WebProviderSlot[] => [
+  ...characters.map((entry) => ({ kind: 'character' as const, characterId: entry.characterId })),
+  ...Array.from({ length: CATALOG_MAX - characters.length }, (_, index) => ({
+    kind: 'preview' as const,
+    slotId: `preview-${index + 1}`,
+    label: '敬请期待',
+  })),
+];
 export type WebProviderPrincipal = ReturnType<WebIdentity['authenticate']>;
 type Principal = WebProviderPrincipal;
 export const providerCharacterId = isWebProviderCharacterId;
@@ -183,17 +206,29 @@ export class WebProviderApplication {
   readonly characterDeletion: WebCharacterDeletion;
   readonly characterAdmin: WebCharacterAdmin;
   readonly inviteActions: WebInviteActions;
-  readonly cocreation: WebCocreation;
+  readonly cocreation: WebCocreationRelations;
   /** Part 21f: the player's own 消费记录. */
   readonly billing: WebBilling;
   /** CHAT_REVIEW_ENABLED (Part 19): 测试对话. Null with the flag off (and on a database older than schema 122). */
   readonly chatReview: WebChatReviewAdmin | null;
   readonly ownerOps: WebOwnerOps;
+  /** Part 42: 广播 (its tables are a digest-checked runtime step; no numbered migration). */
+  readonly broadcast: WebBroadcast;
+  /** Part 57: 导出, built once the pages it reads from exist. */
+  readonly exporter: WebExportAdmin;
+  /** Part 45: shareable voice-card links (the only writer of the share tables). */
+  readonly shares: WebShare;
+  /** Part 36: 连发 (the bubbles of a turn; the only writer of the turn rows) and 👍 / 👎 (the only writer of the feedback rows). */
+  readonly turns: WebTurns;
+  readonly feedback: WebFeedback;
+  /** Part 36: 语音反馈, the owner's page. */
+  readonly feedbackAdmin: WebFeedbackAdmin;
   readonly avatars: WebAvatars;
   /** GUEST_GRACE_ENABLED: 0 when off. */
   readonly graceMs: number;
   /** Null on a database older than schema 118. */
   readonly playerAccounts: WebPlayerAccounts | null;
+  private readonly turnstileSiteKey: string | null;
   /** Part 22c: the statistics counters' write side (daily active markers, cohort close). */
   readonly stats: WebStats;
   constructor(
@@ -243,6 +278,10 @@ export class WebProviderApplication {
     this.stats.start(clock.now());
     this.admission = new WebAdmission(store, clock, () => globalThis.crypto.randomUUID(), this.bonusKey, this.stats);
     this.publisher = new WebVerticalPublisher(store, clock);
+    // Part 36: the turn and feedback tables (digest-checked runtime steps; no numbered migration; STOP WEB_TURN_SCHEMA_MISMATCH /
+    // WEB_FEEDBACK_SCHEMA_MISMATCH).
+    this.turns = new WebTurns(store, clock, this.admission);
+    this.feedback = new WebFeedback(store, clock);
     const chatReviewOn = store.chatReview === true && chatReviewTablesExist(store);
     this.inviteAdmin = new WebAccountAdmin(store, clock, config.origin, {
       ...(mailer ? { mailer } : {}),
@@ -259,6 +298,12 @@ export class WebProviderApplication {
         .update('web-admin-points-lookup-v1')
         .digest(),
     });
+    // Part 37c-1: the dictionary's on/off table (digest-checked runtime step; no numbered migration; STOP WEB_MEME_SCHEMA_MISMATCH).
+    installMemeStore(store);
+    // Part 37c-1b: the owner's own entries, edits, deletions, the 待审 queue and the dismissed list (STOP WEB_MEMELIB_SCHEMA_MISMATCH).
+    installMemeLibrary(store);
+    // Part 37c-1: where a cast document over its row's 300,000-character check lives (STOP WEB_CAST_DOC_SCHEMA_MISMATCH).
+    if (castTablesExist(store)) installCastDocs(store);
     this.cast = castTablesExist(store) ? new WebCastAdmin(store, clock, this.inviteAdmin) : null;
     installWebCharacterCatalog(store);
     installWebCharacterMaterials(store);
@@ -271,6 +316,27 @@ export class WebProviderApplication {
     this.avatars = new WebAvatars(store, clock);
     this.characterDeletion = new WebCharacterDeletion(store, clock);
     this.characterAdmin = new WebCharacterAdmin(store, clock, this.inviteAdmin);
+    installWebBroadcast(store);
+    this.broadcast = new WebBroadcast(store, clock, this.inviteAdmin, () => this.characterAdmin.speechPath);
+    // Part 45: the share tables (digest-checked runtime step; no numbered migration; STOP WEB_SHARE_SCHEMA_MISMATCH).
+    installWebShare(store);
+    this.shares = new WebShare(
+      store,
+      clock,
+      createHmac('sha256', Buffer.from(config.requestKey, 'base64url')).update('web-share-token-v1').digest(),
+      this.publisher,
+      () =>
+        this.characters().map((character) => ({
+          characterId: character.characterId,
+          displayName: character.displayName,
+          portraitUrl: character.portraitUrl,
+          mainColor: character.mainColor,
+          palette: character.palette ?? null,
+          birthDate: character.birthDate ?? null,
+        })),
+      API,
+    );
+    this.system.enableShares(() => this.shares.stats());
     this.characterAdmin.enableMaterials(new WebCharacterMaterials(store, clock));
     this.characterAdmin.enableDeletion(this.characterDeletion);
     this.characterAdmin.enableAvatars(this.avatars);
@@ -288,6 +354,7 @@ export class WebProviderApplication {
       sealKey: Buffer.from(config.sealKey, 'base64url'),
       authorize: this.identity.authorizeInviteAction.bind(this.identity),
     });
+    this.turnstileSiteKey = players.turnstileSiteKey ?? null;
     this.playerAccounts = store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_player_logins'")
       ? new WebPlayerAccounts(store, this.identity, {
           origin: config.origin,
@@ -309,7 +376,7 @@ export class WebProviderApplication {
         })
       : null;
     this.inviteActions = new WebInviteActions(store, clock, config.origin, inviteTiers);
-    this.cocreation = new WebCocreation(
+    this.cocreation = new WebCocreationRelations(
       store,
       clock,
       this.identity,
@@ -319,7 +386,29 @@ export class WebProviderApplication {
         .digest(),
       () => globalThis.crypto.randomUUID(),
     );
+    this.cocreation.enableCharacterDrafts(this.characterAdmin);
     this.billing = new WebBilling(store, clock, this.identity);
+    this.feedbackAdmin = new WebFeedbackAdmin(store, clock, this.inviteAdmin, (scope, mediaId) =>
+      this.publisher.readPublishedAudioAsync(scope, mediaId),
+    );
+    // Part 57: every page's 导出. It reads through the pages' own readers and keeps nothing.
+    this.exporter = new WebExportAdmin(store, clock, this.inviteAdmin, {
+      chatReview: chatReviewOn,
+      characters: this.characterAdmin as never,
+      broadcast: this.broadcast as never,
+      shareStats: () => this.shares.stats(),
+      feedback: this.feedbackAdmin,
+      cocreation: {
+        exportSheets: (auth, filters) =>
+          cocreationSheets(
+            store,
+            this.inviteAdmin,
+            (principalId) => this.cocreation.pseudonym(principalId),
+            auth,
+            filters as Record<string, unknown>,
+          ),
+      },
+    });
   }
 
   bootstrap(token: string | undefined, ipHash: string) {
@@ -415,14 +504,7 @@ export class WebProviderApplication {
         csrf: boot.csrf,
         access,
         characters,
-        slots: [
-          ...characters.map((entry) => ({ kind: 'character' as const, characterId: entry.characterId })),
-          ...Array.from({ length: CATALOG_MAX - characters.length }, (_, index) => ({
-            kind: 'preview' as const,
-            slotId: `preview-${index + 1}`,
-            label: '敬请期待',
-          })),
-        ],
+        slots: catalogSlots(characters),
         conversations,
         syncCursor: this.cursor(principal.principalId, high),
       };
@@ -598,6 +680,31 @@ export class WebProviderApplication {
   }
 
   /**
+   * Part 48: the PUBLIC catalog (no session): only the published characters' card fields, in the bootstrap's own order. It reads the
+   * same catalog the bootstrap and the share page read and copies nothing that names a player, a world or a conversation: no welcome
+   * text, no clip URL, no clip length, no CSRF token. `welcomeClip` only says that a clip exists.
+   */
+  publicCatalog(): WebPublicCatalog {
+    const characters = this.characters();
+    return {
+      characters: characters.map((character) => ({
+        characterId: character.characterId,
+        displayName: character.displayName,
+        portraitUrl: character.portraitUrl,
+        mainColor: character.mainColor,
+        palette: character.palette ?? null,
+        birthDate: character.birthDate ?? null,
+        available: character.availability.state === 'available',
+        welcomeClip: character.welcome.audio.state === 'available',
+      })),
+      slots: catalogSlots(characters),
+      // Part 50: the PUBLIC Turnstile site key (it is in the page source of every Turnstile site anyway), so the page can start the
+      // check at load without first reading /account. Present only when the server asks for the check.
+      ...(this.turnstileSiteKey ? { turnstileSiteKey: this.turnstileSiteKey } : {}),
+    };
+  }
+
+  /**
    * Part 24k-2: the catalog. With a player (`for`), each card carries THAT player's welcome line (drawn by weight and stored on
    * the first meeting) and the clip of that line; without one it carries the first line (nothing is drawn or stored).
    */
@@ -741,6 +848,33 @@ export class WebProviderApplication {
     };
   }
 
+  /** The quotes of these bubbles, read only inside the player's own conversation; a quoted message that is gone has `text: null`. */
+  private bubbleQuotes(principal: Principal, conversationId: string, messageIds: string[]) {
+    const out = new Map<string, NonNullable<WebProviderMessage['quote']>>();
+    if (!messageIds.length) return out;
+    for (const row of this.store.all<{
+      message_id: string;
+      quote_message_id: string;
+      author_kind: 'player' | 'character' | null;
+      body: string | null;
+    }>(
+      `SELECT b.message_id,b.quote_message_id,q.author_kind,q.body FROM web_turn_bubbles b
+      LEFT JOIN messages q ON q.id=b.quote_message_id AND q.world_id=b.world_id AND q.conversation_id=b.conversation_id
+      WHERE b.principal_id=? AND b.world_id=? AND b.conversation_id=? AND b.quote_message_id IS NOT NULL
+        AND b.message_id IN (${messageIds.map(() => '?').join(',')})`,
+      principal.principalId,
+      principal.world_id,
+      conversationId,
+      ...messageIds,
+    ))
+      out.set(row.message_id, {
+        messageId: row.quote_message_id,
+        author: row.author_kind ?? 'player',
+        text: row.body === null ? null : [...row.body].slice(0, 120).join(''),
+      });
+    return out;
+  }
+
   history(principal: Principal, conversationId: string, before: number | null) {
     requireWebContent(this.store, this.clock, principal.principalId, principal.world_id, 'read');
     const conversation = this.store.get<{ private_character_id: string }>(
@@ -799,6 +933,12 @@ export class WebProviderApplication {
         LEFT JOIN web_provider_media_assets a ON a.media_id=i.media_id AND i.origin='narrative'
         LEFT JOIN web_provider_footer_assets f ON f.media_id=i.media_id AND i.origin='trial_footer'
         WHERE p.principal_id=? AND p.player_id=? AND p.world_id=? AND p.conversation_id=? AND m.seq<?
+      UNION ALL
+      SELECT m.seq,m.id,m.body,m.created_at,coalesce(b.operation_id,'') operation_id,'input' origin,NULL ordinal,
+          NULL media_id,NULL duration_ms,0 via_backup,NULL chosen_model,NULL actual_model,NULL price_version
+        FROM web_turn_bubbles b JOIN messages m ON m.id=b.message_id
+        WHERE b.principal_id=? AND b.world_id=? AND b.conversation_id=? AND m.seq<?
+          AND NOT EXISTS (SELECT 1 FROM web_operations o WHERE o.input_message_id=m.id)
       ORDER BY seq DESC LIMIT 51`,
       principal.principalId,
       principal.world_id,
@@ -809,14 +949,44 @@ export class WebProviderApplication {
       principal.world_id,
       conversationId,
       before ?? Number.MAX_SAFE_INTEGER,
+      principal.principalId,
+      principal.world_id,
+      conversationId,
+      before ?? Number.MAX_SAFE_INTEGER,
     );
-    const page = rows.slice(0, 50).reverse();
+    // Part 42: the character's own broadcast messages of this conversation, merged in by their sequence.
+    const broadcast = broadcastHistoryRows(
+      this.store,
+      { principalId: principal.principalId, worldId: principal.world_id, conversationId },
+      before,
+    ).map((row) => ({
+      seq: row.seq,
+      id: row.id,
+      body: row.body,
+      created_at: row.created_at,
+      operation_id: '',
+      origin: 'narrative' as const,
+      ordinal: row.ordinal,
+      media_id: row.media_id,
+      duration_ms: row.duration_ms,
+      via_backup: 0,
+      chosen_model: null,
+      actual_model: null,
+      price_version: null,
+      broadcast: true,
+    }));
+    const all = [...rows.map((row) => ({ ...row, broadcast: false })), ...broadcast].sort((a, b) => b.seq - a.seq);
+    const page = all.slice(0, 50).reverse();
     const character = conversation.private_character_id as WebProviderCharacterId;
+    // Part 36: the quote a bubble carries (same conversation; text null = the original is gone) and the player's own rating.
+    const pageIds = page.map((row) => row.id);
+    const quotes = this.bubbleQuotes(principal, conversationId, pageIds);
+    const ratings = this.feedback.ratingsOf(principal, pageIds);
     return {
       characterId: character,
       conversationId,
-      messages: page.map((row) =>
-        providerHistoryMessage(
+      messages: page.map((row) => ({
+        ...providerHistoryMessage(
           {
             ...row,
             billed_model:
@@ -827,9 +997,13 @@ export class WebProviderApplication {
           conversationId,
           character,
         ),
-      ),
+        // A broadcast message belongs to no operation; a bubble still waiting for its turn has none yet either.
+        ...(row.broadcast || row.operation_id === '' ? { operationId: null } : {}),
+        ...(quotes.has(row.id) ? { quote: quotes.get(row.id)! } : {}),
+        ...(ratings.has(row.id) ? { rating: ratings.get(row.id)! } : {}),
+      })),
       before: page.length ? this.cursor(principal.principalId, page[0]!.seq, conversationId) : null,
-      hasMore: rows.length > 50,
+      hasMore: all.length > 50,
     };
   }
 }

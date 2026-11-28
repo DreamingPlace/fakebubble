@@ -5,6 +5,8 @@ import { WebCharacterPreviews } from '../../apps/server/characters/web-character
 import { WebCharacterPreviewRunner } from '../../apps/server/characters/web-character-preview-runner.ts';
 import { WebAdminSpeech } from '../../apps/server/characters/web-admin-speech.ts';
 import { WebClipDirection } from '../../apps/server/characters/web-clip-direction.ts';
+import { WebCocreationWordingGen } from '../../apps/server/cocreation/web-cocreation-wordings-gen.ts';
+import { WebCocreationTidy } from '../../apps/server/cocreation/web-cocreation-tidy.ts';
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../packages/domain/errors.ts';
@@ -26,6 +28,8 @@ import {
   WebCloudTextGenerator,
   webCloudEmbeddings,
   webCloudDirection,
+  webCloudTidy,
+  webCloudWordings,
   webCloudJudge,
   webCloudSpeech,
 } from '../../apps/server/cloudflare/web-generators.ts';
@@ -91,6 +95,11 @@ export interface WebBusinessEnvironment {
   MAX_AUDIO_RUNNING?: string;
   MAX_WAITING_OPERATIONS?: string;
   AUDIO_FALLBACK_WAIT_MS?: string;
+  /** Part 54: the limit of each provider call, enforced by the generation Worker (text 1000-35000, voice 1000-100000 ms). */
+  TEXT_CALL_TIMEOUT_MS?: string;
+  /** 'off' runs every stage inside the alarm invocation again (only for diagnosis; the default dispatches each stage on its own). */
+  STAGE_DISPATCH?: string;
+  SPEECH_CALL_TIMEOUT_MS?: string;
   /** Player-initiated replies per invited player per rolling 24 hours (1–10000, default 100). */
   DAILY_REPLY_LIMIT?: string;
   /** Memory embeddings: off unless 'true' (the generation Worker's AI binding repeats the gate). */
@@ -134,6 +143,8 @@ export interface WebBusinessEnvironment {
   TURNSTILE_SECRET?: string;
   MEDIA: PrivateBucket;
   BUDGET: WebBudgetStatusRPC & WebBudgetTopUpRPC;
+  /** The object's own namespace (already bound for the operator): each stage is started through it, in its own request context. */
+  BUSINESS?: { get(id: unknown): any };
   GENERATION: WebGenerationBinding;
   /** Part 32: this script's own `WebKdfService`, bound to itself. Absent = every password operation answers WEB_KDF_UNAVAILABLE. */
   KDF?: WebKdfBinding;
@@ -370,6 +381,8 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       retention: () => this.retention.health(),
       renewPrices: () => this.setup.renewPrices(),
       topUp: (requestId, provider, micros) => env.BUDGET.topUp(requestId, provider, micros),
+      // Part 54: the owner's 已按账单核对 settles the shared reservation at the amount he confirmed (the local row was just settled).
+      settleAttempt: (key) => new WebCloudBudgetClient(env.BUDGET).settleAttempt(this.store, key),
     };
   }
   adminGrant(proof: string) {
@@ -470,6 +483,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         // Part 35: the 多轮预演 judge goes through the generation Worker as well; its budget is reserved by the runner first.
         previews.useRehearsalJudge(webCloudJudge(this.env.GENERATION));
         app.characterAdmin.enableSpeech(speech);
+        // Part 42: 广播's voice goes through this same admin speech path (its budget reserved first, UNKNOWN never resent).
         // Part 30: 按反馈重录. The text call goes through the generation Worker (the only provider caller); the budget is
         // env.BUDGET, reserved before the call; the 预演 runner drives its recovery next to the speech bills.
         const direction = new WebClipDirection(
@@ -480,6 +494,19 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         );
         previews.useDirection(direction);
         app.characterAdmin.enableDirection(direction);
+        // Part 39: 整理 in the co-creation inbox: the same Worker route and shared budget, its own pinned prompt.
+        const tidy = new WebCocreationTidy(this.store, this.clock, webCloudTidy(this.env.GENERATION), this.env.BUDGET);
+        previews.useTidy(tidy);
+        app.cocreation.enableTidy(tidy);
+        // Part 39b: 生成 of the wording pool: the same Worker route and shared budget, its own pinned prompt.
+        const wordingGen = new WebCocreationWordingGen(
+          this.store,
+          this.clock,
+          webCloudWordings(this.env.GENERATION),
+          this.env.BUDGET,
+        );
+        previews.useWordingGen(wordingGen);
+        app.cocreation.enableWordingGen(wordingGen);
         const execution = new WebCloudExecutor(
           this.context,
           this.store,
@@ -487,6 +514,11 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
           runner,
           () => this.maintenanceDue(),
           previews,
+          app.broadcast,
+          this.env.BUSINESS && this.env.STAGE_DISPATCH !== 'off'
+            ? (launchId) => this.env.BUSINESS!.get(this.context.id).startStage(launchId)
+            : undefined,
+          app.turns,
         );
         const http = new WebProviderHTTP(
           app,
@@ -530,6 +562,19 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
     this.store.playerModelKeys = probed.keys;
     this.modelKeysAt = probed.ok ? now : now - 55_000;
   }
+  /**
+   * Part 54: runs ONE parked stage in this invocation (see WebProviderExecutor.launch). The call returns at once, so the caller's
+   * connection is free again; the stage continues here, and this invocation (not the alarm's) owns its outbound connections.
+   * Only a launch id the executor itself parked can start anything; any other value does nothing.
+   */
+  async startStage(launchId: string): Promise<boolean> {
+    if (typeof launchId !== 'string' || launchId.length > 200 || !this.services) return false;
+    const services = await this.services;
+    const running = services.execution.executor.startLaunched(launchId);
+    if (!running) return false;
+    this.context.waitUntil(running.catch(() => {}));
+    return true;
+  }
   async alarm() {
     // Privacy cleanup must survive restart, disabled providers and unavailable budget RPC.
     await this.context.storage.setAlarm(this.clock.now() + 30_000);
@@ -557,7 +602,26 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       await this.refreshModelKeys();
       return services.execution.alarm();
     }
-    const next = Math.min(this.maintenanceDue() ?? Infinity, deletion?.nextDue() ?? Infinity);
+    // Part 42: a scheduled broadcast fires from here too (it needs no provider), with no other request.
+    const broadcast = this.application().broadcast;
+    try {
+      await broadcast.pass();
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'web_broadcast_pass_failed', ...safeError(error) }));
+    }
+    // Part 36: a batch whose quiet period is over is closed here too (an operation is admitted; nothing else needs a provider).
+    const turns = this.application().turns;
+    try {
+      turns.pass();
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'web_turn_pass_failed', ...safeError(error) }));
+    }
+    const next = Math.min(
+      this.maintenanceDue() ?? Infinity,
+      deletion?.nextDue() ?? Infinity,
+      broadcast.nextDue() ?? Infinity,
+      turns.nextDue() ?? Infinity,
+    );
     const due = Number.isFinite(next) ? next : null;
     if (due === null) await this.context.storage.deleteAlarm();
     else await this.context.storage.setAlarm(Math.max(this.clock.now() + 1000, due));

@@ -84,7 +84,8 @@ try {
         `欢迎内容 ${at}: 100% is not marked ok`,
       );
       // type the new lines, make the total wrong, see the located message, put it right
-      const texts = page.locator('.wl-row textarea');
+      // Named exception (Part 37a-2): every line now has a second box, its 情境 note, so the words' box is the one that is not 情境.
+      const texts = page.locator('.wl-row textarea.wl-text:not(.wl-context)');
       await texts.nth(1).fill('第二句：你来啦');
       await texts.nth(2).fill('第三句：等你好久了');
       await page.locator('.wl-row input.wl-weight').nth(0).fill('40');

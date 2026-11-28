@@ -13,8 +13,8 @@ export const PROFILE_FIELD_CHARS = Object.freeze({
   persona: PROFILE_LIMITS.persona,
   /** JSON.stringify(authorCanon.settings).length (template-validation.ts). */
   canon: PROFILE_LIMITS.canon,
-  /** WELCOME_LIMITS.maxLines lines of WELCOME_LIMITS.text characters, each with an id of up to 64. */
-  welcome: WELCOME_LIMITS.maxLines * (WELCOME_LIMITS.text + 64),
+  /** WELCOME_LIMITS.maxLines lines of WELCOME_LIMITS.text characters, each with a 情境 note and an id of up to 64. */
+  welcome: WELCOME_LIMITS.maxLines * (WELCOME_LIMITS.text + WELCOME_LIMITS.context + 64),
   palette: PROFILE_LIMITS.paletteItems * (7 + PROFILE_LIMITS.colourName + 6),
 });
 const characters = Object.values(PROFILE_FIELD_CHARS).reduce((sum, n) => sum + n, 0);

@@ -552,8 +552,9 @@ test('completed first segment survives reconnect and epoch; sent second segment 
   const fence = otherLedger.fence(input.operationId);
   f.advance(31_000);
   const takeover = otherQueue.acquireCoordinator('takeover');
-  assert.equal(otherLedger.recover(takeover, fence).status, 'unknown');
-  assert.equal(otherStore.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 1);
+  assert.equal(otherLedger.recover(takeover, fence).status, 'failed'); // Part 54 NAMED EXCEPTION: an UNKNOWN reply now ends as failed at once (money held, never retried); it was 'unknown' until its deadline.
+  // (its running-slot ticket is freed too: reserved 0)
+  assert.equal(otherStore.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0);
   assert.equal(
     otherStore.get<{ state: string }>(
       'SELECT state FROM web_synthetic_voice_segments WHERE operation_id=? AND ordinal=0',
@@ -571,7 +572,8 @@ test('completed first segment survives reconnect and epoch; sent second segment 
   f.advance(238_000);
   const final = otherQueue.acquireCoordinator('final');
   otherLedger.terminate(final, otherLedger.fence(input.operationId), principal, 'failed', 'expired');
-  assert.equal(otherStore.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 1);
+  // Part 54 NAMED EXCEPTION: the UNKNOWN call's running-slot ticket was freed when it went unknown.
+  assert.equal(otherStore.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0);
   assert.equal(otherStore.get<{ reserved: number }>('SELECT reserved FROM web_ip_windows')?.reserved, 0);
 });
 

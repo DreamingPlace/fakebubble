@@ -19,7 +19,13 @@ export interface WebAttemptBudget {
    * before it ran and is being retried: the shared reservation made for it must still exist and is reused, never
    * duplicated and never released.
    */
-  beginAttempt(store: BusinessStore, key: BudgetAttemptKey, resume?: boolean): void | Promise<void>;
+  /**
+   * With requeued=true (Part 43) the stage was re-queued after a restart that proved the call was never sent: a shared
+   * reservation left by the lost attempt is reused only if it still exists, is unsettled and matches this request exactly
+   * (never duplicated, never released); an absent one is reserved as for a first attempt; anything else refuses before
+   * any send.
+   */
+  beginAttempt(store: BusinessStore, key: BudgetAttemptKey, resume?: boolean, requeued?: boolean): void | Promise<void>;
   settleAttempt(store: BusinessStore, key: BudgetAttemptKey): void | Promise<void>;
   recoverKnown(store: BusinessStore): void | Promise<void>;
 }

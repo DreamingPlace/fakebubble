@@ -482,6 +482,8 @@ export async function run24b6bChecks(ctx: Ctx) {
     const castFirst = (await page.locator('.cs-versions .ot-row').first().innerText()).replace(/\s+/g, ' ');
     check(/当前/.test(castFirst), `整页版本 ${at}: the live version is not marked: ${castFirst}`); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「现行」
     check(!/回滚/.test(await page.locator('body').innerText()), `关系与故事 ${at}: the word 回滚 is still on the page`);
+    // Part 59 (named exception): the version list sits in the 「版本」 panel, opened first.
+    if (await page.locator('.cs-versions-pop[hidden]').count()) await page.locator('.cs-versions-btn').click();
     await page.locator('.cs-versions').scrollIntoViewIfNeeded();
     await page.locator('.cs-versions .ot-row').nth(2).click();
     await wait(600);

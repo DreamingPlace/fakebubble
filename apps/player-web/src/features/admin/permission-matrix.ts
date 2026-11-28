@@ -125,7 +125,11 @@ function decompose(initial: readonly AdminPermission[]) {
   return { items, legacy };
 }
 /** A grant for one specific role, in the permission names of the grid (never the raw id): "查看角色 · 指定角色". */
-const OTHER_NAMES: Record<string, string> = { 'stats.read': '查看消耗表与统计', 'points.grant': '积分发放' };
+const OTHER_NAMES: Record<string, string> = {
+  'stats.read': '查看消耗表与统计',
+  'points.grant': '积分发放',
+  'broadcast.send': '发送广播',
+};
 const legacyName = (permission: string) => {
   if (OTHER_NAMES[permission]) return OTHER_NAMES[permission];
   // Part 24f: a delete grant stored earlier stays in the database but opens nothing (only the owner deletes a character).

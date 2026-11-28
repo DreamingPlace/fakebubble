@@ -15,6 +15,8 @@ import {
   starValue,
   storiesOfPair,
   blankStory,
+  pairNoteOf,
+  setPairNote,
 } from './cast-model.ts';
 import { itemList } from './cast-items.ts';
 import { dot, svgNode, type CastCtx } from './cast-ui.ts';
@@ -372,6 +374,29 @@ export function pairPanel(host: HTMLElement, ctx: CastCtx, state: GridState) {
       line.append(head, h('div', { class: 'cs-dir-texts' }, addresses, treatment));
       host.append(line);
     }
+    // Part 59: 关系注解 - one note about the pair (how fans see the two). It goes to the cast view of BOTH characters.
+    const baseNote = pairNoteOf(ctx.base(), a, b)?.text ?? '';
+    const note = h('textarea', {
+      class: 'cs-pair-note',
+      attrs: {
+        maxlength: String(CAST_LIMITS.pairNote),
+        rows: '2',
+        placeholder: '玩家眼中他们是什么关系（会写进两位角色的名片）',
+        'aria-label': `${nameA} 与 ${nameB} 的关系注解`,
+        'data-pair-note': '',
+      },
+    });
+    note.value = pairNoteOf(doc, a, b)?.text ?? '';
+    if (!ctx.canEdit()) note.setAttribute('readonly', '');
+    markDirty(note, note.value !== baseNote);
+    note.addEventListener('input', () => {
+      setPairNote(doc, a, b, note.value);
+      markDirty(note, note.value !== baseNote);
+      ctx.edited(true);
+    });
+    host.append(
+      h('div', { class: 'cs-pair-notes' }, h('div', { class: 'cs-card-head' }, h('h3', { text: '关系注解' })), note),
+    );
     const shared = storiesOfPair(doc, a, b);
     const write = ctx.canEdit()
       ? h('button', { class: 'cs-add', text: '+ 写他们的故事', attrs: { type: 'button' } })

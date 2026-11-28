@@ -1,6 +1,7 @@
 import { WebAvatars, isAvatarId } from './web-avatar.ts';
 import { installWebOwnerOps, notErasedSql } from '../admin/web-owner-ops-schema.ts';
 import type { WebCharacterDeletion } from './web-character-deletion.ts';
+import { consoleCharacterOrder } from './web-character-order.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import {
@@ -37,6 +38,7 @@ import { WebReviewCompare } from './web-review-compare.ts';
 import { WebRehearsal } from './web-rehearsal.ts';
 import { publishWebCharacter } from './web-character-publication.ts';
 import { characterHistory, characterVersion, restoreWebCharacter } from './web-character-history.ts';
+import { rebaseProfile } from './web-character-rebase.ts';
 import { draftHistory } from './web-character-draft-history.ts';
 import {
   evalSetDelete,
@@ -92,10 +94,12 @@ function welcomeLines(display: Record<string, unknown>) {
   }
   const problems = welcomeProblems(display.welcomes);
   if (problems.length) throw new DetailedError('WELCOMES_INVALID', { problems });
-  return (display.welcomes as { id: string; text: string; weight: number }[]).map((line) => {
+  return (display.welcomes as { id: string; text: string; weight: number; context?: string }[]).map((line) => {
     record(line);
-    keys(line, ['id', 'text', 'weight']);
-    return { id: line.id, text: line.text, weight: line.weight };
+    keys(line, ['id', 'text', 'weight', 'context']);
+    // Part 37a-2: the 情境 note is optional; an empty or blank one is no note (the key is absent, so the profile hashes as before).
+    const context = typeof line.context === 'string' ? line.context.trim() : undefined;
+    return { id: line.id, text: line.text, weight: line.weight, ...(context ? { context } : {}) };
   });
 }
 
@@ -181,6 +185,10 @@ export class WebCharacterAdmin {
   }
   /** Part 24k-1: the admin speech path (生成 on a 成品 slot, 预演 试听). Off until the runtime that can call Fish enables it. */
   private speech: WebAdminSpeech | null = null;
+  /** The admin speech path when it is on (Part 42: 广播 generates a voice through it). */
+  get speechPath() {
+    return this.speech;
+  }
   enableSpeech(speech: WebAdminSpeech) {
     this.speech = speech;
     this.materials?.enableSpeech(speech);
@@ -397,6 +405,11 @@ export class WebCharacterAdmin {
       }),
     };
   }
+  /** Part 39: the console's order (首页顺序) of every character id, live first. Any administrator who may open the console. */
+  homeOrder(auth: Auth) {
+    this.actor(auth);
+    return { order: consoleCharacterOrder(this.store) };
+  }
   /** 拖动排序: this admin's own order of one sidebar group. Never read by another admin, the home page or a player. */
   saveOrder(auth: Auth, input: unknown) {
     const actor = this.actor(auth);
@@ -507,10 +520,34 @@ export class WebCharacterAdmin {
         (current.revision === input.expectedRevision || current.revision === Number(input.expectedRevision) + 1)
       )
         return draftDTO(current);
-      ensure((current?.revision ?? null) === input.expectedRevision, 'DRAFT_CONFLICT');
-      const base = current ? current.base_version : (live?.version ?? null);
-      ensure((live?.version ?? null) === base, 'LIVE_VERSION_CONFLICT');
-      ensure(next.template.version === (base ?? 0) + 1, 'INVALID_DRAFT_VERSION');
+      // Part 55: the revision and the published version the page was read at may both have moved on (an adoption wrote into the
+      // draft, a publish or a restore made a new live version). Then the page's edit is merged into what is stored now, field by
+      // field; only a field changed on both sides is refused, and it is named.
+      const state = current || live ? this.stateNow(id) : { profile: next, base: null as number | null };
+      const base = state.base;
+      const clean =
+        (current?.revision ?? null) === input.expectedRevision &&
+        (current ? current.base_version === base : true) &&
+        next.template.version === (base ?? 0) + 1;
+      let toWrite = next;
+      if (!clean) {
+        const mineBase =
+          input.expectedRevision === null
+            ? next.template.version > 1
+              ? this.publishedProfileAt(id, next.template.version - 1)
+              : null
+            : this.revisionProfile(id, Number(input.expectedRevision));
+        ensure(
+          mineBase,
+          (current?.revision ?? null) !== input.expectedRevision ? 'DRAFT_CONFLICT' : 'INVALID_DRAFT_VERSION',
+        );
+        const merged = rebaseProfile(mineBase, next, state.profile);
+        (merged.template as { version: number }).version = (base ?? 0) + 1;
+        toWrite = profile(merged);
+        if (toWrite.presentation.avatar)
+          ensure(this.avatars?.exists(id, toWrite.presentation.avatar.id), 'AVATAR_NOT_FOUND');
+      }
+      const writeDigest = clean ? digest : characterProfileHash(toWrite);
       if (!current)
         ensure(
           this.store.get<{ n: number }>('SELECT count(*) n FROM web_character_drafts')!.n < 100,
@@ -518,8 +555,88 @@ export class WebCharacterAdmin {
         );
       const now = this.clock.now();
       ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
-      this.writeRevision(actor, id, base, next, digest, now);
+      this.writeRevision(actor, id, base, toWrite, writeDigest, now);
       return draftDTO(this.draft(id)!);
+    });
+  }
+  /** The profile of a published version, or null when it cannot be read. */
+  private publishedProfileAt(id: string, version: number): WebCharacterProfile | null {
+    try {
+      const raw = characterVersion(this.store, id, version).profile as StoredWebCharacterProfile;
+      const found = upgradedProfile(raw);
+      return { template: found.template, presentation: found.presentation };
+    } catch {
+      return null;
+    }
+  }
+  /** The profile of one saved draft revision (also one that is no longer the draft), or null. */
+  private revisionProfile(id: string, revision: number): WebCharacterProfile | null {
+    const row = this.store.get<{ profile_json: string }>(
+      'SELECT profile_json FROM web_character_revisions WHERE character_id=? AND revision=?',
+      id,
+      revision,
+    );
+    if (!row) return null;
+    const found = upgradedProfile(JSON.parse(row.profile_json) as StoredWebCharacterProfile);
+    return { template: found.template, presentation: found.presentation };
+  }
+  /**
+   * Part 55: what a character's draft is NOW, on top of the live version: the saved draft, rebased onto the live version when the
+   * draft was started on an older one (a publish or restore since); else the live version itself. `base` is the live version the
+   * next revision is written on. Throws DRAFT_FIELD_CONFLICT when the draft and the live version changed the same field.
+   */
+  private stateNow(id: string): { profile: WebCharacterProfile; base: number | null } {
+    const current = this.draft(id),
+      live = this.live(id);
+    const liveProfile = live
+      ? ({ template: live.template, presentation: live.presentation } as WebCharacterProfile)
+      : null;
+    const base = live?.version ?? null;
+    if (!current) {
+      ensure(liveProfile, 'NOT_FOUND');
+      return { profile: structuredClone(liveProfile), base };
+    }
+    const mine = draftDTO(current).profile;
+    const own = { template: mine.template, presentation: mine.presentation } as WebCharacterProfile;
+    if (current.base_version === base || !liveProfile) return { profile: own, base };
+    const started = current.base_version === null ? null : this.publishedProfileAt(id, current.base_version);
+    const merged = rebaseProfile(started ?? liveProfile, own, liveProfile);
+    (merged.template as { version: number }).version = (base ?? 0) + 1;
+    return { profile: merged, base };
+  }
+  /**
+   * Part 55: change a character's draft by a function of what it is NOW, in one transaction, with no revision from the caller: the
+   * co-creation adoption. Starts the draft from the live version when there is none; never publishes. The result is validated like
+   * any save (a refusal is a code the caller names). Returns the revision written.
+   */
+  adoptIntoDraft(
+    auth: Auth,
+    id: string,
+    change: (profile: WebCharacterProfile) => WebCharacterProfile,
+  ): { revision: number; baseVersion: number | null } {
+    const actor = this.require(auth, 'edit', id);
+    return this.store.transaction(() => {
+      ensure(!webCharacterDeleted(this.store, id), 'CHARACTER_DELETED');
+      const current = this.draft(id);
+      ensure(current || this.live(id), 'ADOPT_NO_DRAFT');
+      const state = this.stateNow(id);
+      const changed = change(structuredClone(state.profile));
+      (changed.template as { version: number }).version = (state.base ?? 0) + 1;
+      const next = profile(changed);
+      ensure(next.template.id === id, 'CHARACTER_ID_MISMATCH');
+      if (next.presentation.avatar) ensure(this.avatars?.exists(id, next.presentation.avatar.id), 'AVATAR_NOT_FOUND');
+      const digest = characterProfileHash(next);
+      if (current?.content_hash === digest && current.base_version === state.base)
+        return { revision: current.revision, baseVersion: state.base };
+      if (!current)
+        ensure(
+          this.store.get<{ n: number }>('SELECT count(*) n FROM web_character_drafts')!.n < 100,
+          'CHARACTER_DRAFT_LIMIT',
+        );
+      const now = this.clock.now();
+      ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
+      const revision = this.writeRevision(actor, id, state.base, next, digest, now);
+      return { revision, baseVersion: state.base };
     });
   }
   /** The rows of one saved draft revision (and the audit line): shared by save() and the cast file import. */

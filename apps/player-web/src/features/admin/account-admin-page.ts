@@ -9,6 +9,8 @@ import { permissionMatrixEditor } from './permission-matrix.ts';
 import { membersView } from './members-view.ts';
 import { overviewView } from './overview-view.ts';
 import { pointsView } from './points-view.ts';
+import { broadcastView } from './broadcast-view.ts';
+import { memesView } from './memes-view.ts';
 import { systemView } from './system-view.ts';
 import { costsView } from './costs-view.ts';
 import { modelsView } from './models-view.ts';
@@ -35,11 +37,19 @@ import type { CastAdminClient } from '../../services/cast-admin-api.ts';
 import type { ProfileImportClient } from '../../services/profile-import-api.ts';
 import { profileImportView } from './profile-import/profile-import-view.ts';
 import { cocreationInbox } from './cocreation-inbox.ts';
+import { exportButton, type MakeExport } from './export/export-dialog.ts';
+import { adoptBox } from './speech-profile/adopt-box.ts';
+import { othersReader } from './speech-profile/profile-draft.ts';
 import { conversationsView } from './conversations-view.ts';
+import { feedbackView } from './feedback-view.ts';
 import { arcOrderView } from './owner/arc-order-view.ts';
 import type { OwnerAdminClient } from '../../services/owner-admin-api.ts';
 import type { ConversationsAdminClient } from '../../services/conversations-admin-api.ts';
-import type { CocreationAdminClient } from '../../services/cocreation-admin-api.ts';
+import type {
+  CocreationAdminClient,
+  CocreationRelationsClient,
+  CocreationWordingsClient,
+} from '../../services/cocreation-admin-api.ts';
 import { browserDownload, inviteTiersView } from './invite-tiers-view.ts';
 import { bindTip } from './ui/tooltip.ts';
 import { ICON_PATHS, iconTool } from './ui/icon-tool.ts';
@@ -57,6 +67,16 @@ import {
   type InviteAdminPermission,
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
 import { InviteLocalApiError } from '../../services/invite-local-api.ts';
+import {
+  adminConnection,
+  ACCESS_EXPIRED_LINE,
+  INTERRUPTED_LINE,
+  INTERRUPTED_LINE_READ,
+  isInterrupted,
+  reauthUrl,
+} from '../../services/admin-connection.ts';
+import { clearAllKeptEdits } from './ui/edit-keeper.ts';
+import { keepScroll } from './ui/keep-scroll.ts';
 
 type Port = Pick<
   AccountAdminApi,
@@ -85,17 +105,22 @@ type Port = Pick<
   systemStatus?: AccountAdminApi['systemStatus'];
   renewPrices?: AccountAdminApi['renewPrices'];
   budgetTopUp?: AccountAdminApi['budgetTopUp'];
+  /** Part 54: 未确认的调用 on 系统状态. */
+  unknownCalls?: AccountAdminApi['unknownCalls'];
+  resolveUnknownCall?: AccountAdminApi['resolveUnknownCall'];
   pointsPreview?: AccountAdminApi['pointsPreview'];
   pointsGrant?: AccountAdminApi['pointsGrant'];
   resetPreview?: AccountAdminApi['resetPreview'];
   cocreationPoints?: AccountAdminApi['cocreationPoints'];
   saveCocreationPoints?: AccountAdminApi['saveCocreationPoints'];
   resetPoints?: AccountAdminApi['resetPoints'];
+  /** 广播 (Part 42): the owner or broadcast.send. Optional: a page without it has no 广播 in the nav. */
+  broadcast?: AccountAdminApi['broadcast'];
   /** 玩家统计 and 消耗表 (Part 22c): the owner or stats.read. Optional: a page without them has neither in the nav. */
   playerStats?: AccountAdminApi['playerStats'];
-  exportPlayerStats?: AccountAdminApi['exportPlayerStats'];
   costs?: AccountAdminApi['costs'];
-  exportCosts?: AccountAdminApi['exportCosts'];
+  /** Part 57: 导出, the one button of each page. Optional: without it no page has the button. */
+  exports?: AccountAdminApi['exports'];
   /** 总览's chart, 消耗表 by user type and 玩家统计's chat users (Part 22d / 24b-1): the owner or stats.read. Optional like the rest. */
   chart?: AccountAdminApi['chart'];
   spendByType?: AccountAdminApi['spendByType'];
@@ -118,9 +143,20 @@ type Port = Pick<
   saveModelSettings?: AccountAdminApi['saveModelSettings'];
   /** 共创收件箱. Optional: a page without it simply has no inbox tab. */
   cocreation?: Pick<CocreationAdminClient, 'counts' | 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'> &
-    Partial<Pick<CocreationAdminClient, 'unadopt' | 'addToCastStory'>>;
+    Partial<Pick<CocreationAdminClient, 'unadopt' | 'addToCastStory' | 'adoptAnswers'>>;
+  /** Part 39: relation notes and 玩家眼中的关系 (optional; without it the inbox has neither). */
+  cocreationRelations?: Pick<CocreationRelationsClient, 'detail' | 'stats' | 'adopt' | 'reject' | 'exclude' | 'tidy'> &
+    Partial<Pick<CocreationRelationsClient, 'adoptReason'>>;
+  /** Part 39b: 题目, the wording pool of the co-creation themes. */
+  cocreationWordings?: Pick<
+    CocreationWordingsClient,
+    'list' | 'add' | 'edit' | 'toggle' | 'remove' | 'estimate' | 'generate'
+  > &
+    Partial<Pick<CocreationWordingsClient, 'setEnabled'>>;
   /** 测试对话 (CHAT_REVIEW_ENABLED; the page only appears when the session says the switch is on). */
   conversations?: Pick<ConversationsAdminClient, 'list' | 'detail' | 'export'>;
+  /** Part 36: 语音反馈 (the owner only). Optional: a page without it has no 语音反馈 in the nav. */
+  feedback?: AccountAdminApi['feedback'];
   /** Part 31: the owner's operations. Optional: a page without it draws none of them. */
   owner?: Pick<
     OwnerAdminClient,
@@ -208,6 +244,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       <div class="admin-nav-groups">${navMarkup()}</div>
     </nav>
     <div class="admin-content" tabindex="-1">
+    <section class="admin-conn" id="admin-conn" role="alert" hidden><p id="admin-conn-line"></p>
+      <button type="button" id="admin-conn-open" class="admin-primary">验证 / 重新登录</button>
+      <a id="admin-conn-link" href="/?mode=provider-admin" target="_blank" rel="noopener" hidden>重新验证</a></section>
     <section class="admin-access-notice" id="admin-access" role="alert" hidden><p>需要先通过 Cloudflare Access 验证身份。</p>
       <button type="button" id="admin-access-enter">前往验证</button></section>
     <section class="invite-admin-result" id="admin-secret" hidden><span id="admin-secret-label"></span><strong class="invite-admin-code" id="admin-secret-value"></strong>
@@ -237,6 +276,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <section data-panel="invites" hidden><p id="admin-no-permissions" hidden>当前账号没有“邀请与额度”权限，请联系主管理员开通。</p><div id="admin-invites"></div></section>
     <section data-panel="characters" hidden><div class="page-head"><h2 id="wb-title">角色工作台</h2><div class="page-head-actions" id="wb-head"></div></div><div id="admin-characters"></div></section>
     <section data-panel="cast" hidden><div id="admin-cast"></div></section>
+    <section data-panel="memes" hidden><div id="admin-memes"></div></section>
     <section data-panel="cocreation" hidden><div id="admin-cocreation"></div></section>
     <section data-panel="members" hidden><div class="page-head"><h2>管理员与权限</h2><div class="page-head-actions" id="admin-members-head"></div></div>
       <form id="admin-member-issue" class="mb-add"><label class="mb-field mb-name-field" for="admin-member-label"><span>新管理员备注</span><input id="admin-member-label" maxlength="80" placeholder="例：共创写手 · 小雨" required></label>
@@ -247,9 +287,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     </section>
     <section data-panel="overview" hidden><div id="admin-overview"></div></section>
     <section data-panel="points" hidden><div id="admin-points"></div></section>
+    <section data-panel="broadcast" hidden><div id="admin-broadcast"></div></section>
     <section data-panel="system" hidden><div id="admin-system"></div></section>
     <section data-panel="costs" hidden><div id="admin-costs"></div></section>
     <section data-panel="conversations" hidden><div id="admin-conversations"></div></section>
+    <section data-panel="feedback" hidden><div id="admin-feedback"></div></section>
     <section data-panel="models" hidden><div id="admin-models"></div></section>
     </div>
     </div>
@@ -273,6 +315,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       field.setAttribute('aria-describedby', 'admin-bind-email-tip');
     }
   }
+  // Part 59: no click moves the page: every scroller of the console keeps its position through a repaint (ui/keep-scroll.ts).
+  const scroll = keepScroll(root);
   const value = (id: string) => q<HTMLInputElement>(`#${id}`).value;
   const statusLine = q<HTMLElement>('.invite-admin-status');
   // Feedback appears where it happened, one message at a time (the toast), and stays readable by a screen reader in the live
@@ -293,6 +337,17 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     window.location.assign('/api/web/provider/admin/enter'),
   );
   const report = (error: unknown) => {
+    // Part 59: an interruption of a console that is signed in is not a failure: the connection line says it (edits are kept).
+    if (isInterrupted(error) && session) {
+      accessNotice.hidden = true;
+      statusLine.textContent =
+        adminConnection.reason === 'access'
+          ? ACCESS_EXPIRED_LINE
+          : adminConnection.writePending
+            ? INTERRUPTED_LINE
+            : INTERRUPTED_LINE_READ;
+      return;
+    }
     const needsAccess = error instanceof InviteLocalApiError && error.code === 'ACCESS_REQUIRED';
     accessNotice.hidden = !needsAccess;
     statusLine.textContent = needsAccess ? '' : adminAccountError(error);
@@ -315,6 +370,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     cast: !!port.cast,
     models: !!port.modelSettings,
     system: !!port.overview && !!port.systemStatus,
+    broadcast: !!port.broadcast,
+    feedback: !!port.feedback,
     conversations: !!port.conversations && session?.features?.chatReview === true,
   });
   const canCreateRole = () =>
@@ -336,6 +393,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     session?.member.role === 'owner' ||
     (!!session && hasCharacterPermission(session.member.permissions, 'edit', characterId));
   const address = addressBar(window);
+  const roleNames = new Map<string, string>();
   let workbench: ReturnType<typeof characterWorkbench> | null = null;
   let previewBench: {
     open(id: string): Promise<void>;
@@ -519,7 +577,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     closeMenu();
     if (target === 'characters') picker.select(routeId);
     render();
-    q<HTMLElement>('.admin-content').focus();
+    // Another page is opened on purpose: it starts at the top. (preventScroll: focusing must not scroll by itself.)
+    scroll.reset();
+    q<HTMLElement>('.admin-content').focus({ preventScroll: true });
     const route = here();
     if (route) {
       if (options.replaceUrl) address.replace(route);
@@ -565,6 +625,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         }
       };
     if (page === 'cast' && port.cast && canSeePage('cast', access())) return () => castPage.load();
+    if (page === 'memes' && port.cast && canSeePage('memes', access())) return () => memes.load();
     if (page === 'cocreation' && inbox && canCocreation('cocreation.read'))
       return () => {
         // #/cocreation/<id> is the inbox filtered to that character (the badge on its card); plain #/cocreation keeps the filter.
@@ -575,6 +636,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     if (page === 'invites' && can('invites.manage') && port.inviteBatches) return () => tiers.load();
     if (page === 'overview' && canSeePage('overview', access())) return () => overview.load();
     if (page === 'points' && canSeePage('points', access())) return () => points.load();
+    if (page === 'broadcast' && canSeePage('broadcast', access())) return () => broadcast.load();
     if (page === 'system' && canSeePage('system', access()))
       return async () => {
         await system.load();
@@ -583,6 +645,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       };
     if (page === 'costs' && canSeePage('costs', access())) return () => costs.load();
     if (page === 'conversations' && canSeePage('conversations', access())) return () => reviews.load();
+    if (page === 'feedback' && canSeePage('feedback', access())) return () => feedbackPage.load();
     if (page === 'models' && port.modelSettings) return () => models.load();
     return null;
   };
@@ -596,7 +659,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       await work();
     } catch (error) {
       if (disposed) return;
-      if (error instanceof InviteLocalApiError && error.status === 401 && error.code !== 'ADMIN_LOGIN_INVALID') {
+      if (
+        !isInterrupted(error) &&
+        error instanceof InviteLocalApiError &&
+        error.status === 401 &&
+        error.code !== 'ADMIN_LOGIN_INVALID'
+      ) {
         session = null;
         page = 'login';
         clearSecrets();
@@ -652,6 +720,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     clearSecrets();
     bindId = null;
     resetId = null;
+    // Part 59: this is the verification / sign-in popup the connection line opened: it did its job, the page that asked carries on.
+    if (window.location?.hash === '#/reauth' && window.opener) {
+      window.close();
+      if (window.closed) return;
+    }
     // Reload keeps the place (the address bar); otherwise the first page this administrator may use.
     const wanted = address.read();
     const landing: AdminRoute =
@@ -808,11 +881,21 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     headerHost: q('#wb-head'),
     colourOf: (characterId) => rosterColourOf.get(characterId),
     previewMount: previewHost,
+    // Part 37c-1: the 梗 档位 of 说话档案 adds a single-entry setting only for a term the dictionary holds (exact).
+    ...(port.cast
+      ? {
+          memeLookup: async (term: string) =>
+            (await port.cast!.memesList({ query: term, year: null, tag: null, state: 'all', page: 1 })).entries.some(
+              (entry) => entry.term === term,
+            ),
+        }
+      : {}),
     modalParent: () => q('main'),
     canPreview: (characterId) => !!previewBench && canPreview(characterId),
     onSeed: (characterId, seed) => picker.setSeed(characterId, seed),
     onDirty: () => previewBench?.refresh(),
     onDirectory: (roles) => {
+      for (const role of roles) roleNames.set(role.characterId, role.displayName);
       picker.show(roles);
     },
     onView: (id) => {
@@ -861,8 +944,32 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       workbench!.openNew();
     });
   });
+  // Part 37b: the one 说话档案 adopt box (⭐ in 多轮预演 and 测试对话, 加入说话档案 in 共创收件箱).
+  const profileOthers = othersReader(port.characters);
+  const profileBox = adoptBox({
+    characters: port.characters,
+    others: profileOthers,
+    parent: () => q('main'),
+    canEdit: canEditCharacter,
+    nameOf: (characterId) => roleNames.get(characterId) ?? '这个角色',
+    run,
+    toast: (text, tone) => toasts.show(text, tone ?? 'info'),
+    errorText: characterAdminError,
+    disposed: () => disposed,
+  });
+  // Part 57: every page's 导出 button is made here (one dialog, one place for the words); a page adds its own choices and filters.
+  const makeExport: MakeExport = (choices) =>
+    exportButton({
+      parent: q('main'),
+      api: port.exports,
+      choices,
+      run: (task) => run(task),
+      status: (text) => toasts.show(text, 'ok'),
+    });
   previewBench = port.previews
     ? previewWorkbench(previewHost, {
+        adopt: (input) => void profileBox.open(input),
+        makeExport,
         api: port.previews,
         characters: port.characters,
         member: () => session?.member ?? null,
@@ -882,9 +989,22 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   inbox = port.cocreation
     ? cocreationInbox(q('#admin-cocreation'), {
         api: port.cocreation,
+        leaveMs: 220,
         characters: port.characters,
         canManage: () => canCocreation('cocreation.manage'),
+        makeExport,
         canEditCharacter,
+        adoptProfile: (input) => void profileBox.open(input),
+        others: profileOthers,
+        ...(port.cocreationWordings ? { wordings: port.cocreationWordings } : {}),
+        ...(port.cocreationRelations
+          ? {
+              relations: port.cocreationRelations,
+              canEditCast: () =>
+                session?.member.role === 'owner' ||
+                (!!session && hasCastPermission(session.member.permissions, 'cast.edit')),
+            }
+          : {}),
         ...(port.cast
           ? {
               castRevision: () => port.cast!.draft().then((draft) => draft.revision),
@@ -927,6 +1047,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const unavailable = () => Promise.reject(new Error('ADMIN_SYSTEM_UNAVAILABLE'));
   const overview = overviewView(q('#admin-overview'), {
     load: () => (port.overview ? port.overview() : unavailable()),
+    makeExport,
     run,
     disposed: () => disposed,
     chart: port.chart
@@ -935,8 +1056,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     stats: port.playerStats
       ? {
           load: (range) => port.playerStats!(range),
-          exportCsv: (range) => (port.exportPlayerStats ? port.exportPlayerStats(range) : unavailable()),
-          download: browserDownload,
           available: () => canSeePage('costs', access()),
         }
       : undefined,
@@ -945,7 +1064,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     load: () => (port.systemStatus ? port.systemStatus() : unavailable()),
     renewPrices: (requestId) => (port.renewPrices ? port.renewPrices(requestId) : unavailable()),
     topUp: (input) => (port.budgetTopUp ? port.budgetTopUp(input) : unavailable()),
+    unknownCalls:
+      port.unknownCalls && port.resolveUnknownCall
+        ? { load: () => port.unknownCalls!(), resolve: (input) => port.resolveUnknownCall!(input) }
+        : undefined,
     isOwner: () => session?.member.role === 'owner',
+    makeExport,
     run,
     confirm: (options, host) => inlineConfirm(host, options),
     toast: (text) => toasts.show(text, 'ok'),
@@ -955,8 +1079,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const costs = costsView(q('#admin-costs'), {
     load: (range) => (port.costs ? port.costs(range) : unavailable()),
     spend: port.spendByType ? (range) => port.spendByType!(range) : undefined,
-    exportCsv: (range) => (port.exportCosts ? port.exportCosts(range) : unavailable()),
-    download: browserDownload,
+    makeExport,
     run,
     disposed: () => disposed,
   });
@@ -976,9 +1099,33 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     newRequestId: () => globalThis.crypto.randomUUID(),
     disposed: () => disposed,
   });
+  const memes = memesView(q('#admin-memes'), {
+    api:
+      port.cast ?? (new Proxy({}, { get: () => () => Promise.reject(new Error('ADMIN_MEMES_UNAVAILABLE')) }) as never),
+    makeExport,
+    canEdit: () =>
+      session?.member.role === 'owner' || (!!session && hasCastPermission(session.member.permissions, 'cast.edit')),
+    newRequestId: () => globalThis.crypto.randomUUID(),
+    disposed: () => disposed,
+    toast: (text) => toasts.show(text, 'ok'),
+    // Part 37c-1b: the permanent delete of his own entries asks in place.
+    confirm: (options, host) => inlineConfirm(host, options),
+  });
+  const broadcast = broadcastView(q('#admin-broadcast'), {
+    api:
+      port.broadcast ??
+      (new Proxy({}, { get: () => () => Promise.reject(new Error('ADMIN_BROADCAST_UNAVAILABLE')) }) as never),
+    makeExport,
+    run,
+    confirm: (options, host) => inlineConfirm(host, options),
+    toast: (text) => toasts.show(text, 'ok'),
+    newRequestId: () => globalThis.crypto.randomUUID(),
+    disposed: () => disposed,
+  });
   const tiers = inviteTiersView(q('#admin-invites'), {
     port,
     isOwner: () => session?.member.role === 'owner',
+    makeExport,
     run,
     confirm: (options, host) => inlineConfirm(host, options),
     toast: (text) => toasts.show(text, 'ok'),
@@ -1010,10 +1157,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     },
     run,
     runLatest,
+    makeExport,
     status: (text) => {
       if (!disposed) status.textContent = text;
     },
     disposed: () => disposed,
+    adoptLine: (input) => void profileBox.open(input),
     ...(port.owner
       ? {
           owner: port.owner,
@@ -1022,6 +1171,20 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
           toast: (text, tone) => toasts.show(text, tone ?? 'info'),
         }
       : {}),
+  });
+  const feedbackPage = feedbackView(q('#admin-feedback'), {
+    api: port.feedback ?? {
+      counts: () => Promise.reject(new Error('ADMIN_FEEDBACK_UNAVAILABLE')),
+      list: () => Promise.reject(new Error('ADMIN_FEEDBACK_UNAVAILABLE')),
+      heard: () => Promise.reject(new Error('ADMIN_FEEDBACK_UNAVAILABLE')),
+      audio: () => Promise.reject(new Error('ADMIN_FEEDBACK_UNAVAILABLE')),
+    },
+    run,
+    makeExport,
+    status: (text) => {
+      if (!disposed) status.textContent = text;
+    },
+    disposed: () => disposed,
   });
   const members = membersView({
     head: q('#admin-members-head'),
@@ -1058,13 +1221,18 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     system.clear();
     costs.clear();
     points.clear();
+    broadcast.clear();
+    memes.clear();
     reviews.clear();
     models.clear();
     inbox?.clear();
     unread = {};
   };
   const adoptSession = (current: AccountAdminSession) => {
-    if (session && (session.member.id !== current.member.id || session.csrf !== current.csrf)) {
+    // Part 59: the same administrator signing in again (another tab, a re-verification) only brings a new CSRF token: nothing is reset
+    // (it used to clear the page and send it to 我的账号). A DIFFERENT administrator resets everything, and their kept edits go.
+    if (session && session.member.id !== current.member.id) {
+      clearAllKeptEdits();
       clearSecrets();
       clearManagement();
       bindId = null;
@@ -1190,6 +1358,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     whenLeaveOk(() => {
       void run(async () => {
         clearSecrets();
+        // Part 59: an explicit sign-out removes the edits this browser kept (a session that merely expired keeps them).
+        clearAllKeptEdits();
         await port.logout();
         if (disposed) return;
         session = null;
@@ -1200,23 +1370,41 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       });
     });
   });
+  /**
+   * Part 59: coming back to the tab (or the window) re-reads the session IN THE BACKGROUND. It used to run as a `run`, which sets
+   * `busy` and disables EVERY control of the page (the 「not-allowed」 cursor) until the answer came; a slow or hung answer (a
+   * Cloudflare challenge, a sleeping connection) froze the page for minutes. Now nothing is disabled, nothing waits for it, the
+   * request has a 15 s deadline, and an interruption only raises the connection line.
+   */
+  let refreshing = false;
   const refresh = () => {
-    if (!session || busy || disposed) return;
-    void run(async () => {
-      const current = await port.restore();
-      if (disposed) return;
-      adoptSession(current);
-      if (current.member.role !== 'owner') {
-        members.clear();
-        if (page === 'members') page = 'account';
-      }
-      // A page whose permission was just taken away is no longer offered; the pages that explain themselves stay.
-      if (isAdminPage(page) && page !== 'invites' && page !== 'characters' && !canSeePage(page, access())) {
-        page = 'account';
-        routeId = null;
-        address.replace({ page, id: null });
-      }
-    });
+    if (!session || disposed || refreshing) return;
+    refreshing = true;
+    void port
+      .restore()
+      .then((current) => {
+        if (disposed) return;
+        const before = JSON.stringify([session?.member.role, session?.member.permissions]);
+        adoptSession(current);
+        if (JSON.stringify([current.member.role, current.member.permissions]) === before) return;
+        if (current.member.role !== 'owner') {
+          members.clear();
+          if (page === 'members') page = 'account';
+        }
+        // A page whose permission was just taken away is no longer offered; the pages that explain themselves stay.
+        if (isAdminPage(page) && page !== 'invites' && page !== 'characters' && !canSeePage(page, access())) {
+          page = 'account';
+          routeId = null;
+          address.replace({ page, id: null });
+        }
+        render();
+      })
+      .catch(() => {
+        /* an interruption raises the connection line; anything else is tried again at the next return */
+      })
+      .finally(() => {
+        refreshing = false;
+      });
   };
   // 总览 and 系统状态 reload by themselves every 60 s while the tab is visible and nothing else is running.
   const tick = setInterval(() => {
@@ -1231,6 +1419,73 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   cleanups.push(() => clearInterval(tick));
   window.addEventListener('focus', refresh);
   cleanups.push(() => window.removeEventListener('focus', refresh));
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') refresh();
+  };
+  document.addEventListener('visibilitychange', onVisible);
+  cleanups.push(() => document.removeEventListener('visibilitychange', onVisible));
+  // Part 59: the admin session slides (8 h after the last request, 24 h at most). While the console is in use but quiet (reading,
+  // typing a long text) a request every 10 minutes keeps it alive, so an active owner is never logged out mid-edit.
+  let lastActive = Date.now();
+  const touched = () => {
+    lastActive = Date.now();
+  };
+  for (const type of ['pointerdown', 'keydown', 'scroll'])
+    document.addEventListener(type, touched, { passive: true, capture: true });
+  cleanups.push(() => {
+    for (const type of ['pointerdown', 'keydown', 'scroll']) document.removeEventListener(type, touched, true);
+  });
+  const keepAlive = setInterval(() => {
+    if (session && !disposed && Date.now() - lastActive < 10 * 60_000) refresh();
+  }, 10 * 60_000);
+  (keepAlive as { unref?: () => void }).unref?.();
+  cleanups.push(() => clearInterval(keepAlive));
+  // Part 59: the connection line. While the console cannot reach its API the owner is told once, can verify or sign in again in a
+  // popup (the page itself stays where it is), and every 4 s the session is probed: the moment the API answers, the saves that
+  // were waiting are sent again (see services/admin-connection.ts).
+  const connBox = q<HTMLElement>('#admin-conn');
+  const connLine = q<HTMLElement>('#admin-conn-line');
+  let probe: ReturnType<typeof setInterval> | null = null;
+  const stopProbe = () => {
+    if (probe) clearInterval(probe);
+    probe = null;
+  };
+  let reauthPopup: Window | null = null;
+  const openReauth = () => {
+    const url = reauthUrl(window.location);
+    reauthPopup = window.open(url, 'fb-admin-reauth', 'popup=yes,width=560,height=720');
+    // Blocked: the 重新验证 link does the same in a new tab.
+    q<HTMLElement>('#admin-conn-link').hidden = !!reauthPopup;
+  };
+  const paintConnection = (state: 'ok' | 'interrupted', reason?: string | null) => {
+    connBox.hidden = state === 'ok' || !session;
+    connLine.textContent =
+      adminConnection.reason === 'access' || reason === 'access'
+        ? ACCESS_EXPIRED_LINE
+        : adminConnection.writePending
+          ? INTERRUPTED_LINE
+          : INTERRUPTED_LINE_READ;
+    if (state === 'interrupted' && (reason ?? adminConnection.reason) === 'access' && !reauthPopup?.closed)
+      openReauth();
+    if (state === 'ok') {
+      // The API answers JSON again: the popup did its job.
+      try {
+        reauthPopup?.close();
+      } catch {
+        /* already gone */
+      }
+      reauthPopup = null;
+      q<HTMLElement>('#admin-conn-link').hidden = true;
+      stopProbe();
+      if (!disposed && [INTERRUPTED_LINE, ACCESS_EXPIRED_LINE].includes(statusLine.textContent))
+        statusLine.textContent = '';
+    } else if (!probe) {
+      probe = setInterval(refresh, 4000);
+      (probe as { unref?: () => void }).unref?.();
+    }
+  };
+  cleanups.push(adminConnection.on(paintConnection), stopProbe);
+  listen(q('#admin-conn-open'), 'click', openReauth);
   q<HTMLElement>('#admin-env').textContent = environmentLabel(window.location?.hostname);
   render();
   void port
@@ -1266,6 +1521,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     inbox?.dispose();
     for (const cleanup of cleanups) cleanup();
     stopFieldWidths();
+    scroll.stop();
     root.replaceChildren();
   };
 }

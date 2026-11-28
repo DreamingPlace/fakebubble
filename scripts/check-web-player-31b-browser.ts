@@ -110,7 +110,8 @@ try {
     );
     await page.locator('.card-slot.is-active .face-portrait[data-portrait="loaded"]').waitFor({ timeout: 15_000 });
     const box = await page.locator('.card-slot.is-active .face-portrait').boundingBox();
-    assert.ok(Math.abs(box.width - 148) < 1 && Math.abs(box.height - 148) < 1, `148 px at ${tag}`);
+    // Part 41 (owner spec 2026-11-18), named exception: the card's picture is 10% smaller than the 148 px of Part 31b, so 133.2 px.
+    assert.ok(Math.abs(box.width - 133.2) < 1 && Math.abs(box.height - 133.2) < 1, `133.2 px at ${tag}`);
     const src = await page.locator('.card-slot.is-active .face-portrait img.portrait').getAttribute('src');
     assert.equal(src, `/api/web/provider/public-image/${withPicture[first]}`);
     assert.equal(await page.locator('.card-slot.is-active .face-portrait img').getAttribute('alt'), '', 'decorative');
@@ -151,32 +152,21 @@ try {
       assert.equal(paint.alpha, 0, `${item}: the initial is not visible (${JSON.stringify(paint)})`);
     }
     await snap(page, `card-avatar-${tag}`);
-    // open the chat of the active card: header avatar 36 px with a 2.5 px ring, the welcome row's avatar 30 px
+    // open the chat of the active card. Named exception (Part 38a, owner decision 2026-11-14): the chat header has NO avatar and no
+    // halo (31b's 36 px header avatar with a 2.5 px ring is gone); only the welcome row's 30 px avatar is checked below.
     await page.locator('.card-slot.is-active').click({ force: true });
     await page.locator('.page-shell[data-phase="chat"]').waitFor({ timeout: 10_000 });
-    await page.locator('.card-slot.is-active .chat-mark[data-portrait="loaded"]').waitFor({ timeout: 15_000 });
-    // (layout size: the card is scaled while it opens, a bounding box would be too)
-    const head = await page
-      .locator('.card-slot.is-active .chat-mark')
-      .evaluate((n: HTMLElement) => [n.offsetWidth, n.offsetHeight]);
-    assert.deepEqual(head, [36, 36], `36 px header avatar at ${tag}`);
-    // the halo ring is 2.5 px in the stylesheet (Chromium snaps a computed border to whole pixels, so the rule itself is read)
-    assert.ok(
-      await page.evaluate(() =>
-        [...document.styleSheets].some((sheet) =>
-          [...sheet.cssRules].some(
-            (r) =>
-              (r as CSSStyleRule).selectorText === '.page-shell .chat-head .chat-mark' &&
-              (r as CSSStyleRule).style.borderWidth === '2.5px',
-          ),
-        ),
-      ),
+    assert.equal(
+      await page.locator('.card-slot.is-active .chat-head .avatar, .card-slot.is-active .chat-head img').count(),
+      0,
     );
+    assert.equal(await page.locator('.card-slot.is-active .chat-mark').count(), 0, 'no header avatar');
     const small = await page
       .locator('.card-slot.is-active .welcome-row .message-avatar')
       .evaluate((n: HTMLElement) => n.offsetWidth);
     assert.equal(small, 30, `30 px message avatar at ${tag}`);
-    // an avatar only beside the last bubble of a group (two incoming rows in a row: the first one's avatar keeps its space but is hidden)
+    // Named exception (Part 38a, owner decision 2026-11-15): 31b showed an avatar only beside the last bubble of a group (the first of two
+    // incoming rows was 'hidden'); now every character message shows its avatar, so both rows are 'visible' (and 30 px).
     const hidden = await page.evaluate(() => {
       const body = document.querySelector('.card-slot.is-active .sent-messages')!;
       const make = () => {
@@ -193,7 +183,7 @@ try {
       b.remove();
       return vis;
     });
-    assert.deepEqual(hidden, ['hidden', 'visible']);
+    assert.deepEqual(hidden, ['visible', 'visible']);
     await snap(page, `chat-avatar-${tag}`);
     await ctx.close();
   }
@@ -207,8 +197,11 @@ try {
       ),
     );
     assert.equal(await active(page), 'character-chen-jimi');
-    assert.equal(await page.locator('.card-slot.is-active .face-portrait').count(), 0, 'no circle without a picture');
-    assert.equal(await page.locator('.card-slot.is-active .chat-mark.has-portrait').count(), 0);
+    // Part 40 (named exception, the owner's card spec): every card has the avatar circle at the top; without a picture it holds the initials.
+    assert.equal(await page.locator('.card-slot.is-active .face-portrait').count(), 1, 'the circle holds the initials');
+    assert.equal(await page.locator('.card-slot.is-active .face-portrait img').count(), 0, 'no picture in it');
+    // Part 38a (owner decision 2026-11-14): the chat header has no avatar at all, so no .chat-mark exists (stricter than .has-portrait).
+    assert.equal(await page.locator('.card-slot.is-active .chat-mark').count(), 0);
     await snap(page, 'card-no-avatar-m');
     await ctx.close();
   }

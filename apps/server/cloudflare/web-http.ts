@@ -14,10 +14,13 @@ import { PROFILE_BODY_LIMIT } from '../characters/web-profile-limits.ts';
 import { webProviderHTTPError } from '../platform/web-provider-http-error.ts';
 import { logRefusal } from '../platform/web-refusal-status.ts';
 import { routeWebInvite } from '../invites/web-invite-routes.ts';
+import { routeWebAdminExport } from '../export/web-export-routes.ts';
+import { routeWebFeedbackAdmin } from '../turns/web-feedback-routes.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
 import { OWNER_BODY_LIMIT } from '../admin/web-owner-ops.ts';
+import { BROADCAST_UPLOAD_BODY_LIMIT, broadcastAudio } from '../broadcast/web-broadcast-read.ts';
 import { AVATAR_BODY_LIMIT, avatarHeaders } from '../characters/web-avatar.ts';
 import { routeWebBilling } from '../admission/web-billing-routes.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
@@ -207,6 +210,33 @@ export class WebProviderHTTP {
       const found = await app.avatars.readPublic(image[1]!);
       return new Response(Uint8Array.from(found.bytes), { headers: avatarHeaders(found.bytes.length) });
     }
+    // Part 48: the public catalog (the home cards before any session). No cookie or session is read and none is set; only public
+    // card fields are returned. Rate-limited per IP and globally like the share routes.
+    if (method === 'GET' && path === `${API}/catalog`) {
+      this.limits.rate(`web:catalog:${ipHash}`, LIMITS.catalogPerIpPerMinute);
+      this.limits.rate('web:catalog:global', LIMITS.catalogGlobalPerMinute);
+      return Response.json(app.publicCatalog(), {
+        headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' },
+      });
+    }
+    // Part 45: the two public share reads. No session or cookie is read; the visitor needs only the token. Rate-limited per IP and
+    // globally. Unknown, expired and purged links answer identically (NOT_FOUND); nothing is cached and the page is not named.
+    const shareRead = path.match(new RegExp(`^${API}/shares/([^/]{1,128})(/audio)?$`));
+    if (method === 'GET' && shareRead) {
+      this.limits.rate(`web:share:${ipHash}`, LIMITS.sharePerIpPerMinute);
+      this.limits.rate('web:share:global', LIMITS.shareGlobalPerMinute);
+      const shareHeaders = { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' };
+      if (shareRead[2]) {
+        const bytes = await app.shares.audio(shareRead[1]!);
+        ensure(bytes, 'NOT_FOUND');
+        return new Response(Uint8Array.from(bytes), {
+          headers: { ...shareHeaders, 'content-type': 'audio/wav', 'content-length': String(bytes.length) },
+        });
+      }
+      const card = app.shares.open(shareRead[1]!);
+      ensure(card, 'NOT_FOUND');
+      return Response.json(card, { headers: shareHeaders });
+    }
     if (method === 'GET' && path === `${API}/admin/session`)
       return Response.json(app.inviteAdmin.session(this.cookie(request, true)));
     if (
@@ -270,21 +300,25 @@ export class WebProviderHTTP {
             ? AVATAR_BODY_LIMIT
             : materialUpload
               ? 8_001_024
-              : /\/admin\/(?:cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply))$/.test(path)
-                ? CAST_BODY_LIMIT
-                : bulkWrite
-                  ? 786_432
-                  : characterWrite
-                    ? PROFILE_BODY_LIMIT
-                    : path.startsWith(`${API}/admin/owner/`)
-                      ? OWNER_BODY_LIMIT
-                      : path.startsWith(`${API}/cocreation/`)
-                        ? COCREATION_BODY_LIMIT
-                        : 8192,
+              : path === `${API}/admin/broadcast/upload`
+                ? BROADCAST_UPLOAD_BODY_LIMIT
+                : /\/admin\/(?:cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply))$/.test(path)
+                  ? CAST_BODY_LIMIT
+                  : bulkWrite
+                    ? 786_432
+                    : characterWrite
+                      ? PROFILE_BODY_LIMIT
+                      : path.startsWith(`${API}/admin/owner/`)
+                        ? OWNER_BODY_LIMIT
+                        : path.startsWith(`${API}/cocreation/`)
+                          ? COCREATION_BODY_LIMIT
+                          : 8192,
         ),
       };
       const result =
         (await routeWebPlayerAccounts(path.startsWith(`${API}/account/`) ? app.playerAccounts : null, input)) ??
+        (await routeWebFeedbackAdmin(app.feedbackAdmin, input)) ??
+        routeWebAdminExport(app.exporter, input) ??
         (await routeWebAccountAdmin(
           app.inviteAdmin,
           input,
@@ -294,12 +328,13 @@ export class WebProviderHTTP {
           app.system,
           app.cast,
           app.ownerOps,
+          app.broadcast,
         )) ??
         routeWebCocreation(app.cocreation, input) ??
         routeWebBilling(app.billing, input) ??
         routeWebInvite(app.inviteActions, input, app.inviteAdmin);
-      if (/\/admin\/characters\/[A-Za-z0-9_-]{1,128}\/(review-start|run-start|delete-start)$/.test(localPath))
-        await this.execution.wake();
+      // Part 40: a route that queues work for the executor says so itself (queuesWork); the transport wakes it.
+      if (result.queuesWork) await this.execution.wake();
       const response = Response.json(result.body, { status: result.status });
       if (result.issuedToken) this.setCookie(response, result.issuedToken, false, false, true);
       else if (result.clearPlayerCookie) this.setCookie(response, '', false, true);
@@ -359,6 +394,84 @@ export class WebProviderHTTP {
         );
       });
     }
+    // Part 36: one bubble of a batch (the reply is one turn), where the turn is, and 👍 / 👎.
+    const bubble = path.match(new RegExp(`^${API}/characters/([A-Za-z0-9_-]{1,128})/bubbles$`));
+    if (method === 'POST' && bubble) {
+      ensure(providerCharacterId(bubble[1]!), 'NOT_FOUND');
+      this.write(request);
+      const body = await this.body(request);
+      ensure(
+        typeof body.requestId === 'string' &&
+          typeof body.text === 'string' &&
+          (body.quoteMessageId === undefined || typeof body.quoteMessageId === 'string') &&
+          Object.keys(body).every((key) => ['requestId', 'text', 'quoteMessageId'].includes(key)),
+        'INVALID_REQUEST',
+      );
+      await this.execution.wake();
+      const result = app.store.transaction(() =>
+        app.turns.addBubble(this.write(request), {
+          requestId: body.requestId as string,
+          characterId: bubble[1]!,
+          text: body.text as string,
+          quoteMessageId: (body.quoteMessageId as string | undefined) ?? null,
+          ipHash,
+        }),
+      );
+      // The business object's own alarm closes the batch when the player has been quiet for 4 s (or at once at five bubbles).
+      await this.execution.wake();
+      return Response.json(result, { status: result.duplicate ? 200 : 202 });
+    }
+    const turn = path.match(new RegExp(`^${API}/characters/([A-Za-z0-9_-]{1,128})/turn$`));
+    if (method === 'GET' && turn) {
+      ensure(providerCharacterId(turn[1]!), 'NOT_FOUND');
+      const cookie = this.cookie(request);
+      ensure(cookie, 'AUTH_REQUIRED');
+      return Response.json(app.turns.view(app.identity.authenticate(cookie), turn[1]!));
+    }
+    if (method === 'POST' && path === `${API}/ratings`) {
+      this.write(request);
+      const body = await this.body(request);
+      ensure(
+        typeof body.requestId === 'string' &&
+          typeof body.conversationId === 'string' &&
+          typeof body.messageId === 'string' &&
+          typeof body.rating === 'string' &&
+          Object.keys(body).every((key) =>
+            ['requestId', 'conversationId', 'messageId', 'rating', 'target'].includes(key),
+          ),
+        'INVALID_REQUEST',
+      );
+      return Response.json(
+        app.store.transaction(() =>
+          app.feedback.rate(this.write(request), {
+            requestId: body.requestId as string,
+            conversationId: body.conversationId as string,
+            messageId: body.messageId as string,
+            rating: body.rating as 'up' | 'down' | 'none',
+            ...(body.target === undefined ? {} : { target: body.target as 'voice' | 'content' }),
+          }),
+        ),
+      );
+    }
+    if (method === 'POST' && path === `${API}/shares`) {
+      this.write(request);
+      const body = await this.body(request);
+      ensure(
+        typeof body.requestId === 'string' &&
+          typeof body.conversationId === 'string' &&
+          typeof body.messageId === 'string' &&
+          Object.keys(body).sort().join(',') === 'conversationId,messageId,requestId',
+        'INVALID_REQUEST',
+      );
+      return app.store.transaction(() => {
+        const made = app.shares.create(this.write(request), {
+          requestId: body.requestId as string,
+          conversationId: body.conversationId as string,
+          messageId: body.messageId as string,
+        });
+        return Response.json({ token: made.token, expiresAt: made.expiresAt });
+      });
+    }
     const token = this.cookie(request);
     ensure(token, 'AUTH_REQUIRED');
     const actor = app.identity.authenticate(token);
@@ -410,6 +523,17 @@ export class WebProviderHTTP {
     );
     if (method === 'GET' && audio) {
       requireWebContent(app.store, app.clock, actor.principalId, actor.world_id, 'read');
+      // Part 42: a broadcast's voice clip (one stored per character per broadcast), read only by the player it was delivered to.
+      const broadcast = broadcastAudio(
+        app.store,
+        { principalId: actor.principalId, worldId: actor.world_id, conversationId: audio[1]! },
+        audio[2]!,
+        audio[3]!,
+      );
+      if (broadcast)
+        return new Response(Uint8Array.from(broadcast), {
+          headers: { 'content-type': 'audio/wav', 'content-length': String(broadcast.length) },
+        });
       const row = app.store.get<{ character_id: string }>(
         `SELECT p.character_id FROM web_publication_items i
         JOIN web_publications p ON p.operation_id=i.operation_id WHERE i.message_id=? AND i.media_id=?

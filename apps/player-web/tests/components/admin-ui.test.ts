@@ -274,6 +274,8 @@ test('role picker lists roles with their state, marks the open one and shows an 
     { characterId: 'jojo', displayName: 'JOJO', publishedVersion: 2, draftRevision: 4 },
     { characterId: 'new-one', displayName: '新角色', publishedVersion: null, draftRevision: null },
   ]);
+  // Part 59 (named exception): the rail lists live characters by default; 「显示未上线」 shows the rest, so this test turns it on.
+  el(host).querySelector('.admin-pick-toggle')!.click();
   const rows = el(host).querySelectorAll('.admin-pick');
   assert.equal(rows.length, 2);
   assert.match(rows[0]!.textContent, /JOJO/);

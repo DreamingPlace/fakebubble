@@ -1,21 +1,33 @@
 /**
- * 共创 sheet: a swipeable deck of inspiration cards for one official character. The player writes what they like,
- * skips the rest, and hands everything written so far over in one go. Nothing is reviewed or answered; the only
- * feedback is a thank-you. Drafts live in memory only (never localStorage), so they survive closing the sheet but
- * not a page reload.
+ * 共创 sheet: five theme cards for one official character, then the fixed card 「{name}的一天都会干什么？」 (Part 47: six optional parts), then
+ * the relationship card (the first step of that flow, shown directly). Each theme shows ONE question picked at
+ * random from the character's enabled wording pool (the plain default of the theme when the pool is empty), when the sheet opens and on ↻.
+ * The player writes what they like, skips the rest, and hands everything written so far over in one go; the note records the theme and the
+ * exact question shown. Nothing is reviewed or answered; the only feedback is a thank-you. Drafts live in memory only (never
+ * localStorage), so they survive closing the sheet but not a page reload.
  */
 import {
-  COCREATION_CARDS,
   COCREATION_LIMITS,
   COCREATION_NOTE_MAX,
-  COCREATION_PAIR_CARD,
-  COCREATION_PAIR_NOTE_MAX,
-  cocreationPrompt,
   validateCocreationAnswers,
   type CocreationAnswer,
-  type CocreationCard,
 } from '../../../../../packages/contracts/cocreation-cards.ts';
+import {
+  COCREATION_THEMES,
+  pickWording,
+  type CocreationTheme,
+} from '../../../../../packages/contracts/cocreation-wordings.ts';
+import {
+  DAY_PARTS,
+  DAY_PART_LABELS,
+  DAY_PART_MAX,
+  DAY_PROMPT,
+  dayCardId,
+  dayPartOf,
+  type DayPart,
+} from '../../../../../packages/contracts/cocreation-day.ts';
 import { h, length } from './h.ts';
+import { relationFlow, resetRelationDraft, type RelationSend } from './relation-flow.ts';
 
 export interface CocreationApi {
   submitCocreation(input: {
@@ -25,18 +37,17 @@ export interface CocreationApi {
   }): Promise<{ submissionId: string; answered: number; duplicate: boolean }>;
   /** Has today's entry for this character been used? Best effort: without it the sheet simply does not say. */
   cocreationToday?(characterId: string): Promise<{ cardIds: string[] }>;
+  /** Part 39b: the character's ENABLED wordings per theme (text only). Best effort: without it every theme shows its plain default. */
+  cocreationWordings?(characterId: string): Promise<{ themes: Record<string, string[]> }>;
   /** Part 24c: a note to the production team (留言条). Without it the sheet has no such entry. */
   submitMemo?(input: {
     requestId: string;
     text: string;
   }): Promise<{ submissionId: string; duplicate: boolean; earned?: number }>;
-  /** Part 24c: the story between this character and another. Without it the sheet has no pair card. */
-  submitPair?(input: {
-    requestId: string;
-    characterId: string;
-    partnerId: string;
-    text: string;
-  }): Promise<{ submissionId: string; duplicate: boolean; earned?: number }>;
+  /** Part 39: two to eight characters, a pair's ratings and reason, the story. Without it the sheet has no relationship card. */
+  submitRelation?(input: RelationSend): Promise<{ submissionId: string; duplicate: boolean; earned?: number }>;
+  /** Part 39: the world background of the latest saved cast draft (plain text), or null. Best effort. */
+  worldBackground?(): Promise<{ background: string | null }>;
 }
 export type CocreationSheetOptions = {
   api: CocreationApi;
@@ -50,8 +61,8 @@ export type CocreationSheetOptions = {
   /** Part 25a: the character's aura (three cloud colours) and accent; the sheet is painted in them. */
   aura?: readonly [string, string, string, string];
   say?: (message: string) => void;
-  /** Part 24c: the other live characters, for the pair story card (id and display name). */
-  others?: readonly { characterId: string; name: string }[];
+  /** Part 39: every live character (this one too) in the console order of the home page; the dice and the ＋ pick from it. */
+  everyone?: readonly { characterId: string; name: string }[];
   /** Where the sheet is mounted; defaults to document.body. */
   mount?: HTMLElement;
   random?: () => number;
@@ -62,7 +73,6 @@ export type CocreationSheetOptions = {
   guest?: boolean;
 };
 
-export const BATCH_SIZE = 5;
 export const cocreationCopy = {
   /** The chat ⋯ menu's entry. */
   title: (_name: string) => '一起共创角色',
@@ -75,7 +85,8 @@ export const cocreationCopy = {
   allUsed: '今天的问题都回答过了，明天再来',
   /** Part 25a: "written / cards on offer". */
   progress: (n: number, total: number) => `${n} / ${total}`,
-  shuffle: '换一批',
+  /** Part 39b: ↻ shows another question for every theme that has not been written yet. */
+  refresh: '换一换',
   send: (name: string) => `交给${name}`,
   sending: '正在交出去…',
   thanks: (name: string) => `${name}收到了你的小纸条`,
@@ -84,12 +95,6 @@ export const cocreationCopy = {
   earned: (points: number) => `共创奖励 +${points} 点`,
   /** Part 25c: the guest's version of the line above, in the same place: a guest earns nothing, a signed-up player does. */
   guestHint: '注册后，共创还能得点数～',
-  /** The pair story card: "{name} 和 [select] [🎲] 之间的故事". */
-  pairWith: (name: string) => `${name} 和`,
-  pairBetween: '之间的故事',
-  pairSelect: '选一个角色',
-  pairRoll: '随机换一个',
-  pairPlaceholder: (name: string, other: string) => `${name}和${other}之间发生过什么？`,
   /** The 留言条 entry: a note to the production team, never rewarded. */
   memoOpen: '给制作组的留言条',
   memoPlaceholder: '想对制作组说点什么',
@@ -101,16 +106,12 @@ export const cocreationCopy = {
   done: '写好了',
   skip: '跳过',
   clear: '清除这张',
-  addReply: '再回一句',
-  dropReply: '去掉这句',
-  halfDialogue: '两边都写上才算一张哦',
-  you: '你说：',
-  reply: (name: string) => `${name}会回：`,
   close: '关闭',
   errors: {
     COCREATION_DAILY_LIMIT: '有的问题今天已经回答过了，明天再来吧',
     COCREATION_IP_LIMIT: '今天的共创次数用完了，明天再来吧',
     COCREATION_TEXT_INVALID: '有一张的内容不太合适，检查一下长度再试试。',
+    COCREATION_WORDING_INVALID: '这次的问题没能记下来，换一换再试试。',
     COCREATION_EMPTY: '先写一张再交出去吧。',
     NOT_FOUND: '这个人物暂时不能共创。',
     COCREATION_UNAVAILABLE: '暂时不能写这个，稍后再试试。',
@@ -120,14 +121,11 @@ export const cocreationCopy = {
 
 type Draft = {
   text: Map<string, string>;
-  dialogue: { player: string; replies: string[] };
-  /** Cards in the order they were first written: written cards stay at the front of the deck. */
+  /** Cards in the order they were first written: written cards keep their question (the one the note answers). */
   order: string[];
-  queue: string[];
-  batch: string[];
+  /** The exact question shown for a card whose text is written: it travels with the answer. */
+  shown: Map<string, string>;
   pending: { requestId: string; fingerprint: string } | null;
-  /** Part 24c: the pair story card: the chosen other character ('' = none yet), its text and the request id of an uncertain send. */
-  pair: { partnerId: string; text: string; pending: { requestId: string; fingerprint: string } | null };
 };
 const drafts = new Map<string, Draft>();
 /** The 留言条 text and the request id of an uncertain send (one for the whole page, as a memo is about no character). */
@@ -140,19 +138,11 @@ export const resetCocreationDrafts = () => {
   drafts.clear();
   memoDraft.text = '';
   memoDraft.pending = null;
+  resetRelationDraft();
 };
 
-const cardMax = (card: CocreationCard) => (card.id === 'free' ? COCREATION_LIMITS.free : COCREATION_LIMITS.text);
 /** Same rule as chat input: line breaks and other control characters become a space. */
 const clean = (value: string) => value.replace(/[\u0000-\u001f\u007f]+/gu, ' ');
-const shuffle = <T>(items: readonly T[], random: () => number) => {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j]!, copy[i]!];
-  }
-  return copy;
-};
 
 export function openCocreationSheet(options: CocreationSheetOptions) {
   const { api, characterId, name } = options;
@@ -160,68 +150,65 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   const newRequestId = options.newRequestId ?? (() => globalThis.crypto.randomUUID());
   const mountPoint = options.mount ?? document.body;
   const opener = document.activeElement as HTMLElement | null;
-  const draft: Draft = drafts.get(characterId) ?? {
-    text: new Map(),
-    dialogue: { player: '', replies: [''] },
-    order: [],
-    queue: [],
-    batch: [],
-    pending: null,
-    pair: { partnerId: '', text: '', pending: null },
-  };
+  const draft: Draft = drafts.get(characterId) ?? { text: new Map(), order: [], shown: new Map(), pending: null };
   drafts.set(characterId, draft);
-  const others = api.submitPair ? (options.others ?? []).filter((entry) => entry.characterId !== characterId) : [];
-  if (!others.some((entry) => entry.characterId === draft.pair.partnerId))
-    draft.pair.partnerId = others[0]?.characterId ?? '';
-  const otherName = () => others.find((entry) => entry.characterId === draft.pair.partnerId)?.name ?? '';
-  const pairReady = () => draft.pair.partnerId !== '' && draft.pair.text.trim() !== '';
 
-  const dialogueDone = () => draft.dialogue.player.trim() !== '' && draft.dialogue.replies.some((r) => r.trim() !== '');
-  const dialogueTouched = () =>
-    draft.dialogue.player.trim() !== '' || draft.dialogue.replies.some((r) => r.trim() !== '');
   // Cards this player already answered today (UTC) for this character: shown disabled, never part of an answer.
   const used = new Set<string>();
+  // Part 47: the fixed card 「一天」 has the id 'day' on the deck; its six parts are kept as the ordinary drafts `day-<part>`.
+  const DAY = 'day';
+  const partWritten = (part: DayPart) => (draft.text.get(dayCardId(part)) ?? '').trim() !== '';
   const isWritten = (id: string) =>
-    !used.has(id) && (id === 'dialogue' ? dialogueDone() : (draft.text.get(id) ?? '').trim() !== '');
-  const unwrittenPool = () =>
-    COCREATION_CARDS.filter((card) => card.id !== 'free' && !used.has(card.id) && !isWritten(card.id)).map(
-      (card) => card.id,
-    );
-  const writtenIds = () => draft.order.filter(isWritten);
-  const writtenCount = () => writtenIds().length;
-
-  const drawBatch = () => {
-    const pool = unwrittenPool();
-    let queue = draft.queue.filter((id) => pool.includes(id));
-    const take: string[] = [];
-    while (take.length < BATCH_SIZE && take.length < pool.length) {
-      if (queue.length === 0)
-        queue = shuffle(
-          pool.filter((id) => !take.includes(id)),
-          random,
-        );
-      take.push(queue.shift()!);
-    }
-    draft.queue = queue;
-    draft.batch = take;
-  };
-  if (draft.batch.length === 0) drawBatch();
-  const deckIds = () => [
-    ...writtenIds(),
-    ...draft.batch.filter((id) => !isWritten(id)),
-    ...(isWritten('free') || used.has('free') ? [] : ['free']),
-    ...COCREATION_CARDS.filter((card) => used.has(card.id)).map((card) => card.id),
+    id === DAY
+      ? !used.has(DAY) && DAY_PARTS.some(partWritten)
+      : !used.has(id) && (draft.text.get(id) ?? '').trim() !== '';
+  /** The answers' card ids in the order they were first written (a part of 一天 is one answer of its own). */
+  const writtenIds = () => [
+    ...draft.order.filter((id) => dayPartOf(id) === null && isWritten(id)),
+    // the parts of 一天 always go in the order of the day, whichever was written first
+    ...DAY_PARTS.map(dayCardId).filter((id) => isWritten(DAY) && partWritten(dayPartOf(id)!)),
   ];
+  /** The deck counts 一天 as ONE card, however many parts are written. */
+  const writtenCount = () => COCREATION_THEMES.filter((theme) => isWritten(theme.id)).length + (isWritten(DAY) ? 1 : 0);
+  const deckIds = () => [...COCREATION_THEMES.map((theme) => theme.id as string), DAY];
+
+  // ---- the questions: one enabled wording per theme, picked at random -------------------------------------------------
+  let wordings: Record<string, string[]> = {};
+  let ready = false;
+  /** What each theme shows now ('' until the pool has been asked). */
+  const current = new Map<string, string>();
+  const questionOf = (id: string) =>
+    id === DAY
+      ? DAY_PROMPT.replaceAll('{name}', name)
+      : isWritten(id)
+        ? (draft.shown.get(id) ?? current.get(id) ?? '')
+        : (current.get(id) ?? '');
+  /** A theme with a written answer keeps its question: the note records the one it answered. */
+  const pickAll = () => {
+    if (!ready) return;
+    for (const theme of COCREATION_THEMES)
+      if (!isWritten(theme.id)) current.set(theme.id, pickWording(theme, wordings[theme.id] ?? [], name, random));
+    renderDeck();
+  };
 
   // ---- DOM ------------------------------------------------------------------------------------------------------
-  const title = h('strong', { class: 'cc-title', text: cocreationCopy.heading(name), attrs: { id: 'cc-title' } });
+  const relationOn = !!api.submitRelation && (options.everyone?.length ?? 0) >= 2;
+  const title = h('strong', { class: 'cc-title', attrs: { id: 'cc-title' } });
+  // Part 39: with the relation flow the title is the character's name, a button that inserts it at the cursor of the text box.
+  const nameButton = h('button', { class: 'cc-name-btn', text: name, attrs: { type: 'button' } });
+  if (relationOn) title.append(nameButton);
+  else title.textContent = cocreationCopy.heading(name);
   const progress = h('span', { class: 'cc-progress', attrs: { role: 'status', 'aria-live': 'polite' } });
   const closeButton = h('button', {
     class: 'cc-close icon-button',
     attrs: { type: 'button', 'aria-label': cocreationCopy.close },
     text: '×',
   });
-  const shuffleButton = h('button', { class: 'cc-shuffle', text: cocreationCopy.shuffle, attrs: { type: 'button' } });
+  const shuffleButton = h('button', {
+    class: 'cc-shuffle',
+    text: '↻',
+    attrs: { type: 'button', 'aria-label': cocreationCopy.refresh },
+  });
   const deck = h('div', {
     class: 'cc-deck',
     attrs: { role: 'list', tabindex: '0', 'aria-label': '灵感卡片，可左右滑动' },
@@ -235,7 +222,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     attrs: { role: 'status', 'aria-live': 'polite' },
     hidden: true,
   });
-  const allUsed = () => COCREATION_CARDS.every((card) => used.has(card.id));
+  const allUsed = () => COCREATION_THEMES.every((theme) => used.has(theme.id)) && used.has(DAY);
   const sendButton = h('button', { class: 'cc-send', attrs: { type: 'button' }, text: cocreationCopy.send(name) });
   const footer = h('footer', { class: 'cc-foot' }, notice, sendButton);
   const thanksSub = h('p', { class: 'cc-thanks-sub', text: cocreationCopy.thanksSub });
@@ -246,14 +233,46 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     h('strong', { class: 'cc-thanks-title', text: cocreationCopy.thanks(name) }),
     thanksSub,
   );
+  // Part 39: the world background, plain text, read only (nothing else of the cast).
+  const worldBox = h('div', { class: 'cc-world', hidden: true, attrs: { 'aria-label': '世界背景' } });
+  let lastArea: HTMLTextAreaElement | null = null;
+  const track = (node: HTMLTextAreaElement) => {
+    lastArea = node;
+  };
+  const flow = relationOn
+    ? relationFlow({
+        send: (input) => api.submitRelation!(input),
+        everyone: options.everyone!,
+        // Part 39b: the relationship always includes THIS character.
+        anchor: characterId,
+        random,
+        newRequestId,
+        track,
+        onHead: (head) => {
+          sheet.className = `cc-sheet${head.open ? ' is-rel' : ''}${thankedNow ? ' is-thanked' : ''}`;
+          closeButton.textContent = head.open ? head.glyph : '×';
+          if (head.open) {
+            title.textContent = head.title;
+            progress.textContent = head.progress;
+          } else {
+            title.replaceChildren(nameButton);
+            refresh();
+          }
+        },
+        onSent: (earned) => showThanks(earned),
+      })
+    : null;
+  let thankedNow = false;
   const sheet = h(
     'div',
     { class: 'cc-sheet', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'cc-title' } },
     h('header', { class: 'cc-head' }, closeButton, h('div', { class: 'cc-heading' }, title, progress), shuffleButton),
     usedBanner,
+    worldBox,
     deck,
     dots,
     footer,
+    ...(flow ? [flow.screen] : []),
     thanks,
   );
   // The character's colours travel as custom properties set through the CSSOM (an inline style attribute is refused by the CSP).
@@ -274,15 +293,12 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   }
 
   type CardRefs = {
-    card: CocreationCard;
+    theme: CocreationTheme | null;
     root: HTMLElement;
     open: HTMLButtonElement;
+    prompt: HTMLElement;
     editor: HTMLElement;
-    areas: HTMLTextAreaElement[];
-    counters: HTMLElement[];
-    secondReply?: HTMLElement;
-    addReply?: HTMLElement;
-    hint?: HTMLElement;
+    area: HTMLTextAreaElement;
     skip: HTMLButtonElement;
     cta: HTMLElement;
   };
@@ -293,36 +309,12 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const counter = (value: string, max: number) => `${length(value)}/${max}`;
-  const textArea = (
-    label: string,
-    placeholder: string,
-    value: string,
-    max: number,
-    onInput: (value: string) => void,
-    rows = 3,
-  ) => {
-    const area = h('textarea', {
-      class: 'cc-area',
-      attrs: { rows: String(rows), maxlength: String(max), placeholder, 'aria-label': label, enterkeyhint: 'done' },
-    });
-    area.value = value;
-    const count = h('span', { class: 'cc-count', text: counter(value, max), attrs: { 'aria-hidden': 'true' } });
-    area.addEventListener('input', () => {
-      const next = clean(area.value);
-      if (next !== area.value) area.value = next;
-      count.textContent = counter(next, max);
-      onInput(next);
-    });
-    return { area, count };
-  };
 
   const refreshRefs = (id: string) => {
     const ref = refs.get(id);
     if (!ref) return;
     const written = isWritten(id);
-    ref.root.className = `cc-card${written ? ' is-written' : ''}${openId === id ? ' is-open' : ''}${
-      id === 'dialogue' ? ' is-dialogue' : ''
-    }`;
+    ref.root.className = `cc-card${written ? ' is-written' : ''}${openId === id ? ' is-open' : ''}`;
     const spent = used.has(id);
     if (spent) {
       ref.root.className += ' is-used';
@@ -332,174 +324,170 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     ref.open.disabled = spent;
     ref.cta.textContent = spent ? cocreationCopy.cardUsed : cocreationCopy.write;
     ref.open.setAttribute('aria-expanded', String(openId === id));
-    ref.skip.textContent =
-      written || (id === 'dialogue' && dialogueTouched()) ? cocreationCopy.clear : cocreationCopy.skip;
-    if (ref.hint) ref.hint.hidden = !(id === 'dialogue' && dialogueTouched() && !dialogueDone());
-    if (ref.secondReply) ref.secondReply.hidden = draft.dialogue.replies.length < 2;
-    if (ref.addReply) ref.addReply.hidden = draft.dialogue.replies.length >= 2;
+    ref.skip.textContent = written ? cocreationCopy.clear : cocreationCopy.skip;
+    // The question shown is the one a written answer was given to; until the pool has answered there is none.
+    const question = questionOf(id);
+    if (ref.prompt.textContent !== question) {
+      ref.prompt.textContent = question;
+      if (id !== DAY) ref.area.setAttribute('aria-label', question);
+    }
+    ref.prompt.className = `cc-prompt${question === '' ? '' : ' is-shown'}`;
   };
   const refresh = () => {
     const n = writtenCount();
     progress.textContent = cocreationCopy.progress(n, deckIds().filter((id) => !used.has(id)).length);
-    sendButton.disabled = busy || ((n === 0 || allUsed()) && !pairReady());
+    sendButton.disabled = busy || n === 0 || allUsed();
     usedBanner.hidden = !allUsed();
     shuffleButton.disabled = busy;
     memoRefresh();
     for (const id of refs.keys()) refreshRefs(id);
   };
 
-  const buildCard = (card: CocreationCard): CardRefs => {
-    const prompt = cocreationPrompt(card, name);
+  const buildCard = (theme: CocreationTheme): CardRefs => {
     const badge = h('span', { class: 'cc-badge', text: cocreationCopy.written });
     const cta = h('span', { class: 'cc-cta', text: cocreationCopy.write });
+    const prompt = h('span', { class: 'cc-prompt' });
     const face = h(
       'button',
       { class: 'cc-face', attrs: { type: 'button', 'aria-expanded': 'false' } },
-      h('span', { class: 'cc-prompt', text: prompt }),
+      prompt,
       badge,
       cta,
     );
     const editor = h('div', { class: 'cc-editor', hidden: true });
-    const areas: HTMLTextAreaElement[] = [];
-    const counters: HTMLElement[] = [];
     const done = h('button', { class: 'cc-done', text: cocreationCopy.done, attrs: { type: 'button' } });
     const skip = h('button', { class: 'cc-skip', text: cocreationCopy.skip, attrs: { type: 'button' } });
-    let secondReply: HTMLElement | undefined;
-    let addReply: HTMLElement | undefined;
-    let hint: HTMLElement | undefined;
-
-    if (card.kind === 'text') {
-      const max = cardMax(card);
-      const { area, count } = textArea(prompt, '写在这里…', draft.text.get(card.id) ?? '', max, (value) => {
-        draft.text.set(card.id, value);
-        noteWritten(card.id);
-        refresh();
-      });
-      areas.push(area);
-      counters.push(count);
-      editor.append(area, h('div', { class: 'cc-meta' }, count));
-    } else {
-      // The dialogue card renders like the real chat: the player's bubble on the right, the character's on the left.
-      const mark = options.mark ?? name.slice(0, 1);
-      const you = textArea(
-        cocreationCopy.you,
-        '你想对' + name + '说什么',
-        draft.dialogue.player,
-        COCREATION_LIMITS.dialoguePlayer,
-        (v) => {
-          draft.dialogue.player = v;
-          noteWritten('dialogue');
-          refresh();
-        },
-        2,
-      );
-      const reply = (index: number) =>
-        textArea(
-          `${cocreationCopy.reply(name)}${index + 1}`,
-          index === 0 ? `${name}会怎么回` : '再补一句',
-          draft.dialogue.replies[index] ?? '',
-          COCREATION_LIMITS.dialogueReply,
-          (v) => {
-            draft.dialogue.replies[index] = v;
-            noteWritten('dialogue');
-            refresh();
-          },
-          2,
-        );
-      const first = reply(0),
-        second = reply(1);
-      areas.push(you.area, first.area, second.area);
-      counters.push(you.count, first.count, second.count);
-      const dropReply = h('button', { class: 'cc-link', text: cocreationCopy.dropReply, attrs: { type: 'button' } });
-      const add = h('button', { class: 'cc-link', text: cocreationCopy.addReply, attrs: { type: 'button' } });
-      addReply = add;
-      secondReply = h(
-        'div',
-        { class: 'message-row incoming cc-bubble-row', hidden: true },
-        h('span', { class: 'avatar message-avatar', text: mark, attrs: { 'aria-hidden': 'true' } }),
-        h(
-          'div',
-          { class: 'cc-bubble cc-bubble-in' },
-          second.area,
-          h('div', { class: 'cc-meta' }, second.count, dropReply),
-        ),
-      );
-      hint = h('p', { class: 'cc-hint', text: cocreationCopy.halfDialogue, hidden: true });
-      dropReply.addEventListener('click', () => {
-        draft.dialogue.replies = draft.dialogue.replies.slice(0, 1);
-        second.area.value = '';
-        second.count.textContent = counter('', COCREATION_LIMITS.dialogueReply);
-        refresh();
-        first.area.focus?.();
-      });
-      add.addEventListener('click', () => {
-        if (draft.dialogue.replies.length >= COCREATION_LIMITS.dialogueReplies) return;
-        draft.dialogue.replies = [...draft.dialogue.replies, ''];
-        refresh();
-        second.area.focus?.();
-      });
-      editor.append(
-        h(
-          'div',
-          { class: 'message-row outgoing cc-bubble-row' },
-          h('div', { class: 'cc-bubble cc-bubble-out' }, you.area, h('div', { class: 'cc-meta' }, you.count)),
-        ),
-        h(
-          'div',
-          { class: 'message-row incoming cc-bubble-row' },
-          h('span', { class: 'avatar message-avatar', text: mark, attrs: { 'aria-hidden': 'true' } }),
-          h('div', { class: 'cc-bubble cc-bubble-in' }, first.area, h('div', { class: 'cc-meta' }, first.count, add)),
-        ),
-        secondReply,
-        hint,
-      );
-    }
-    editor.append(h('div', { class: 'cc-actions' }, skip, done));
-
-    const root = h('article', { class: 'cc-card', attrs: { role: 'listitem', 'data-card': card.id } }, face, editor);
-    const ref: CardRefs = {
-      card,
-      root,
-      open: face,
-      editor,
-      areas,
-      counters,
-      skip,
-      cta,
-      ...(secondReply ? { secondReply } : {}),
-      ...(addReply ? { addReply } : {}),
-      ...(hint ? { hint } : {}),
-    };
-
-    face.addEventListener('click', () => toggle(card.id));
-    done.addEventListener('click', () => toggle(card.id, false));
-    skip.addEventListener('click', () => {
-      if (card.kind === 'text') {
-        draft.text.delete(card.id);
-        areas[0]!.value = '';
-        counters[0]!.textContent = counter('', cardMax(card));
-      } else {
-        draft.dialogue = { player: '', replies: [''] };
-        for (const [i, area] of areas.entries()) {
-          area.value = '';
-          counters[i]!.textContent = counter(
-            '',
-            i === 0 ? COCREATION_LIMITS.dialoguePlayer : COCREATION_LIMITS.dialogueReply,
-          );
-        }
-      }
-      toggle(card.id, false);
+    const max = COCREATION_LIMITS.text;
+    const area = h('textarea', {
+      class: 'cc-area',
+      attrs: {
+        rows: '3',
+        maxlength: String(max),
+        placeholder: '写在这里…',
+        'aria-label': theme.label,
+        enterkeyhint: 'done',
+      },
     });
-    for (const area of areas)
-      area.addEventListener('keydown', (event) => {
-        const key = event as unknown as { key: string; isComposing?: boolean; shiftKey?: boolean };
-        // Enter would put a line break into the text, which chat input does not allow: it finishes the card instead.
-        if (key.key === 'Enter' && !key.isComposing) {
-          event.preventDefault();
-          toggle(card.id, false);
-        }
+    area.value = draft.text.get(theme.id) ?? '';
+    const count = h('span', { class: 'cc-count', text: counter(area.value, max), attrs: { 'aria-hidden': 'true' } });
+    area.addEventListener('focus', () => track(area));
+    area.addEventListener('input', () => {
+      const next = clean(area.value);
+      if (next !== area.value) area.value = next;
+      count.textContent = counter(next, max);
+      draft.text.set(theme.id, next);
+      // The question on screen when the first word is written is the one this note answers.
+      if (next.trim() !== '' && !draft.shown.has(theme.id)) draft.shown.set(theme.id, current.get(theme.id) ?? '');
+      noteWritten(theme.id);
+      refresh();
+    });
+    editor.append(area, h('div', { class: 'cc-meta' }, count), h('div', { class: 'cc-actions' }, skip, done));
+
+    const root = h('article', { class: 'cc-card', attrs: { role: 'listitem', 'data-card': theme.id } }, face, editor);
+    face.addEventListener('click', () => toggle(theme.id));
+    done.addEventListener('click', () => toggle(theme.id, false));
+    skip.addEventListener('click', () => {
+      draft.text.delete(theme.id);
+      draft.shown.delete(theme.id);
+      area.value = '';
+      count.textContent = counter('', max);
+      toggle(theme.id, false);
+    });
+    area.addEventListener('keydown', (event) => {
+      const key = event as unknown as { key: string; isComposing?: boolean };
+      // Enter would put a line break into the text, which chat input does not allow: it finishes the card instead.
+      if (key.key === 'Enter' && !key.isComposing) {
+        event.preventDefault();
+        toggle(theme.id, false);
+      }
+    });
+    return { theme, root, open: face, prompt, editor, area, skip, cta };
+  };
+  /** Part 47: the fixed 「一天」 card. Six optional parts, each its own box; at least one must be written to hand the card in. */
+  const buildDayCard = (): CardRefs => {
+    const badge = h('span', { class: 'cc-badge', text: cocreationCopy.written });
+    const cta = h('span', { class: 'cc-cta', text: cocreationCopy.write });
+    const prompt = h('span', { class: 'cc-prompt' });
+    const face = h(
+      'button',
+      { class: 'cc-face', attrs: { type: 'button', 'aria-expanded': 'false' } },
+      prompt,
+      badge,
+      cta,
+    );
+    const editor = h('div', { class: 'cc-editor cc-day-editor', hidden: true });
+    const done = h('button', { class: 'cc-done', text: cocreationCopy.done, attrs: { type: 'button' } });
+    const skip = h('button', { class: 'cc-skip', text: cocreationCopy.skip, attrs: { type: 'button' } });
+    const rows = DAY_PARTS.map((part, at) => {
+      const id = dayCardId(part);
+      const max = DAY_PART_MAX[part];
+      const mark = h('i', { class: 'cc-day-ok', text: '✓', attrs: { 'aria-hidden': 'true' } });
+      const area = h('textarea', {
+        class: 'cc-area',
+        attrs: {
+          rows: part === 'whole' ? '4' : '2',
+          maxlength: String(max),
+          placeholder: '写在这里…',
+          'aria-label': DAY_PART_LABELS[part],
+          enterkeyhint: at === DAY_PARTS.length - 1 ? 'done' : 'next',
+          'data-part': part,
+        },
       });
-    return ref;
+      area.value = draft.text.get(id) ?? '';
+      const count = h('span', { class: 'cc-count', text: counter(area.value, max), attrs: { 'aria-hidden': 'true' } });
+      const paintMark = () => {
+        mark.classList.toggle('is-on', area.value.trim() !== '');
+      };
+      paintMark();
+      area.addEventListener('focus', () => track(area));
+      area.addEventListener('input', () => {
+        const next = clean(area.value);
+        if (next !== area.value) area.value = next;
+        count.textContent = counter(next, max);
+        draft.text.set(id, next);
+        if (next.trim() !== '' && !draft.order.includes(id)) draft.order.push(id);
+        paintMark();
+        refresh();
+      });
+      return {
+        part,
+        area,
+        count,
+        paintMark,
+        node: h(
+          'label',
+          { class: 'cc-day-part', attrs: { 'data-part': part } },
+          h('span', { class: 'cc-day-label' }, DAY_PART_LABELS[part], mark),
+          area,
+          h('span', { class: 'cc-meta' }, count),
+        ),
+      };
+    });
+    rows.forEach((row, at) =>
+      row.area.addEventListener('keydown', (event) => {
+        const key = event as unknown as { key: string; isComposing?: boolean };
+        // Enter would put a line break into the text, which chat input does not allow: it moves on, and finishes at the last part.
+        if (key.key !== 'Enter' || key.isComposing) return;
+        event.preventDefault();
+        const next = rows[at + 1];
+        if (next) next.area.focus?.();
+        else toggle(DAY, false);
+      }),
+    );
+    editor.append(...rows.map((row) => row.node), h('div', { class: 'cc-actions' }, skip, done));
+    const root = h('article', { class: 'cc-card cc-day', attrs: { role: 'listitem', 'data-card': DAY } }, face, editor);
+    face.addEventListener('click', () => toggle(DAY));
+    done.addEventListener('click', () => toggle(DAY, false));
+    skip.addEventListener('click', () => {
+      for (const row of rows) {
+        draft.text.delete(dayCardId(row.part));
+        row.area.value = '';
+        row.count.textContent = counter('', DAY_PART_MAX[row.part]);
+        row.paintMark();
+      }
+      toggle(DAY, false);
+    });
+    return { theme: null, root, open: face, prompt, editor, area: rows[0]!.area, skip, cta };
   };
   const noteWritten = (id: string) => {
     if (isWritten(id) && !draft.order.includes(id)) draft.order.push(id);
@@ -516,70 +504,9 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
         block: 'nearest',
         behavior: 'smooth',
       });
-      ref?.areas[0]?.focus?.();
+      ref?.area.focus?.();
     } else refs.get(id)?.open.focus?.();
   }
-
-  // ---- Part 24c: the pair story card (design/burbur-v2 Cocreate board): "{name} 和 [select] [🎲] 之间的故事" -------------------
-  const buildPairCard = () => {
-    const select = h('select', { class: 'cc-pair-select', attrs: { 'aria-label': cocreationCopy.pairSelect } });
-    for (const entry of others) {
-      const option = h('option', { text: entry.name, attrs: { value: entry.characterId } });
-      select.append(option);
-    }
-    select.value = draft.pair.partnerId;
-    const roll = h('button', {
-      class: 'cc-pair-roll',
-      text: '🎲',
-      attrs: { type: 'button', 'aria-label': cocreationCopy.pairRoll },
-    });
-    const { area, count } = textArea(
-      cocreationCopy.pairWith(name),
-      cocreationCopy.pairPlaceholder(name, otherName()),
-      draft.pair.text,
-      COCREATION_PAIR_NOTE_MAX,
-      (value) => {
-        draft.pair.text = value;
-        refresh();
-      },
-      3,
-    );
-    const setPartner = (id: string) => {
-      draft.pair.partnerId = id;
-      select.value = id;
-      area.setAttribute('placeholder', cocreationCopy.pairPlaceholder(name, otherName()));
-      refresh();
-    };
-    select.addEventListener('change', () => setPartner(select.value));
-    // Tap again to re-roll: any OTHER character than the one showing (when there is more than one to pick from).
-    roll.addEventListener('click', () => {
-      const pool = others.filter((entry) => entry.characterId !== draft.pair.partnerId);
-      const pick = (pool.length ? pool : others)[Math.floor(random() * (pool.length ? pool.length : others.length))];
-      if (pick) setPartner(pick.characterId);
-    });
-    area.addEventListener('keydown', (event) => {
-      if ((event as unknown as { key: string }).key === 'Enter') event.preventDefault();
-    });
-    const root = h(
-      'article',
-      { class: 'cc-card cc-pair', attrs: { role: 'listitem', 'data-card': COCREATION_PAIR_CARD } },
-      h(
-        'div',
-        { class: 'cc-face cc-pair-face' },
-        h(
-          'div',
-          { class: 'cc-pair-line' },
-          h('span', { text: cocreationCopy.pairWith(name) }),
-          select,
-          roll,
-          h('span', { text: cocreationCopy.pairBetween }),
-        ),
-      ),
-      h('div', { class: 'cc-editor' }, area, h('div', { class: 'cc-meta' }, count)),
-    );
-    return { root, area, count };
-  };
-  const pairCard = others.length > 0 ? buildPairCard() : null;
 
   // ---- Part 24c: 给制作组的留言条 (a note to the production team; stored and typed as a memo, never rewarded) --------------------
   const memoOpen = h('button', {
@@ -620,131 +547,95 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   const renderDeck = () => {
     refs.clear();
     const ids = deckIds();
-    const cards = ids.map((id) => {
-      const ref = buildCard(COCREATION_CARDS.find((card) => card.id === id)!);
-      refs.set(id, ref);
+    const cards = COCREATION_THEMES.map((theme) => {
+      const ref = buildCard(theme);
+      refs.set(theme.id, ref);
       return ref.root;
     });
-    deck.replaceChildren(...cards, ...(pairCard ? [pairCard.root] : []));
-    dots.replaceChildren(...ids.map((id) => h('i', { class: id === ids[0] ? 'on' : '', attrs: { 'data-dot': id } })));
+    const day = buildDayCard();
+    refs.set(DAY, day);
+    // The deck: five themes, 一天, and (last) the first step of the relationship flow.
+    deck.replaceChildren(...cards, day.root, ...(flow?.available ? [flow.entry] : []));
+    const dotIds = flow?.available ? [...ids, 'relation'] : ids;
+    dots.replaceChildren(
+      ...dotIds.map((id) => h('i', { class: id === dotIds[0] ? 'on' : '', attrs: { 'data-dot': id } })),
+    );
     refresh();
   };
 
+  // ↻: another question for every theme not written yet; a quiet crossfade of the questions (none under reduced motion).
   shuffleButton.addEventListener('click', () => {
-    if (busy) return;
+    if (busy || !ready) return;
     openId = null;
-    drawBatch();
-    renderDeck();
+    deck.classList.remove('is-swapping');
+    pickAll();
+    void (deck as unknown as { offsetWidth: number }).offsetWidth;
+    deck.classList.add('is-swapping');
     (deck as unknown as { scrollTo?: (o: unknown) => void }).scrollTo?.({ left: 0, behavior: 'smooth' });
     deck.focus?.();
   });
 
-  const answers = (): CocreationAnswer[] => {
-    const out: CocreationAnswer[] = [];
-    for (const id of writtenIds()) {
-      if (id === 'dialogue')
-        out.push({
-          cardId: id,
-          player: draft.dialogue.player.trim(),
-          replies: draft.dialogue.replies.map((r) => r.trim()).filter(Boolean),
-        });
-      else out.push({ cardId: id, text: (draft.text.get(id) ?? '').trim() });
-    }
-    return out;
-  };
+  const answers = (): CocreationAnswer[] =>
+    writtenIds().map((id) =>
+      dayPartOf(id)
+        ? { cardId: id, text: (draft.text.get(id) ?? '').trim() }
+        : { cardId: id, text: (draft.text.get(id) ?? '').trim(), wording: questionOf(id) },
+    );
   const show = (message: string) => {
     notice.textContent = message;
     notice.hidden = message === '';
   };
 
-  /** The cards in `sent` were handed over while the pair note was not: they are spent for today and leave the draft. */
-  const spendCards = (sent: CocreationAnswer[]) => {
-    for (const answer of sent) {
-      used.add(answer.cardId);
-      draft.text.delete(answer.cardId);
-      if (answer.cardId === 'dialogue') draft.dialogue = { player: '', replies: [''] };
-    }
-    draft.order = draft.order.filter((id) => !used.has(id));
-    draft.pending = null;
-    draft.batch = [];
-    drawBatch();
-    renderDeck();
-  };
-
   sendButton.addEventListener('click', async () => {
     if (busy || closed) return;
     const payload = answers();
-    const sendCards = payload.length > 0 && !allUsed();
-    if (sendCards) {
-      const checked = validateCocreationAnswers(payload);
-      if (!checked.ok) {
-        show(cocreationCopy.errors[checked.code] ?? cocreationCopy.errors.unknown!);
-        return;
-      }
-    } else if (!pairReady()) return;
+    if (payload.length === 0 || allUsed()) return;
+    const checked = validateCocreationAnswers(payload);
+    if (!checked.ok) {
+      show(cocreationCopy.errors[checked.code] ?? cocreationCopy.errors.unknown!);
+      return;
+    }
     busy = true;
     show('');
     sendButton.textContent = cocreationCopy.sending;
     refresh();
-    const fail = (error: unknown) => {
+    // The same content keeps the same request id, so retrying an uncertain send can never submit it twice.
+    const fingerprint = JSON.stringify(payload);
+    if (draft.pending?.fingerprint !== fingerprint) draft.pending = { requestId: newRequestId(), fingerprint };
+    let earned = 0;
+    try {
+      const handed = await api.submitCocreation({
+        characterId,
+        requestId: draft.pending.requestId,
+        answers: payload,
+      });
+      earned = (handed as { earned?: number }).earned ?? 0;
+    } catch (error) {
       busy = false;
       sendButton.textContent = cocreationCopy.send(name);
       const code = (error as { code?: string }).code ?? '';
       show(cocreationCopy.errors[code] ?? cocreationCopy.errors.unknown!);
-      return code;
-    };
-    let earned = 0;
-    if (sendCards) {
-      // The same content keeps the same request id, so retrying an uncertain send can never submit it twice.
-      const fingerprint = JSON.stringify(payload);
-      if (draft.pending?.fingerprint !== fingerprint) draft.pending = { requestId: newRequestId(), fingerprint };
-      try {
-        const handed = await api.submitCocreation({
-          characterId,
-          requestId: draft.pending.requestId,
-          answers: payload,
-        });
-        earned += (handed as { earned?: number }).earned ?? 0;
-      } catch (error) {
-        const code = fail(error);
-        // Refused whole: learn which cards are spent so they can be disabled; the rest of the draft stays.
-        if (code === 'COCREATION_DAILY_LIMIT') loadUsed();
-        if (!closed) refresh();
-        return;
-      }
-    }
-    if (pairReady() && api.submitPair) {
-      const text = draft.pair.text.trim();
-      const fingerprint = JSON.stringify([draft.pair.partnerId, text]);
-      if (draft.pair.pending?.fingerprint !== fingerprint)
-        draft.pair.pending = { requestId: newRequestId(), fingerprint };
-      try {
-        const handed = await api.submitPair({
-          requestId: draft.pair.pending.requestId,
-          characterId,
-          partnerId: draft.pair.partnerId,
-          text,
-        });
-        earned += handed.earned ?? 0;
-      } catch (error) {
-        fail(error);
-        // The cards went through: they are spent, and only the pair note is left to send.
-        if (sendCards && !closed) spendCards(payload);
-        if (!closed) refresh();
-        return;
-      }
+      // Refused whole: learn which cards are spent so they can be disabled; the rest of the draft stays.
+      if (code === 'COCREATION_DAILY_LIMIT') loadUsed();
+      if (!closed) refresh();
+      return;
     }
     // Handed over: the draft is spent. A new sheet starts fresh.
     drafts.delete(characterId);
     busy = false;
     if (closed) return;
+    showThanks(earned);
+  });
+  function showThanks(earned: number) {
+    if (closed) return;
     if (earned > 0) thanksSub.textContent = `${cocreationCopy.thanksSub} ${cocreationCopy.earned(earned)}`;
     else if (options.guest === true) thanksSub.textContent = `${cocreationCopy.thanksSub}\n${cocreationCopy.guestHint}`;
     thanks.hidden = false;
+    thankedNow = true;
     sheet.className = 'cc-sheet is-thanked';
     sendButton.disabled = true;
     timer = setTimeout(() => close(), options.thanksMs ?? 1800);
-  });
+  }
 
   memoSend.addEventListener('click', async () => {
     if (busy || closed || !api.submitMemo || memoDraft.text.trim() === '') return;
@@ -790,10 +681,35 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     opener?.focus?.();
   }
   const onKey = (event: Event) => {
-    if ((event as KeyboardEvent).key === 'Escape' && !busy) close();
+    if ((event as KeyboardEvent).key === 'Escape' && !busy) {
+      if (flow?.isOpen()) flow.back();
+      else close();
+    }
   };
   closeButton.addEventListener('click', () => {
-    if (!busy) close();
+    if (busy) return;
+    // Part 39: in the relation screen this button is one step back (or out to the deck), not the end of the sheet.
+    if (flow?.isOpen()) flow.back();
+    else close();
+  });
+  // Part 39: the character's name inserts itself at the cursor of the text box below (the open card's, else the last one used).
+  nameButton.addEventListener('mousedown', (event) => event.preventDefault());
+  nameButton.addEventListener('click', () => {
+    if (flow?.isOpen()) {
+      flow.insert(name);
+      return;
+    }
+    const target = lastArea ?? (openId ? (refs.get(openId)?.area ?? null) : null);
+    if (!target) return;
+    const max = Number(target.getAttribute('maxlength') ?? '0') || Infinity;
+    const from = target.selectionStart ?? target.value.length;
+    const to = target.selectionEnd ?? from;
+    const next = clean(target.value.slice(0, from) + name + target.value.slice(to));
+    if (length(next) > max) return;
+    target.value = next;
+    target.setSelectionRange?.(from + name.length, from + name.length);
+    target.focus?.();
+    target.dispatchEvent(new Event('input'));
   });
   document.addEventListener?.('keydown', onKey);
   document.documentElement?.classList?.add('cc-open');
@@ -801,7 +717,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   // The dots follow the card nearest the middle of the deck while swiping.
   deck.addEventListener('scroll', () => {
     const el = deck as unknown as { scrollLeft: number; clientWidth: number; scrollWidth: number };
-    const ids = deckIds();
+    const ids = flow?.available ? [...deckIds(), 'relation'] : deckIds();
     if (!el.clientWidth || ids.length === 0) return;
     const index = Math.round((el.scrollLeft / Math.max(1, el.scrollWidth - el.clientWidth)) * (ids.length - 1));
     Array.from(dots.children).forEach((dot, i) => (dot.className = i === index ? 'on' : ''));
@@ -812,20 +728,44 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
       (today) => {
         if (closed) return;
         for (const id of today.cardIds) used.add(id);
-        // The unspent cards are drawn again, so a spent card never takes a place in the batch.
-        const kept = draft.batch.filter((id) => !used.has(id));
-        draft.batch = [
-          ...kept,
-          ...unwrittenPool()
-            .filter((id) => !kept.includes(id))
-            .slice(0, BATCH_SIZE - kept.length),
-        ];
+        // Part 47: any part answered today closes the whole 「一天」 card for the day.
+        if (today.cardIds.some((id) => dayPartOf(id) !== null)) used.add(DAY);
         renderDeck();
       },
       () => {},
     );
   }
 
+  // Part 39b: the character's enabled wordings. Until they are here (or refused) the cards show no question, so a default never flashes
+  // before the real one; a failure falls back to the plain default of each theme.
+  void api.cocreationWordings?.(characterId).then(
+    (pool) => {
+      if (closed) return;
+      wordings = pool.themes;
+      ready = true;
+      pickAll();
+    },
+    () => {
+      if (closed) return;
+      ready = true;
+      pickAll();
+    },
+  );
+  if (!api.cocreationWordings) {
+    ready = true;
+    pickAll();
+  }
+
+  void api.worldBackground?.().then(
+    (world) => {
+      if (closed) return;
+      const text = world.background;
+      worldBox.textContent = text ?? '';
+      worldBox.hidden = !text;
+      flow?.setWorld(text);
+    },
+    () => {},
+  );
   renderDeck();
   mountPoint.append(sheet);
   deck.focus?.();

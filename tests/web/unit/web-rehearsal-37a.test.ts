@@ -6,6 +6,8 @@ import test from 'node:test';
 import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
 import { WebProviderBudget } from '../../../apps/server/budget/web-provider-budget.ts';
 import { WebCharacterAdmin } from '../../../apps/server/characters/web-character-admin.ts';
+import { publishedWebCharacters } from '../../../apps/server/characters/web-character-catalog.ts';
+import { writerRoster } from '../../../apps/server/generation/writer-roster.ts';
 import { installWebCharacterCatalog } from '../../../apps/server/characters/web-character-catalog.ts';
 import { WebCharacterPreviews } from '../../../apps/server/characters/web-character-preview.ts';
 import {
@@ -384,4 +386,171 @@ test('37a columns: a run stored before this Part (a model key without a writer) 
     f.store.get<{ models_json: string }>('SELECT models_json FROM web_rehearsal_runs')!.models_json,
     '["deepseek"]',
   );
+});
+
+// ---- Part 37a-2: 开场 (a welcome line with its 情境, then 5 follow-ups) --------------------------------------------------------
+
+test('37a-2 开场: starts from the welcome line with its 情境; only the 新 column is told the note and the teammates', async (t) => {
+  const f = fixture(t);
+  const note = '弟弟家朋用你的账号在他的电话手表上加了玩家，你刚发现。这是你和玩家第一次说话。';
+  const profile = f.chars.detail(f.auth, CHARACTER).draft!.profile;
+  profile.presentation.welcomes[0]!.text = '家朋怎么又拿电话手表乱加人';
+  profile.presentation.welcomes[0]!.context = note;
+  const saved = f.chars.save(f.auth, CHARACTER, { expectedRevision: f.saved.revision, profile });
+  // the note is part of the draft
+  assert.equal(f.chars.detail(f.auth, CHARACTER).draft!.profile.presentation.welcomes[0]!.context, note);
+  const body = f.input({
+    draftRevision: saved.revision,
+    profileHash: saved.contentHash,
+    source: { kind: 'set', set: 'opening' },
+    models: ['deepseek', 'deepseek-v8'],
+  });
+  const estimate = f.chars.rehearsalEstimate(f.auth, CHARACTER, body);
+  assert.equal(estimate.turns, 5, 'five player follow-ups, below the 6 a script of your own needs');
+  f.chars.rehearsalStart(f.auth, CHARACTER, {
+    ...body,
+    requestId: 'rehearsal-0501',
+    acknowledgeMicros: estimate.totalMicros,
+  });
+  await drain(f);
+  const units = f.store.all<{ request_json: string; model_key: string; turn: number }>(
+    'SELECT request_json,model_key,turn FROM web_rehearsal_units ORDER BY model_key,turn',
+  );
+  assert.equal(units.filter((u) => u.model_key === 'deepseek-v8').length, 5);
+  for (const unit of units) {
+    const request = JSON.parse(unit.request_json) as { opening?: { text: string; context?: string }; roster?: unknown };
+    assert.equal(request.opening?.text, '家朋怎么又拿电话手表乱加人');
+    if (unit.model_key === 'deepseek-v8') {
+      assert.equal(request.opening?.context, note, `turn ${unit.turn}: a young chat keeps the note`);
+      assert.ok(Array.isArray(request.roster), 'a 新 column carries the teammates');
+    } else {
+      assert.ok(!('context' in request.opening!), '旧 never carries the note');
+      assert.ok(!('roster' in request), '旧 never carries the roster');
+    }
+  }
+  // a script of your own is still 6 to 20 turns
+  assert.throws(() => f.chars.rehearsalEstimate(f.auth, CHARACTER, f.input({ source: { kind: 'set', set: 'nope' } })), {
+    code: 'INVALID_REHEARSAL_SOURCE',
+  });
+});
+
+test('37a-2 roster: the other published characters in catalog order, cards only (name, aliases, one-liner), never the character itself', (t) => {
+  const f = fixture(t);
+  const catalog = f.store.all<{ character_id: string }>(
+    'SELECT character_id FROM web_character_catalog ORDER BY position',
+  );
+  assert.ok(catalog.length >= 3, 'the fixture publishes several characters');
+  const roster = writerRoster(f.store, CHARACTER);
+  assert.deepEqual(
+    roster.length,
+    catalog.length - 1,
+    'everybody else, whatever CAST_CONTEXT_ENABLED says (the fixture never turns it on)',
+  );
+  for (const card of roster) assert.deepEqual(Object.keys(card).sort(), ['aliases', 'name', 'oneLiner']);
+  const names = roster.map((card) => card.name);
+  const expected = publishedWebCharacters(f.store)
+    .filter((entry) => entry.characterId !== CHARACTER)
+    .map((entry) => entry.presentation.displayName);
+  assert.deepEqual(names, expected, "the console's catalog order (no cast file published: the public names)");
+  assert.ok(!JSON.stringify(roster).includes('persona'), 'no setting travels');
+});
+
+// ---- Part 40: columns in parallel, a 预演 is never starved, refusals ---------------------------------------------------------
+
+test('40 parallel: the columns of a run are claimed side by side (at most 3, one call per column), a column keeps its turns in order', async (t) => {
+  const f = fixture(t);
+  const { runId } = f.start({ models: ['deepseek', 'deepseek-v8', 'gemini', 'xai'] });
+  const r = f.runner();
+  const first = [r.claim(), r.claim(), r.claim()];
+  assert.ok(
+    first.every((c) => c?.rehearsal),
+    'three claims at once',
+  );
+  const keys = first.map(
+    (c) =>
+      f.store.get<{ model_key: string; turn: number }>(
+        'SELECT model_key,turn FROM web_rehearsal_units WHERE run_id=? AND seq=?',
+        runId,
+        c!.rehearsal!.seq,
+      )!,
+  );
+  assert.equal(new Set(keys.map((k) => k.model_key)).size, 3, 'three different columns');
+  assert.ok(
+    keys.every((k) => k.turn === 1),
+    'each is on its first turn',
+  );
+  assert.equal(r.claim(), null, 'a fourth call waits: three in flight');
+  // run them side by side
+  await Promise.all(first.map((c) => r.run(c!, signal())));
+  // the next claims: the fourth column's first turn, then second turns, never the same column twice at once
+  const next = [r.claim(), r.claim(), r.claim()];
+  const nextKeys = next.map(
+    (c) =>
+      f.store.get<{ model_key: string }>(
+        'SELECT model_key FROM web_rehearsal_units WHERE run_id=? AND seq=?',
+        runId,
+        c!.rehearsal!.seq,
+      )!.model_key,
+  );
+  assert.equal(new Set(nextKeys).size, 3);
+  for (const c of next) await r.run(c!, signal());
+  await drain(f);
+  const detail = f.chars.rehearsalDetail(f.auth, CHARACTER, runId);
+  assert.ok(detail.columns.every((c) => c.cells.every((cell) => cell.state === 'done')));
+  assert.equal(f.store.get<{ n: number }>('SELECT sum(reserved) n FROM web_external_budgets')!.n, 0);
+});
+
+test('40 never starved: a 预演 of the administrator is claimed while 多轮预演 calls are in flight', async (t) => {
+  const f = fixture(t);
+  f.start({ models: ['deepseek', 'gemini'] });
+  const r = f.runner();
+  const flying = [r.claim(), r.claim()];
+  assert.ok(flying.every((c) => c?.rehearsal));
+  const preview = f.chars.startPreview(f.auth, CHARACTER, {
+    requestId: 'preview-40-0001',
+    draftRevision: f.saved.revision,
+    profileHash: f.saved.contentHash,
+    message: '你好呀',
+  });
+  const claimed = r.claim();
+  assert.ok(claimed && !claimed.rehearsal && !claimed.compare, 'the preview is taken first');
+  assert.equal(claimed.id, preview.previewId);
+  // another preview waits for this one (one at a time), but the rehearsal calls in flight do not count against it
+  for (const c of flying) await r.run(c!, signal());
+});
+
+test('40 refusals: a refusal waiting cannot lift fails the cell at once with its code; capacity full only waits', async (t) => {
+  const f = fixture(t);
+  const { runId } = f.start({ models: ['gemini'] });
+  const r = f.runner();
+  // capacity full right now: nothing sent, the cell goes back and waits (retry later), no code, not failed
+  f.store.run(
+    "UPDATE web_external_budgets SET reserved=capacity WHERE provider='gemini' AND stage='text' AND phase='draft'",
+  );
+  const waiting = r.claim()!;
+  await r.run(waiting, signal());
+  const unit = (seq: number) =>
+    f.store.get<{ status: string; error_code: string | null; retry_at: number }>(
+      'SELECT status,error_code,retry_at FROM web_rehearsal_units WHERE run_id=? AND seq=?',
+      runId,
+      seq,
+    )!;
+  assert.deepEqual([unit(waiting.rehearsal!.seq).status, unit(waiting.rehearsal!.seq).error_code], ['queued', null]);
+  assert.equal(f.sent.length, 0);
+  assert.equal(r.claim(), null, 'it is not retried before its time');
+  f.store.run("UPDATE web_external_budgets SET reserved=0 WHERE provider='gemini' AND stage='text' AND phase='draft'");
+  // no ticket row: not temporary, the cell fails at once with its code
+  f.store.run("DELETE FROM web_external_budgets WHERE provider='gemini' AND stage='text' AND phase='draft'");
+  f.tick(11_000);
+  const refused = r.claim()!;
+  await r.run(refused, signal());
+  assert.deepEqual(
+    [unit(refused.rehearsal!.seq).status, unit(refused.rehearsal!.seq).error_code],
+    ['failed', 'WEB_PROVIDER_CAPACITY_MISSING'],
+  );
+  assert.equal(f.sent.length, 0, 'nothing was sent');
+  const detail = f.chars.rehearsalDetail(f.auth, CHARACTER, runId);
+  assert.equal(detail.columns[0]!.cells[0]!.errorCode, 'WEB_PROVIDER_CAPACITY_MISSING');
+  assert.equal(detail.columns[0]!.counts.failed, 1);
+  assert.equal(detail.columns[0]!.counts.codes.WEB_PROVIDER_CAPACITY_MISSING, 1);
 });

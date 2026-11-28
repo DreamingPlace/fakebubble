@@ -430,13 +430,11 @@ test('24c adoption to the cast: a pair note becomes a story of the DRAFT with bo
   const sent = s.note(ann, 'p1', '她们小学同桌三年');
   const before = readDraft(s.f.store as never);
   assert.equal(before.revision, saved.revision);
-  // A stale revision is refused and NOTHING happens: no story, no adoption, no points.
-  const stale = code(() => s.co.addToCastStory(s.adopter, sent.submissionId, 0, before.revision - 1));
-  assert.equal(stale, 'CAST_REVISION_CONFLICT');
   assert.equal(readDraft(s.f.store as never).doc.stories.length, 0);
   assert.equal(s.co.detail(s.adopter, sent.submissionId).answers[0]!.adoptedAt, null);
   assert.equal(s.points(ann), 105);
-  const done = s.co.addToCastStory(s.adopter, sent.submissionId, 0, before.revision);
+  // Part 55: no revision is sent; the story goes in at the draft's current revision.
+  const done = s.co.addToCastStory(s.adopter, sent.submissionId, 0);
   assert.equal(done.castRevision, before.revision + 1);
   const draft = readDraft(s.f.store as never);
   assert.equal(draft.doc.stories.length, 1);
@@ -452,18 +450,14 @@ test('24c adoption to the cast: a pair note becomes a story of the DRAFT with bo
   // Only a pair note can go there, and only with cast.edit.
   const card = s.card(ann, 'c1', [{ cardId: 'free', text: '别的想法' }]);
   assert.equal(
-    code(() => s.co.addToCastStory(s.adopter, card.submissionId, 0, draft.revision)),
+    code(() => s.co.addToCastStory(s.adopter, card.submissionId, 0)),
     'INVALID_REQUEST',
   );
   const reader = s.f.member(['cocreation.manage', 'cast.read'], 'Reader');
   const another = s.note(ann, 'p2', '第二个故事');
   assert.equal(
-    code(() => s.co.addToCastStory(reader, another.submissionId, 0, draft.revision)),
+    code(() => s.co.addToCastStory(reader, another.submissionId, 0)),
     'ADMIN_PERMISSION_REQUIRED',
-  );
-  assert.equal(
-    code(() => s.co.addToCastStory(s.adopter, another.submissionId, 0, 'x')),
-    'INVALID_REQUEST',
   );
 });
 

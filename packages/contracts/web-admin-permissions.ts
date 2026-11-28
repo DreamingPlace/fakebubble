@@ -51,6 +51,12 @@ export type StatsAdminPermission = (typeof ADMIN_STATS_PERMISSIONS)[number];
  */
 export const ADMIN_CAST_PERMISSIONS = ['cast.read', 'cast.edit', 'cast.publish'] as const;
 export type CastAdminPermission = (typeof ADMIN_CAST_PERMISSIONS)[number];
+/**
+ * 广播 (Part 42): a character sends a text and/or voice message to every registered player. Only the owner can give this permission
+ * (it is in no preset except 全部) and the permission editor has no row for it: it is granted through the 全部 preset or the API.
+ */
+export const ADMIN_BROADCAST_PERMISSIONS = ['broadcast.send'] as const;
+export type BroadcastAdminPermission = (typeof ADMIN_BROADCAST_PERMISSIONS)[number];
 // Read legacy scoped grants without silently migrating them. New UI grants only four categories.
 export const ADMIN_PERMISSION_LIMIT = 128;
 /**
@@ -86,6 +92,7 @@ export type AdminPermission =
   | PointsAdminPermission
   | StatsAdminPermission
   | CastAdminPermission
+  | BroadcastAdminPermission
   | 'invites.revoke'
   | 'characters.create'
   | `characters.${CharacterAdminAction}:${string}`;
@@ -102,6 +109,7 @@ export function isAdminPermission(value: unknown): value is AdminPermission {
     (ADMIN_POINTS_PERMISSIONS as readonly string[]).includes(value) ||
     (ADMIN_STATS_PERMISSIONS as readonly string[]).includes(value) ||
     (ADMIN_CAST_PERMISSIONS as readonly string[]).includes(value) ||
+    (ADMIN_BROADCAST_PERMISSIONS as readonly string[]).includes(value) ||
     value === 'invites.revoke' ||
     value === 'characters.create' ||
     /^characters\.(read|edit|discard|preview|publish|materials|approve-materials|delete):(?:\*|[A-Za-z0-9_-]{1,128})$/.test(
@@ -174,6 +182,11 @@ export function hasCastPermission(grants: readonly string[], permission: CastAdm
   return grants.includes(permission);
 }
 
+/** Sending a 广播 (the owner role is checked by the caller). */
+export function hasBroadcastPermission(grants: readonly string[]) {
+  return grants.includes('broadcast.send');
+}
+
 export function canCreateCharacter(grants: readonly string[]) {
   return grants.includes('category.characters') || grants.includes('characters.create');
 }
@@ -193,7 +206,8 @@ export type AdminPermissionItem =
   | SystemAdminPermission
   | PointsAdminPermission
   | StatsAdminPermission
-  | CastAdminPermission;
+  | CastAdminPermission
+  | BroadcastAdminPermission;
 /** Direct requirements only; the closure is computed. */
 export const ADMIN_PERMISSION_REQUIRES: Readonly<Record<AdminPermissionItem, readonly AdminPermissionItem[]>> = {
   'characters.read': [],
@@ -219,6 +233,7 @@ export const ADMIN_PERMISSION_REQUIRES: Readonly<Record<AdminPermissionItem, rea
   'cast.read': [],
   'cast.edit': ['cast.read'],
   'cast.publish': ['cast.read'],
+  'broadcast.send': [],
 };
 export const ADMIN_PERMISSION_ITEMS = Object.keys(ADMIN_PERMISSION_REQUIRES) as AdminPermissionItem[];
 const closure = (item: AdminPermissionItem, next: (value: AdminPermissionItem) => readonly AdminPermissionItem[]) => {

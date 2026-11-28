@@ -68,7 +68,7 @@ export function castKnowledge(doc: CastDoc, characterId: string): CastKnowledgeR
  * What the OTHER characters are told about a character's names. Usable: kind 'other' / 'neutral' whose attitude is likes / ok.
  * Listed apart as "do not call": every 黑称, and every other / neutral name he dislikes. His 自称 is never shown to anyone else.
  */
-function othersAliases(aliases: readonly CastAlias[]): Pick<CastCard, 'aliases' | 'doNotCall'> {
+export function othersAliases(aliases: readonly CastAlias[]): Pick<CastCard, 'aliases' | 'doNotCall'> {
   // Part 24l: a name that is a 黑称 for him goes ONLY under doNotCall, even when it is also an alias or a neutral name.
   const insults = new Set(aliases.filter((a) => a.kind === 'insult').map((a) => a.text));
   const usable = aliases.filter(
@@ -128,13 +128,16 @@ function build(doc: CastDoc, characterId: string): Parts {
   const relations: CastView['relations'] = [];
   for (const id of targets) {
     const direction = doc.directions.find((d) => d.from === characterId && d.to === id);
+    // Part 59: the pair's 关系注解 (an unordered pair), shown to both of its characters.
+    const note = doc.pairNotes?.find((n) => (n.a === characterId && n.b === id) || (n.b === characterId && n.a === id));
     const rating = ratingRow[id];
-    if (rating === undefined && !direction) continue;
+    if (rating === undefined && !direction && !note) continue;
     relations.push({
       to: nameOf(id),
       ...(rating === undefined ? {} : { rating }),
       ...(direction?.addresses.length ? { addresses: direction.addresses.map((a) => a.text) } : {}),
       ...(direction?.treatment ? { treatment: direction.treatment } : {}),
+      ...(note ? { note: note.text } : {}),
     });
     ratings.push(rating ?? null);
   }
@@ -265,6 +268,12 @@ export function compileCastViewDetailed(
   }
   return { view, dropped };
 }
+
+/**
+ * Part 37c-1: the character's view with nothing dropped (no cap). Only cast-select.ts reads it: the per-reply selection starts from
+ * everything the character knows and keeps what the recent turns make relevant, within its own budget.
+ */
+export const compileFullView = (doc: CastDoc, characterId: string): CastView => build(doc, characterId).view;
 
 export const compileCastView = (doc: CastDoc, characterId: string): CastView =>
   compileCastViewDetailed(doc, characterId).view;

@@ -200,12 +200,6 @@ textarea:focus-visible,
   letter-spacing: -0.04em;
   user-select: none;
 }
-.head-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  font-size: 17px;
-}
 .icon-button {
   width: 44px;
   height: 44px;
@@ -1903,6 +1897,590 @@ html.cc-open body {
 .cc-memo-send:disabled {
   opacity: 0.45;
 }
+/* Part 39: co-creation about the shared world (design board approved by the owner; player selectors only). */
+.cc-name-btn {
+  all: unset;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--cc-ink);
+  transition: background 160ms ease;
+}
+.cc-name-btn:hover,
+.cc-name-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.6);
+  outline: none;
+}
+.cc-world {
+  flex: none;
+  max-height: 132px;
+  margin: 4px max(18px, calc(50vw - 170px)) 0;
+  padding: 14px 16px;
+  overflow: auto;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.55);
+  color: #33413d;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  scrollbar-width: none;
+  animation: cc-card-in 320ms cubic-bezier(0.2, 0.82, 0.24, 1) both;
+}
+.cc-world[hidden] {
+  display: none;
+}
+/* ---- Part 39b: the relationship screen. One self-contained block: every control states its own reset (no `all: unset`), the text
+   direction is fixed, every flex child may shrink (min-width: 0), and the card, the stars and the buttons are sized from the card, not
+   from the viewport, so the screen looks the same at 390, 768, 1280 and 1440. ---- */
+.cc-rel-entry-face {
+  min-height: 0;
+  padding: 14px 12px;
+  cursor: default;
+}
+.cc-rel-dice,
+.cc-rel-again,
+.cc-rel-plus,
+.cc-rel-x,
+.cc-rel-name,
+.cc-rel .cc-star,
+.cc-rel .cc-zero,
+.cc-rel-back,
+.cc-rel-next {
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.cc-rel-dice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--bb-ink);
+  font-size: 15px;
+  font-weight: 800;
+  box-shadow: 0 2px 10px rgba(40, 24, 60, 0.12);
+  transition:
+    transform 200ms var(--bb-ease),
+    box-shadow 200ms var(--bb-ease);
+}
+.cc-rel-dice:hover {
+  transform: scale(1.04);
+}
+.cc-rel-dice:active {
+  transform: scale(0.97);
+}
+.cc-rel-dice:focus-visible,
+.cc-rel-again:focus-visible,
+.cc-rel-plus:focus-visible,
+.cc-rel-x:focus-visible,
+.cc-rel-name:focus-visible,
+.cc-rel .cc-star:focus-visible,
+.cc-rel .cc-zero:focus-visible,
+.cc-rel-back:focus-visible,
+.cc-rel-next:focus-visible {
+  outline: 3px solid var(--bb-ink);
+  outline-offset: 2px;
+}
+/* The screen replaces the deck while a relation is written. */
+.cc-sheet.is-rel .cc-deck,
+.cc-sheet.is-rel .cc-dots,
+.cc-sheet.is-rel .cc-foot,
+.cc-sheet.is-rel .cc-world,
+.cc-sheet.is-rel .cc-used,
+.cc-sheet.is-rel .cc-shuffle {
+  display: none;
+}
+.cc-rel {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  display: block;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+  font-family: inherit;
+  color: var(--bb-ink);
+  animation: bb-in 320ms var(--bb-ease) both;
+}
+.cc-rel[hidden] {
+  display: none;
+}
+.cc-rel-grid {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 8px 18px max(28px, env(safe-area-inset-bottom));
+}
+.cc-rel-left,
+.cc-rel-right {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.cc-rel-world {
+  box-sizing: border-box;
+  max-height: 240px;
+  padding: 14px 16px;
+  overflow: auto;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.6);
+  color: #2b3835;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cc-rel-world[hidden] {
+  display: none;
+}
+.cc-rel-card {
+  box-sizing: border-box;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  padding: 18px;
+  border-radius: 24px;
+  background: #fff;
+  color: #1d2a27;
+  box-shadow:
+    0 16px 40px rgba(40, 24, 60, 0.14),
+    0 2px 8px rgba(40, 24, 60, 0.06);
+}
+.cc-rel-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cc-rel-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  height: 40px;
+  padding: 0 6px 0 8px;
+  border-radius: 999px;
+  background: #f3efe9;
+  font-size: 15px;
+  white-space: nowrap;
+  animation: cc-rel-pop 240ms var(--bb-ease) both;
+}
+.cc-rel-chip[data-anchor="true"] {
+  background: #e9e3f7;
+  padding-right: 10px;
+}
+.cc-rel-name {
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-weight: 800;
+  transition: background 160ms ease;
+}
+.cc-rel-name:hover {
+  background: rgba(20, 20, 20, 0.07);
+}
+.cc-rel-name.is-inline {
+  padding: 0 4px;
+}
+.cc-rel-x {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #7a7288;
+  font-size: 13px;
+  transition: background 160ms ease;
+}
+.cc-rel-x:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+.cc-rel-again,
+.cc-rel-plus {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  line-height: 1;
+  transition:
+    background 160ms ease,
+    transform 200ms var(--bb-ease);
+}
+.cc-rel-again {
+  background: #e9e3f7;
+  font-size: 18px;
+}
+.cc-rel-again:hover {
+  transform: rotate(-12deg) scale(1.06);
+}
+.cc-rel-plus-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.cc-rel-plus {
+  border: 1.5px dashed #b9afcb;
+  color: #6c6480;
+  font-size: 20px;
+}
+.cc-rel-plus:hover,
+.cc-rel-plus[aria-expanded="true"] {
+  background: #f3efe9;
+  border-color: #1d2a27;
+  color: #1d2a27;
+}
+/* The menu opens to the RIGHT of the plus and never to the left. */
+.cc-rel-menu {
+  position: absolute;
+  z-index: 5;
+  left: calc(100% + 8px);
+  top: -4px;
+  min-width: 160px;
+  max-height: 240px;
+  margin: 0;
+  padding: 6px;
+  overflow: auto;
+  list-style: none;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(40, 24, 60, 0.24);
+  transform-origin: left top;
+  animation: cc-rel-menu-in 200ms var(--bb-ease) both;
+}
+.cc-rel-option {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: #1d2a27;
+  font-size: 14.5px;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+.cc-rel-option:hover,
+.cc-rel-option:focus-visible {
+  background: #ece6f8;
+  outline: none;
+}
+.cc-rel-option.is-taken {
+  opacity: 0.4;
+  cursor: default;
+}
+.cc-rel-option.is-taken:hover {
+  background: transparent;
+}
+.cc-rel-bars {
+  display: flex;
+  gap: 6px;
+}
+.cc-rel-bars[hidden] {
+  display: none;
+}
+.cc-rel-bars i {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(20, 20, 20, 0.14);
+  transition: background 260ms var(--bb-ease);
+}
+.cc-rel-bars i.on {
+  background: var(--bb-ink);
+}
+.cc-rel-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.cc-rel-stage:empty {
+  display: none;
+}
+.cc-rel-stage > * {
+  animation: cc-rel-step-in 300ms var(--bb-ease) both;
+}
+.cc-rel-rates {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.cc-rate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.cc-rate-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  font-size: 15px;
+  font-weight: 800;
+  min-width: 0;
+}
+.cc-rate-who em {
+  margin: 0 6px;
+  font-style: normal;
+  font-weight: 400;
+  color: #7f7a8a;
+}
+.cc-stars {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.cc-rel .cc-star,
+.cc-rel .cc-zero {
+  display: grid;
+  place-items: center;
+  flex: 0 1 44px;
+  min-width: 0;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  font-size: 28px;
+  line-height: 1;
+  color: #d9d3e3;
+  transition:
+    color 180ms ease,
+    transform 220ms cubic-bezier(0.3, 1.6, 0.5, 1),
+    background 160ms ease;
+}
+.cc-rel .cc-star.is-on {
+  color: #f0a62a;
+}
+.cc-rel .cc-star:hover {
+  transform: scale(1.12);
+}
+.cc-rel .cc-star:active {
+  transform: scale(0.94);
+}
+.cc-rel .cc-zero {
+  flex: 0 1 34px;
+  margin-right: 4px;
+  border: 1.5px solid #cbc4d6;
+  border-radius: 50%;
+  font-size: 14px;
+  color: #6c6480;
+}
+.cc-rel .cc-zero.is-on {
+  background: var(--bb-ink);
+  border-color: var(--bb-ink);
+  color: #fff;
+}
+/* The meaning of the value: light, small, one line, one size; the six words are the same length, so nothing moves. */
+.cc-word {
+  position: relative;
+  height: 18px;
+  margin-left: 2px;
+}
+.cc-word span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 12.5px;
+  line-height: 18px;
+  letter-spacing: 0.2em;
+  color: #7f7a8a;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.cc-word span.is-shown {
+  opacity: 1;
+}
+.cc-rel-prompt {
+  margin: 0 0 12px;
+  font-size: 21px;
+  line-height: 1.38;
+  font-weight: 900;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+.cc-rel-hint {
+  margin: -6px 0 14px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #5d5868;
+  overflow-wrap: anywhere;
+}
+.cc-rel-hint[hidden] {
+  display: none;
+}
+.cc-rel-rates .cc-rel-prompt {
+  margin-bottom: 8px;
+}
+.cc-rel-inline-names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.cc-rel-area {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: 150px;
+  font-family: inherit;
+}
+.cc-rel-notice {
+  margin: 0;
+  font-size: 13.5px;
+  color: #a03a29;
+}
+.cc-rel-notice[hidden] {
+  display: none;
+}
+.cc-rel-foot {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+.cc-rel-back,
+.cc-rel-next {
+  display: inline-grid;
+  place-items: center;
+  min-height: 48px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-size: 15.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    opacity 160ms ease;
+}
+.cc-rel-back {
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--cc-ink, #1d2a27);
+  color: #1d2a27;
+}
+.cc-rel-back[hidden] {
+  display: none;
+}
+.cc-rel-next {
+  flex: 1 1 0;
+  min-width: 0;
+  background: #141414;
+  color: #fff;
+}
+.cc-rel-back:active,
+.cc-rel-next:active {
+  transform: scale(0.97);
+}
+.cc-rel-next:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+@keyframes cc-rel-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes cc-rel-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+@keyframes cc-rel-menu-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px) scale(0.97);
+  }
+}
+/* Below 900 px the screen is one column, 560 px at most, centred; the chips card only shows while choosing (the names are in the
+   steps themselves). */
+@media (max-width: 899px) {
+  .cc-rel-world {
+    display: none;
+  }
+  .cc-rel:not([data-step="choose"]):not([data-step="group"]) .cc-rel-left {
+    display: none;
+  }
+  /* ＋ sits on its own row at the left, so its list (which opens to the RIGHT only) always has room on a phone. */
+  .cc-rel-plus-wrap {
+    flex: 0 0 100%;
+  }
+  .cc-rel-menu {
+    left: 48px;
+    min-width: 0;
+    width: min(220px, calc(100vw - 120px));
+  }
+}
+/* From 900 px: two columns centred as one block, the people on the left, the steps on the right. */
+@media (min-width: 900px) {
+  .cc-rel-grid {
+    grid-template-columns: minmax(300px, 400px) minmax(380px, 560px);
+    justify-content: center;
+    align-items: start;
+    gap: 28px;
+    max-width: 1100px;
+    padding: 28px 40px 40px;
+  }
+  .cc-rel-area {
+    min-height: 190px;
+  }
+  .cc-world {
+    margin-inline: auto;
+    width: 600px;
+  }
+}
+/* The questions of the deck: hidden until the pool has answered, then they appear; ↻ crossfades them. */
+.cc-sheet .cc-prompt {
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+.cc-sheet .cc-prompt.is-shown {
+  opacity: 1;
+}
+.cc-deck.is-swapping .cc-prompt.is-shown {
+  animation: cc-prompt-swap 360ms var(--bb-ease) both;
+}
+@keyframes cc-prompt-swap {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.cc-sheet .cc-shuffle:not(:disabled):active {
+  transform: rotate(180deg);
+}
+.cc-sheet .cc-shuffle {
+  transition: transform 320ms var(--bb-ease);
+}
 /* Part 24c: 获得点数 beside the points of 我的信息, and its sheet. */
 .mi-earn {
   margin-left: auto;
@@ -3050,6 +3628,55 @@ body:has(.admin-shell) {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
+}
+
+/* ---- Part 57: 导出 ---- */
+/* The dialog the page's 导出 button opens: one label column, one control column; it never holds an explanation line (hover only). */
+.account-admin-page.admin-shell .ex-dialog {
+  width: min(560px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+}
+.account-admin-page.admin-shell .ex-body {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.account-admin-page.admin-shell .ex-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .ex-label {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .ex-dialog .ex-input {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .ex-dialog input.admin-date-input {
+  width: 152px;
+  min-width: 152px;
+}
+.account-admin-page.admin-shell .ex-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .ex-to,
+.account-admin-page.admin-shell .ex-zone {
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .rh-export {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 8px;
 }
 /* Part 24m: the leave-with-unsaved-changes dialog opens and closes with a short fade and rise. */
 .admin-leave-backdrop[data-state="open"] {
@@ -6756,6 +7383,9 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
   background: var(--ad-primary);
   color: #fff;
 }
+.account-admin-page.admin-shell button.admin-primary {
+  transition-duration: calc(60ms * var(--ad-motion));
+}
 .account-admin-page.admin-shell button.admin-primary:hover:not(:disabled),
 .account-admin-page.admin-shell .cs button.cs-primary:hover:not(:disabled),
 .account-admin-page.admin-shell button.tiers-new:hover:not(:disabled) {
@@ -8733,6 +9363,302 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 
 /* ---- a confirmation that opens in place ---- */
+/* ---- Part 42: 广播 (the console's tokens; every change of state moves: 240 ms open/close, 180 ms hover, a growing bar) ---- */
+.account-admin-page.admin-shell .bc-compose {
+  display: grid;
+  gap: 18px;
+  max-width: 880px;
+}
+.account-admin-page.admin-shell .bc-field {
+  display: grid;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .bc-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ad-text);
+  cursor: help;
+  width: fit-content;
+}
+.account-admin-page.admin-shell .bc-charhead,
+.account-admin-page.admin-shell .bc-bubblefoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .bc-chars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .bc-char {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: 999px;
+  background: var(--ad-surface);
+  cursor: pointer;
+  transition:
+    background calc(180ms * var(--ad-motion)) var(--ad-ease, ease),
+    border-color calc(180ms * var(--ad-motion)) var(--ad-ease, ease),
+    transform calc(180ms * var(--ad-motion)) var(--ad-ease, ease);
+}
+.account-admin-page.admin-shell .bc-char:hover {
+  border-color: var(--ad-primary);
+}
+.account-admin-page.admin-shell .bc-char[data-on="true"] {
+  background: var(--ad-tint);
+  border-color: var(--ad-primary);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .bc-char input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.account-admin-page.admin-shell .bc-char:focus-within {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 2px;
+}
+.account-admin-page.admin-shell .bc-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+.account-admin-page.admin-shell .bc-bubbles {
+  display: grid;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .bc-bubble-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  animation: bc-in calc(240ms * var(--ad-motion)) var(--ad-ease, ease) both;
+}
+.account-admin-page.admin-shell .bc-bubble {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  font: inherit;
+  transition: border-color calc(180ms * var(--ad-motion)) var(--ad-ease, ease);
+}
+.account-admin-page.admin-shell .bc-bubble:focus {
+  border-color: var(--ad-primary);
+  outline: none;
+}
+.account-admin-page.admin-shell .bc-count[data-over="true"] {
+  color: var(--ad-danger);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .bc-link,
+.account-admin-page.admin-shell .bc-x,
+.account-admin-page.admin-shell .bc-play {
+  border: 0;
+  background: none;
+  padding: 4px 6px;
+  border-radius: 8px;
+  color: var(--ad-tint-ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background calc(180ms * var(--ad-motion)) var(--ad-ease, ease);
+}
+.account-admin-page.admin-shell .bc-link:hover,
+.account-admin-page.admin-shell .bc-x:hover,
+.account-admin-page.admin-shell .bc-play:hover {
+  background: var(--ad-tint);
+}
+.account-admin-page.admin-shell .bc-danger {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .bc-danger:hover {
+  background: var(--ad-danger-soft);
+}
+.account-admin-page.admin-shell .bc-voices {
+  display: grid;
+  gap: 8px;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    opacity calc(240ms * var(--ad-motion)) var(--ad-ease, ease),
+    grid-template-rows calc(240ms * var(--ad-motion)) var(--ad-ease, ease);
+}
+.account-admin-page.admin-shell .bc-voices[data-open="true"] {
+  grid-template-rows: none;
+  opacity: 1;
+}
+.account-admin-page.admin-shell .bc-voices[data-open="false"] {
+  display: none;
+}
+.account-admin-page.admin-shell .bc-voice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-radius);
+  background: var(--ad-bg);
+  animation: bc-in calc(240ms * var(--ad-motion)) var(--ad-ease, ease) both;
+}
+.account-admin-page.admin-shell .bc-vname {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .bc-vctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.account-admin-page.admin-shell .bc-time {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.account-admin-page.admin-shell .bc-when {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  animation: bc-in calc(240ms * var(--ad-motion)) var(--ad-ease, ease) both;
+}
+.account-admin-page.admin-shell .bc-when[data-open="true"] {
+  display: inline-flex;
+}
+.account-admin-page.admin-shell .bc-clock {
+  width: 7ch;
+  padding: 6px 8px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  font: inherit;
+}
+.account-admin-page.admin-shell .bc-sendbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.account-admin-page.admin-shell .bc-why {
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .bc-editbar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--ad-radius);
+  background: var(--ad-warn-soft);
+  color: var(--ad-warn);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .bc-editbar[data-open="true"] {
+  display: flex;
+  animation: bc-in calc(240ms * var(--ad-motion)) var(--ad-ease, ease) both;
+}
+.account-admin-page.admin-shell .bc-table {
+  display: grid;
+}
+.account-admin-page.admin-shell .bc-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) 170px 80px 110px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  border-top: 1px solid var(--ad-hairline);
+  transition: background calc(180ms * var(--ad-motion)) var(--ad-ease, ease);
+}
+.account-admin-page.admin-shell .bc-row:not(.bc-row-head):hover {
+  background: var(--ad-bg);
+}
+.account-admin-page.admin-shell .bc-row-head {
+  border-top: 0;
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .bc-state {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 8px;
+}
+.account-admin-page.admin-shell .bc-pct {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell .bc-bar {
+  grid-column: 1 / -1;
+  display: block;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--ad-hairline);
+  overflow: hidden;
+}
+.account-admin-page.admin-shell .bc-bar b {
+  display: block;
+  height: 100%;
+  background: var(--ad-primary);
+  transition: width calc(600ms * var(--ad-motion)) var(--ad-ease, ease);
+}
+.account-admin-page.admin-shell .bc-names {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .bc-num,
+.account-admin-page.admin-shell .bc-recipients {
+  font-variant-numeric: tabular-nums;
+}
+.account-admin-page.admin-shell .bc-acts {
+  display: inline-flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+@keyframes bc-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.account-admin-page.admin-shell .bc-charfield {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+.account-admin-page.admin-shell .bc-charfield > .bc-chars {
+  grid-column: 1 / -1;
+}
+.account-admin-page.admin-shell .bc-charfield > .bc-link {
+  justify-self: start;
+}
+.account-admin-page.admin-shell .bc-voicefield {
+  animation: bc-in calc(240ms * var(--ad-motion)) var(--ad-ease, ease) both;
+}
+.account-admin-page.admin-shell .bc-list {
+  max-width: 880px;
+}
+.account-admin-page.admin-shell .bc-row {
+  grid-template-columns: 140px minmax(0, 1fr) 170px 56px 104px;
+}
+
 .account-admin-page.admin-shell .ic {
   display: grid;
   grid-template-rows: 0fr;
@@ -10028,6 +10954,421 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   font-weight: 700;
   text-decoration: none;
 }
+
+/* ---- Part 39: relation notes in the co-creation inbox, and 玩家眼中的关系 (#57 tokens and components; nothing restyled) ---- */
+.account-admin-page.admin-shell #admin-cocreation .cr-host {
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: var(--ad-bg);
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-member {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: 999px;
+  background: var(--ad-surface);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-decided {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-ratings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-rating {
+  display: grid;
+  grid-template-columns: minmax(0, 11em) 8em 1.2em 5em;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-stars {
+  color: var(--ad-tint-ink);
+  letter-spacing: 1px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-stars-word {
+  color: var(--ad-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-reason p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-match {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-join {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--ad-tint-line);
+  border-radius: 999px;
+  color: var(--ad-tint-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-join.is-new {
+  border-style: dashed;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-name {
+  box-sizing: border-box;
+  width: 16em;
+  max-width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  font: inherit;
+  transition: border-color var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-story-wrap {
+  position: relative;
+  display: block;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-story {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px 14px 26px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.7;
+  transition: border-color var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-count {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-count[data-over="true"] {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-flags {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--ad-radius);
+  background: #fdf6e6;
+  color: #6b4e12;
+  font-size: 13px;
+  list-style: none;
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-flags[hidden],
+.account-admin-page.admin-shell #admin-cocreation .cr-error[hidden],
+.account-admin-page.admin-shell #admin-cocreation .cr-limit[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-error,
+.account-admin-page.admin-shell #admin-cocreation .cr-limit {
+  margin: 0;
+  color: var(--ad-danger);
+  font-size: 13px;
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-actions button {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-adopt-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.account-admin-page.admin-shell #admin-cocreation button.cr-adopt {
+  border-color: var(--ad-primary);
+  background: var(--ad-primary);
+  color: #fff;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell #admin-cocreation button.cr-adopt:disabled {
+  border-color: var(--ad-border);
+  background: var(--ad-surface);
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-adopt-note {
+  max-width: 22em;
+  color: var(--ad-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+/* 玩家眼中的关系 */
+.account-admin-page.admin-shell #admin-cocreation .cr-view {
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-view[hidden] {
+  display: none;
+}
+/* ---- Part 39b: 题目, the wording pool in 共创收件箱 ---- */
+.account-admin-page.admin-shell #admin-cocreation .cw-view[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ad-gap);
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+/* Part 44: 全选 and the bulk 上线 / 下线 */
+.account-admin-page.admin-shell #admin-cocreation .cw-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-sp-2, 8px);
+  min-height: var(--ad-h-compact, 32px);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-bulkbar[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-all {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ad-sp-2, 8px);
+  cursor: pointer;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-picked {
+  min-width: 5em;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-bulk {
+  box-sizing: border-box;
+  min-height: var(--ad-h-compact, 32px);
+  padding: 0 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color calc(160ms * var(--ad-motion)) var(--ad-ease),
+    opacity calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-bulk:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-row,
+.account-admin-page.admin-shell #admin-cocreation .cw-row .cw-text,
+.account-admin-page.admin-shell #admin-cocreation .cw-row .cw-switch {
+  transition:
+    color calc(160ms * var(--ad-motion)) var(--ad-ease),
+    background-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--ad-radius);
+  background: var(--ad-danger-soft);
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-error[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-character {
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-card-radius);
+  background: var(--ad-surface);
+  padding: 4px var(--ad-card-pad) var(--ad-card-pad);
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-character > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  cursor: pointer;
+  list-style: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-character > summary::-webkit-details-marker {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-count {
+  margin-left: auto;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-tools {
+  margin: 0 0 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-theme {
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--ad-line);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-theme h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  animation: admin-rise-in var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-row[data-enabled="false"] .cw-text {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-text,
+.account-admin-page.admin-shell #admin-cocreation .cw-new {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-switch,
+.account-admin-page.admin-shell #admin-cocreation .cw-del,
+.account-admin-page.admin-shell #admin-cocreation .cw-add {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-switch[aria-checked="true"] {
+  background: var(--ad-ok-soft);
+  border-color: transparent;
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-del {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.account-admin-page.admin-shell #admin-cocreation .cr-pair,
+.account-admin-page.admin-shell #admin-cocreation .cr-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-arrow {
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-dist {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 44px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-bar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  width: 22px;
+  height: 100%;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-bar i {
+  display: block;
+  width: 100%;
+  height: var(--h, 0%);
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+  background: var(--ad-tint-line);
+  transition: height var(--ad-t-open) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-bar b {
+  color: var(--ad-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
 .account-admin-page.admin-shell .cc-bulk {
   display: flex;
   align-items: center;
@@ -10037,6 +11378,61 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .cc-bulk[hidden],
 .account-admin-page.admin-shell .cc-counts[hidden] {
   display: none;
+}
+
+/* ---- Part 55: 采纳 (one, all of a card, or every ticked card) and the cards that leave 新 ---- */
+.account-admin-page.admin-shell #admin-cocreation button:is(.cc-adopt-now, .cc-adopt-all, .cc-adopt-selected) {
+  border-color: var(--ad-primary);
+  background: var(--ad-primary);
+  color: #fff;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell
+  #admin-cocreation
+  button:is(.cc-adopt-now, .cc-adopt-all, .cc-adopt-selected):hover:not(:disabled) {
+  background: var(--ad-primary-hover);
+  border-color: var(--ad-primary-hover);
+}
+.account-admin-page.admin-shell #admin-cocreation button:is(.cc-adopt-now, .cc-adopt-all, .cc-adopt-selected):disabled {
+  border-color: var(--ad-border);
+  background: var(--ad-bg);
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-cocreation button.cc-select-all[hidden],
+.account-admin-page.admin-shell #admin-cocreation button.cc-adopt-selected[hidden] {
+  display: none;
+}
+/* a processed card leaves the list: it fades and shrinks for a moment (no motion at all for prefers-reduced-motion) */
+.account-admin-page.admin-shell #admin-cocreation .cc-row.is-leaving {
+  opacity: 0;
+  transform: scale(0.96);
+  pointer-events: none;
+  transition:
+    opacity calc(200ms * var(--ad-motion)) var(--ad-ease),
+    transform calc(200ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-adopt-report {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--ad-danger);
+  border-radius: var(--ad-radius);
+  background: var(--ad-danger-soft);
+  color: var(--ad-text);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-adopt-report[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-report-title {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-report-list {
+  margin: 0;
+  padding-left: 18px;
 }
 
 .account-admin-page.admin-shell #admin-cocreation button::before,
@@ -14406,6 +15802,39 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   visibility: hidden;
 }
 
+/* ---- 欢迎内容: the words and the 情境 note share the wide column, one under the other (Part 37a-2) ---- */
+.account-admin-page.admin-shell .wl-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ad-sp-1, 4px);
+  min-width: 0;
+}
+.account-admin-page.admin-shell .wl-note {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .wl-note-tag {
+  position: absolute;
+  left: 1px;
+  top: 1px;
+  display: flex;
+  align-items: center;
+  height: calc(var(--ad-h-standard, 40px) - 2px);
+  padding: 0 var(--ad-sp-3, 12px);
+  border-radius: calc(var(--ad-radius, 8px) - 1px) 0 0 calc(var(--ad-radius, 8px) - 1px);
+  border-right: 1px solid var(--ad-border);
+  background: var(--ad-primary-soft);
+  color: var(--ad-primary);
+  font-size: 12px;
+  pointer-events: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .wl-note textarea.wl-context.gb {
+  display: block;
+  width: 100%;
+  padding-left: 60px;
+}
+
 /* ---- 欢迎内容: the words grow, the percent is one aligned column with its unit beside it ---- */
 .account-admin-page.admin-shell .wl-row {
   /* Part 27's handle and × (28 px each), Part 29's weight column; the words grow, so everything aligns to the first line */
@@ -16093,17 +17522,63 @@ button:not(
   margin-left: auto;
   font-variant-numeric: tabular-nums;
 }
+.account-admin-page.admin-shell .rh-code {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ad-muted);
+  overflow-wrap: anywhere;
+}
 .account-admin-page.admin-shell .rh-pane {
   animation: rhIn calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+/* Part 44: a result table keeps fixed column widths and scrolls sideways inside its own box (wheel, trackpad, a visible bar). The 玩家
+   column (the row labels in the counts tables) stays on the left; a header never truncates. */
+.account-admin-page.admin-shell .rh-scrollwrap {
+  position: relative;
+}
+.account-admin-page.admin-shell .rh-scroll {
+  --rh-col: 208px;
+  --rh-first: 144px;
   overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+  background: var(--ad-surface);
+  /* the visible, draggable bar is .rh-hbar (sticky at the bottom of the panel); this one is only the scroll box */
+  scrollbar-width: none;
+}
+.account-admin-page.admin-shell .rh-scroll::-webkit-scrollbar {
+  display: none;
+}
+.account-admin-page.admin-shell .rh-scroll:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: -2px;
+}
+.account-admin-page.admin-shell .rh-hbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  margin-top: 4px;
+  height: 16px;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  border-radius: 8px;
+  background: var(--ad-bg);
+  scrollbar-width: auto;
+}
+.account-admin-page.admin-shell .rh-hbar[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .rh-hbar > i {
+  display: block;
+  height: 1px;
+  width: var(--rh-fill, 100%);
 }
 .account-admin-page.admin-shell .rh-grid {
   display: grid;
-  grid-template-columns: minmax(150px, 0.7fr) repeat(var(--rh-cols), minmax(190px, 1fr));
-  border: 1px solid var(--ad-border);
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--ad-surface);
+  grid-template-columns: var(--rh-first) repeat(var(--rh-cols), var(--rh-col));
+  width: max-content;
+  min-width: 100%;
 }
 .account-admin-page.admin-shell .rh-row {
   display: contents;
@@ -16111,19 +17586,30 @@ button:not(
 .account-admin-page.admin-shell .rh-head {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   padding: 8px 12px;
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
   color: var(--ad-muted);
   background: var(--ad-bg);
   border-bottom: 1px solid var(--ad-border);
+}
+.account-admin-page.admin-shell .rh-head.rh-corner,
+.account-admin-page.admin-shell .rh-player {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-shadow: 1px 0 0 var(--ad-border);
+}
+.account-admin-page.admin-shell .rh-head.rh-corner {
+  z-index: 3;
 }
 .account-admin-page.admin-shell .rh-player,
 .account-admin-page.admin-shell .rh-cell {
   padding: 10px 12px;
   border-bottom: 1px solid var(--ad-hairline);
-  animation: rhIn calc(240ms * var(--ad-motion)) var(--ad-ease) both;
+  animation: rhFade calc(240ms * var(--ad-motion)) var(--ad-ease) both;
   animation-delay: calc(var(--rh-i, 0) * 20ms * var(--ad-motion));
 }
 .account-admin-page.admin-shell .rh-player {
@@ -16161,12 +17647,41 @@ button:not(
   animation: rhPulse calc(1100ms * var(--ad-motion)) ease-in-out infinite;
 }
 .account-admin-page.admin-shell .rh-counts {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--ad-surface);
-  border: 1px solid var(--ad-border);
-  border-radius: 12px;
+  table-layout: fixed;
+  width: calc(var(--rh-first) + var(--rh-cols) * var(--rh-col));
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
 }
+.account-admin-page.admin-shell .rh-memes {
+  width: calc(var(--rh-first) + var(--rh-lead2, 104px) + var(--rh-cols) * var(--rh-col));
+}
+.account-admin-page.admin-shell .rh-counts thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  white-space: nowrap;
+  background: var(--ad-bg);
+  width: var(--rh-col);
+}
+.account-admin-page.admin-shell .rh-counts thead th:first-child {
+  width: var(--rh-first);
+}
+.account-admin-page.admin-shell .rh-memes thead th:nth-child(2) {
+  width: var(--rh-lead2, 104px);
+}
+.account-admin-page.admin-shell .rh-counts:not(.rh-memes) tbody th[scope="row"],
+.account-admin-page.admin-shell .rh-counts:not(.rh-memes) thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--ad-bg);
+  box-shadow: 1px 0 0 var(--ad-border);
+}
+.account-admin-page.admin-shell .rh-counts:not(.rh-memes) thead th:first-child {
+  z-index: 3;
+}
+/* the 梗与故事 table has two leading columns (the item, then the phrasing): they scroll with the rest, so the panel keeps room for the models */
 .account-admin-page.admin-shell .rh-counts th,
 .account-admin-page.admin-shell .rh-counts td {
   padding: 8px 12px;
@@ -16181,6 +17696,29 @@ button:not(
 }
 .account-admin-page.admin-shell .rh-counts td {
   font-variant-numeric: tabular-nums;
+}
+.account-admin-page.admin-shell .rh-counts tbody th > span {
+  display: block;
+}
+/* the row's name stays on one line; only its note (under it) wraps in the narrow sticky column */
+.account-admin-page.admin-shell .rh-counts tbody th > span:first-child {
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .rh-counts tbody th > .rh-note {
+  white-space: normal;
+}
+.account-admin-page.admin-shell .rh-note {
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .rh-counts td.rh-over {
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell .rh-over-mark {
+  margin-left: 8px;
+  font-size: 12px;
 }
 .account-admin-page.admin-shell .rh-memes tr[data-first="true"] th,
 .account-admin-page.admin-shell .rh-memes tr[data-first="true"] td {
@@ -16246,6 +17784,15 @@ button:not(
     transform: none;
   }
 }
+/* a reply that lands fades in where it is: it never moves the row (the cells of a turn stay on one line while it arrives) */
+@keyframes rhFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 @keyframes rhPulse {
   50% {
     opacity: 0.25;
@@ -16272,13 +17819,21 @@ button:not(
   box-sizing: border-box;
 }
 .account-admin-page.admin-shell .pw-half-rehearsal {
-  position: sticky;
-  top: var(--ad-sp-3, 12px);
-  max-height: calc(100vh - 2 * var(--ad-sp-3, 12px));
-  overflow: auto;
   border: 1px solid var(--ad-border);
   border-radius: var(--ad-radius);
   background: var(--ad-surface);
+}
+/* Part 40: both halves are as tall as the window leaves them (from the top of the split to the bar at the bottom), start at the same line and
+   scroll on their own. Nothing inside a half scrolls or clips: the table is cut by the half's edge only, and the half scrolls to it. */
+.account-admin-page.admin-shell .pw-split {
+  align-items: stretch;
+  height: max(360px, calc(100dvh - var(--pw-split-top, 210px) - 80px));
+}
+.account-admin-page.admin-shell .pw-split > .pw-half {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 .account-admin-page.admin-shell .rh-inline.rh {
   display: grid;
@@ -16301,6 +17856,791 @@ button:not(
 }
 .account-admin-page.admin-shell .rh-inline .rh-setup {
   grid-template-columns: minmax(0, 1fr);
+}
+/* ---- Part 37b: 说话档案 (the adopt box, the 角色工作台 section, the ⭐ buttons). Built on the #57 pieces (drawer, segmented, status
+   badge, hover tip) and the console tokens, so the console restyle applies to it. Motion goes through --ad-motion (0 with reduced motion). */
+.account-admin-page.admin-shell .sp-adopt,
+.account-admin-page.admin-shell .sp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.account-admin-page.admin-shell .sp-adopt > * {
+  animation: adIn calc(240ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .sp-from {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .sp-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .sp-pane[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .sp-lab,
+.account-admin-page.admin-shell .sp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .sp-lab > span,
+.account-admin-page.admin-shell .sp-field-head {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .sp-field-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .sp-field-head b {
+  color: var(--ad-text);
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .sp-adopt input[type="text"],
+.account-admin-page.admin-shell .sp-adopt select,
+.account-admin-page.admin-shell .sp-panel select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ad-text);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .sp-panel select {
+  width: auto;
+  min-height: 32px;
+}
+.account-admin-page.admin-shell .sp-text {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 84px;
+  padding: 10px 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ad-text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+  transition: border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .sp-text:focus,
+.account-admin-page.admin-shell .sp-adopt input[type="text"]:focus,
+.account-admin-page.admin-shell .sp-adopt select:focus {
+  border-color: var(--ad-primary);
+}
+.account-admin-page.admin-shell .sp-now,
+.account-admin-page.admin-shell .sp-hint,
+.account-admin-page.admin-shell .sp-lock,
+.account-admin-page.admin-shell .sp-empty {
+  margin: 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .sp-count {
+  margin-left: auto;
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  transition: color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .sp-count.is-over,
+.account-admin-page.admin-shell .sp-count.is-full {
+  color: var(--ad-danger);
+  font-weight: 600;
+}
+.account-admin-page.admin-shell .sp-error,
+.account-admin-page.admin-shell .sp-warn {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  animation: adIn calc(200ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .sp-error[hidden],
+.account-admin-page.admin-shell .sp-warn[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .sp-error {
+  background: var(--ad-danger-soft);
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .sp-warn {
+  background: #fdf3df;
+  color: #7a5200;
+}
+.account-admin-page.admin-shell .sp-warn p {
+  margin: 4px 0 0;
+}
+.account-admin-page.admin-shell .sp-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .sp-panel {
+  max-width: 760px;
+}
+.account-admin-page.admin-shell .sp-title {
+  margin: 4px 0 0;
+  font-size: 15px;
+}
+.account-admin-page.admin-shell .sp-card,
+.account-admin-page.admin-shell .sp-daily,
+.account-admin-page.admin-shell .sp-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.account-admin-page.admin-shell .sp-group {
+  padding: 12px 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+  background: var(--ad-surface);
+}
+.account-admin-page.admin-shell .sp-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .sp-samples {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.account-admin-page.admin-shell .sp-sample {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--ad-bg);
+  animation: adIn calc(240ms * var(--ad-motion)) var(--ad-ease) both;
+  transition: background calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .sp-sample:hover {
+  background: var(--ad-tint);
+}
+.account-admin-page.admin-shell .sp-sample-text p {
+  margin: 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .sp-player {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .sp-sample-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .sp-none {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .rh-bubble {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .rh-bubble-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .rh-star,
+.account-admin-page.admin-shell .review-star {
+  flex: none;
+  min-height: 24px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.45;
+  transition:
+    opacity calc(160ms * var(--ad-motion)) var(--ad-ease),
+    background calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .rh-bubble:hover .rh-star,
+.account-admin-page.admin-shell .review-line:hover .review-star,
+.account-admin-page.admin-shell .rh-star:focus-visible,
+.account-admin-page.admin-shell .review-star:focus-visible {
+  opacity: 1;
+  background: var(--ad-tint);
+}
+
+/* Part 37c-1: 网络梗 (the dictionary's switches) and the character's 梗 档位 in 说话档案. Console block: motion under --ad-motion. */
+.account-admin-page.admin-shell #admin-memes {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.account-admin-page.admin-shell #admin-memes .mm-bar {
+  position: static;
+  margin: 0;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+.account-admin-page.admin-shell #admin-memes .mm-error {
+  margin: 0;
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-memes .mm-on {
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-memes .mm-termcell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-default-off {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-bg);
+  border: 1px solid var(--ad-border);
+  color: var(--ad-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-term {
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-meaning {
+  display: block;
+  min-width: 320px;
+  max-width: 560px;
+  color: var(--ad-text);
+  line-height: 1.5;
+  /* the table's cells do not wrap; a meaning is a sentence and must, or it runs under the next column */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell #admin-memes .admin-table td {
+  vertical-align: middle;
+}
+.account-admin-page.admin-shell #admin-memes .mm-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 220px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-switch {
+  box-sizing: border-box;
+  min-height: 36px;
+  min-width: 76px;
+  padding: 0 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-muted);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background calc(200ms * var(--ad-motion)) var(--ad-ease),
+    color calc(200ms * var(--ad-motion)) var(--ad-ease),
+    border-color calc(200ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-memes .mm-switch[aria-checked="true"] {
+  background: var(--ad-ok-soft);
+  border-color: transparent;
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-memes .mm-switch:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.account-admin-page.admin-shell #admin-memes .mm-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-pager[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .mm-use {
+  display: grid;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .mm-use-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.account-admin-page.admin-shell .mm-use-label {
+  min-width: 96px;
+  font-weight: 500;
+}
+.account-admin-page.admin-shell .mm-use-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+.account-admin-page.admin-shell .mm-use-add input,
+.account-admin-page.admin-shell .mm-use-add select {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+}
+.account-admin-page.admin-shell .mm-use-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.account-admin-page.admin-shell .mm-use-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .mm-use-hit {
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+
+/* Part 37c-1b: the editable library (add / edit / delete / 已删除), the upload preview and the 待审 queue. Every transition runs under
+   --ad-motion (0 under prefers-reduced-motion); one control height (36 px) and one gap rhythm (8 / 12 / 16) throughout. */
+.account-admin-page.admin-shell #admin-memes .mm-panel {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.account-admin-page.admin-shell #admin-memes .mm-panel[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-memes .mm-panel-in {
+  animation: mm-in calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+@keyframes mm-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.account-admin-page.admin-shell #admin-memes .mm-bar {
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+.account-admin-page.admin-shell #admin-memes .page-head-actions button,
+.account-admin-page.admin-shell #admin-memes .mm-row-actions button,
+.account-admin-page.admin-shell #admin-memes .mm-q-actions button {
+  min-height: 36px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-confirm-host:empty {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-memes .mm-pending {
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell #admin-memes .mm-row-actions,
+.account-admin-page.admin-shell #admin-memes .mm-q-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-danger {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-memes .mm-edited {
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  border-color: transparent;
+}
+.account-admin-page.admin-shell #admin-memes .mm-category,
+.account-admin-page.admin-shell #admin-memes .mm-source {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-source {
+  background: var(--ad-bg);
+  border: 1px solid var(--ad-border);
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-memes .mm-muted {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-memes .mm-ok {
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-memes .mm-problem {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-memes .admin-table tbody tr {
+  transition: background calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .mm-form {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.account-admin-page.admin-shell .mm-field {
+  display: grid;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .mm-field-label {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .mm-field input,
+.account-admin-page.admin-shell .mm-field select,
+.account-admin-page.admin-shell .mm-field textarea,
+.account-admin-page.admin-shell .mm-file input,
+.account-admin-page.admin-shell .mm-q-content input,
+.account-admin-page.admin-shell .mm-q-content textarea,
+.account-admin-page.admin-shell .mm-q-content select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+  transition: border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .mm-field textarea,
+.account-admin-page.admin-shell .mm-q-content textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+.account-admin-page.admin-shell .mm-q-content select,
+.account-admin-page.admin-shell .mm-field select {
+  min-width: 0;
+}
+.account-admin-page.admin-shell .mm-field input[readonly] {
+  background: var(--ad-bg);
+  color: var(--ad-muted);
+}
+/* the new version of a 待审 item: label row, then term and category side by side, then the meaning */
+.account-admin-page.admin-shell .mm-q-edit {
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .mm-q-edit .mm-compare-head,
+.account-admin-page.admin-shell .mm-q-edit .mm-q-meaning {
+  grid-column: 1 / -1;
+}
+.account-admin-page.admin-shell .mm-compare-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .mm-field input:focus,
+.account-admin-page.admin-shell .mm-field textarea:focus,
+.account-admin-page.admin-shell .mm-q-content input:focus,
+.account-admin-page.admin-shell .mm-q-content textarea:focus {
+  border-color: var(--ad-accent, var(--ad-tint-ink));
+  outline: none;
+}
+.account-admin-page.admin-shell .mm-count {
+  justify-self: end;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .mm-count-over {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .mm-field-meta {
+  margin: 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .mm-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .mm-form-actions button {
+  min-height: 36px;
+}
+.account-admin-page.admin-shell .mm-form .mm-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .mm-form .mm-error[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .mm-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ad-tint-ink);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .mm-import-pick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 16px;
+  align-items: start;
+}
+.account-admin-page.admin-shell .mm-file {
+  display: grid;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .mm-file-name {
+  color: var(--ad-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .mm-import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .mm-import-summary[hidden],
+.account-admin-page.admin-shell .mm-import-result[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .mm-import-result {
+  max-height: 52vh;
+  overflow: auto;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  animation: mm-in calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .mm-import-table td,
+.account-admin-page.admin-shell .mm-import-table th {
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .mm-import-detail {
+  min-width: 260px;
+}
+.account-admin-page.admin-shell .mm-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-bg);
+  border: 1px solid var(--ad-border);
+  color: var(--ad-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .mm-chip-ok {
+  background: var(--ad-ok-soft);
+  border-color: transparent;
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell .mm-chip-update,
+.account-admin-page.admin-shell .mm-chip-revive {
+  background: var(--ad-warn-soft);
+  border-color: transparent;
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell .mm-chip-invalid {
+  background: transparent;
+  border-color: var(--ad-danger);
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .mm-compare {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.account-admin-page.admin-shell .mm-compare-side {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 8px 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-bg);
+}
+.account-admin-page.admin-shell .mm-compare-new {
+  background: var(--ad-surface);
+}
+.account-admin-page.admin-shell .mm-compare-side p {
+  margin: 0;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .mm-compare-side b {
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.account-admin-page.admin-shell .mm-compare-side i {
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-style: normal;
+}
+.account-admin-page.admin-shell #admin-memes .mm-q-content {
+  min-width: 460px;
+  max-width: 760px;
+  white-space: normal;
+}
+.account-admin-page.admin-shell #admin-memes .mm-queue {
+  display: grid;
+  gap: 12px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-date {
+  white-space: nowrap;
+  color: var(--ad-muted);
+}
+
+/* ---- Part 59: kept edits, the connection line ---- */
+/* 「恢复未保存的修改」: the same amber bar as the conflict bar; it is part of the page's flow only where the editor puts it. */
+.wb-restore {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid #d9a441;
+  border-radius: 8px;
+  background: #fdf6e6;
+  font-size: 13px;
+}
+.wb-restore span {
+  flex: 1 1 auto;
+}
+/* The connection line floats over the content (it never pushes the page down, so the scroll position is never moved by it). */
+.admin-conn {
+  position: fixed;
+  z-index: 60;
+  bottom: 84px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 10px 14px;
+  border: 1px solid #d9a441;
+  border-radius: 8px;
+  background: #fdf6e6;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  font-size: 13px;
+}
+.admin-conn[hidden] {
+  display: none;
+}
+.admin-conn p {
+  margin: 0;
+}
+
+/* ---- Part 59: 显示未上线 (角色工作台 rail, 共创收件箱, 关系与故事) ---- */
+.admin-pick-toggle {
+  display: block;
+  width: 100%;
+  margin: 8px 0 6px;
+  padding: 4px 6px;
+  border: 1px dashed var(--ad-border, #d7d3c9);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: normal;
+  cursor: pointer;
+}
+.admin-pick-toggle[aria-pressed="true"] {
+  border-style: solid;
+  background: var(--ad-warn-soft, #fdf3dc);
+}
+.admin-pick-toggle .full {
+  display: none;
+}
+.wb-roster:hover .admin-pick-toggle .short,
+.wb-roster:focus-within .admin-pick-toggle .short {
+  display: none;
+}
+.wb-roster:hover .admin-pick-toggle .full,
+.wb-roster:focus-within .admin-pick-toggle .full {
+  display: inline;
+}
+
+/* ---- Part 59: the one 「版本」 control of 关系与故事 (a popover over the page, never a bar above it) ---- */
+.account-admin-page.admin-shell .cs-versions-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.account-admin-page.admin-shell .cs-versions-pop {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(640px, calc(100vw - 80px));
+  max-height: 70vh;
+  overflow: auto;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.16);
+  border-radius: var(--ad-card-radius);
+}
+.account-admin-page.admin-shell .cs-versions-pop[hidden] {
+  display: none;
 }
 /* ======================================================================================================================
    Part 24b-7f: the role rail, the top spacing of 发布 / 版本历史 / 预演, and the type size of 测试对话 (docs/ADMIN_LAYOUT.md §7-§9). Layout
@@ -16953,6 +19293,12 @@ body.legal-page {
   border-color: #c98f86;
   color: #8a3b30;
 }
+/* Part 58: the writer's hidden plan, one small muted line under the reply (the owner's page only). */
+.review-plan {
+  grid-column: 3 / -1;
+  font-size: 12px;
+  color: var(--ad-muted);
+}
 .review-time,
 .review-speaker {
   font-size: 12px;
@@ -17543,12 +19889,30 @@ body.legal-page {
   justify-content: center;
   gap: 4px;
 }
+/* Part 44: the Latin of a nickname comes from ONE family on every phone (the first of these the device has: its own UI face, never a
+   metrics-different fallback), then the CJK faces; one weight for both, no synthesised bold, so 「三点水的vuan」 reads as one name. */
 .face-name {
+  font-family:
+    Inter, Roboto, "SF Pro Text", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, "PingFang SC",
+    "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
   font-size: calc(var(--name-size, 0.3) * 100cqw);
-  font-weight: 900;
-  letter-spacing: -0.05em;
+  font-weight: 800;
+  font-synthesis: none;
+  letter-spacing: -0.02em;
   line-height: 0.95;
   white-space: nowrap;
+  /* Part 46: no phone browser may scale this text on its own (Android's text autosizing / font boost): the fit measures the text
+     against its computed size, so a size the browser changes behind it would make the fit chase it. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+/* Part 44: the text sits in an inner box that is bigger than the line it takes (padding, undone by the same negative margin), so the
+   gradient that is clipped to the glyphs also paints the descenders (g, y, p, q), the overhang of the last glyph and the side
+   bearings. Where the name sits and how tall its line is do not change. */
+.face-name-text {
+  display: inline-block;
+  padding: 0.16em 0.12em 0.24em;
+  margin: -0.16em -0.12em -0.24em;
 }
 .face-latin {
   height: 44px;
@@ -19189,16 +21553,20 @@ html.theme-fade *::after {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
-.face-wave {
+.face-bars {
+  position: relative;
   flex: 1;
   min-width: 0;
   height: 22px;
+  display: block;
+}
+.face-wave {
+  display: block;
+  width: 100%;
+  height: 100%;
   color: rgba(20, 20, 20, 0.24);
-  transition: color 240ms ease;
 }
-.face-voice[data-playing="true"] .face-wave {
-  color: var(--accent);
-}
+/* Part 49: the playing voice is shown by the played part of these bars (.pk-played, below); the grey ones stay as they are. */
 .face-dur {
   font-family: var(--bb-mono);
   font-size: 11px;
@@ -19221,9 +21589,6 @@ html.theme-fade *::after {
 :root[data-theme="dark"] .face-wave {
   color: rgba(255, 255, 255, 0.24);
 }
-:root[data-theme="dark"] .face-voice[data-playing="true"] .face-wave {
-  color: var(--n-accent);
-}
 /* the head's one-line next step (体验已结束 …) and the footer note read on the dark page too */
 :root[data-theme="dark"] .page-shell .site-head .head-hint,
 :root[data-theme="dark"] .page-shell .site-head .head-note,
@@ -19231,7 +21596,7 @@ html.theme-fade *::after {
   color: var(--bb-sub);
 }
 
-/* ---- chat: the header is centred (back | avatar over name | ⋯), as on the Chat board ---- */
+/* ---- chat: the header is centred (back | name | ⋯); no avatar in it, ever (Part 38a) ---- */
 .page-shell .card-slot .chat-head {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr) 56px;
@@ -19260,6 +21625,7 @@ html.theme-fade *::after {
   align-items: center;
   gap: 3px;
   min-width: 0;
+  position: relative;
 }
 .page-shell .chat-head strong {
   position: static;
@@ -19272,10 +21638,23 @@ html.theme-fade *::after {
 .page-shell .chat-head .icon-button {
   color: var(--bb-ink);
 }
+/* the old text of the header, fading out while the new one fades in (Part 38a) */
+.page-shell .chat-head .title-ghost {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--bb-ink);
+  pointer-events: none;
+  white-space: nowrap;
+}
 
 /* ---- avatars: a ring, a thin gap of page colour, then the fill. A character's comes from its colour; the player's from their pick ---- */
-.page-shell .message-avatar,
-.page-shell .chat-mark {
+.page-shell .message-avatar {
   border: 2px solid transparent;
   border-radius: 50%;
   background:
@@ -19285,18 +21664,11 @@ html.theme-fade *::after {
   color: #141414;
   font-weight: 900;
 }
-.page-shell .chat-mark {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  font-size: 10px;
-}
 .page-shell .message-avatar {
   width: 38px;
   height: 38px;
 }
-:root[data-theme="dark"] .page-shell .message-avatar,
-:root[data-theme="dark"] .page-shell .chat-mark {
+:root[data-theme="dark"] .page-shell .message-avatar {
   background:
     linear-gradient(140deg, var(--n-aura-3), var(--n-aura-2)) padding-box,
     conic-gradient(from 200deg, var(--n-accent), var(--n-aura-3), var(--n-aura-2), var(--n-accent)) border-box;
@@ -20003,282 +22375,386 @@ html.theme-fade *::after {
   color: var(--bb-ink);
 }
 
-/* ---- the shared voice 小卡: what a person lands on when a card is sent to them ---- */
-.shared-page {
-  min-height: 100dvh;
-  max-width: 460px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  color: var(--bb-ink);
+/* ---- Part 45: the shared voice 小卡 page (/s/<token>) and the 分享 sheet. The page is the home card on its own; board approved by the owner. ---- */
+.share-page {
+  --card-w: 276px;
 }
-.shared-page {
-  position: relative;
-  isolation: isolate;
+.share-page .site-head {
+  justify-content: flex-start;
 }
-/* The card's aura paints the whole window behind the page (the custom properties live on the page, not on <html>). */
-.shared-page::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
+.share-page .carousel {
   pointer-events: none;
-  background:
-    radial-gradient(70% 35% at 10% 15%, var(--aura-1) 0%, transparent 70%),
-    radial-gradient(60% 35% at 95% 50%, var(--aura-2) 0%, transparent 70%),
-    radial-gradient(80% 40% at 30% 100%, var(--aura-3) 0%, transparent 70%);
 }
-.shared-head {
-  height: 56px;
-  flex: none;
-  padding: 0 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.page-shell.share-page .carousel .card-slot.is-active {
+  pointer-events: auto;
+  cursor: default;
+  width: 276px !important;
+  height: min(520px, calc(100dvh - 300px)) !important;
+  min-height: 0 !important;
+  top: 44% !important;
 }
-.shared-hand {
-  height: 34px;
-  color: var(--bb-ink);
-}
-.shared-what {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  font-size: 13px;
-  color: var(--bb-ink);
-}
-.shared-main {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 20px 12px;
-}
-.shared-sticker {
-  position: relative;
-  z-index: 2;
-  margin: 0 0 -12px;
+.share-sticker {
+  position: absolute;
+  z-index: 4;
+  top: -16px;
+  left: 50%;
+  margin: 0;
   padding: 8px 14px;
   border-radius: 4px;
   background: #fff;
   color: #141414;
   font-size: 14px;
   font-weight: 700;
-  transform: rotate(-3deg);
+  white-space: nowrap;
+  transform: translateX(-50%) rotate(-3deg);
   box-shadow: 0 6px 16px rgba(40, 24, 60, 0.12);
   animation: bb-pop 300ms var(--bb-ease) backwards;
+  transition:
+    background 400ms var(--bb-ease),
+    color 400ms var(--bb-ease),
+    box-shadow 400ms var(--bb-ease),
+    transform 400ms var(--bb-ease);
 }
-.shared-sticker::before {
+.share-sticker::before {
   content: "";
   position: absolute;
   left: 50%;
   top: -8px;
   width: 54px;
   height: 16px;
-  background: var(--accent, #bba4ff);
-  opacity: 0.55;
+  background: color-mix(in srgb, var(--pk-d-a2, var(--accent, #bba4ff)) 60%, transparent);
   transform: translateX(-50%) rotate(-4deg);
+  transition: opacity 400ms var(--bb-ease);
 }
-.shared-card {
-  width: min(286px, 100%);
-  aspect-ratio: 286 / 452;
-  max-height: 100%;
-  padding: 7px;
-  border-radius: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  background: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 24px 60px rgba(40, 24, 60, 0.2);
-  transform: rotate(2deg);
-  animation: bb-in 420ms var(--bb-ease) 80ms backwards;
+:root[data-theme="dark"] .share-sticker::before {
+  background: color-mix(in srgb, var(--pk-n-a2, var(--n-accent, #bba4ff)) 60%, transparent);
 }
-.shared-face {
-  position: relative;
-  height: 100%;
+:root[data-theme="dark"] .share-sticker {
+  background: #f5f3f7;
+}
+.share-actions {
+  position: fixed;
+  z-index: 200;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 24px calc(28px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  padding: 18px 18px 16px;
-  border-radius: 23px;
-  overflow: hidden;
-  background: linear-gradient(165deg, var(--aura-3) 0%, var(--aura-1) 45%, #fff 100%);
-  color: #141414;
-}
-.shared-face::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  mix-blend-mode: soft-light;
-  background: linear-gradient(
-    115deg,
-    transparent 28%,
-    rgba(255, 255, 255, 0.6) 42%,
-    rgba(255, 210, 246, 0.5) 48%,
-    rgba(186, 236, 255, 0.5) 54%,
-    transparent 68%
-  );
-}
-.shared-top,
-.shared-foot {
-  position: relative;
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--bb-mono);
-  letter-spacing: 0.06em;
-}
-.shared-top {
-  font-size: 11px;
-}
-.shared-foot {
-  padding-top: 10px;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: #4a4a4a;
-}
-.shared-who {
-  position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.shared-name {
-  font-size: 76px;
-  font-weight: 900;
-  letter-spacing: -0.05em;
-  line-height: 0.95;
-  white-space: nowrap;
-}
-.shared-latin {
-  height: 44px;
-  color: #141414;
-}
-.shared-quote {
-  position: relative;
-  margin: 0 0 14px;
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 1.45;
-}
-.shared-play {
-  position: relative;
-  appearance: none;
-  display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
-  height: 54px;
-  padding: 0 14px 0 8px;
-  border: 0;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 4px 14px rgba(40, 24, 60, 0.1);
-  color: #141414;
-  font: inherit;
-  cursor: pointer;
-  transition: transform 160ms var(--bb-ease);
 }
-.shared-play:disabled {
-  cursor: default;
-}
-.shared-play:not(:disabled):active {
-  transform: scale(0.98);
-}
-.shared-play-dot {
-  width: 38px;
-  height: 38px;
-  flex: none;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--accent, #7c4deb);
-  color: #fff;
-}
-.shared-play-dot svg {
-  width: 16px;
-  height: 16px;
-}
-.shared-wave {
-  flex: 1;
-  min-width: 0;
-  height: 22px;
-  color: rgba(20, 20, 20, 0.22);
-}
-.shared-dur {
-  font-family: var(--bb-mono);
-  font-size: 11px;
-  color: #4a4a4a;
-}
-.shared-actions {
-  flex: none;
-  padding: 0 20px max(14px, env(safe-area-inset-bottom));
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-.shared-cta {
-  width: 100%;
-  max-width: 300px;
-  height: 54px;
+.share-cta {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
-  background: var(--s-out);
-  color: var(--s-out-fg);
-  font-size: 16px;
-  font-weight: 700;
+  gap: 8px;
+  width: min(320px, 100%);
+  min-height: 56px;
+  border-radius: 28px;
+  background: var(--s-out, #141414);
+  color: var(--bb-paper, #fff);
+  font-size: 17px;
+  font-weight: 600;
   text-decoration: none;
+  animation: bb-pop 300ms var(--bb-ease) 120ms backwards;
   transition: transform 160ms var(--bb-ease);
 }
-.shared-cta::after {
+.share-cta::after {
   content: "→";
-  margin-left: 8px;
 }
-.shared-cta:active {
-  transform: scale(0.98);
+.share-cta:active {
+  transform: scale(0.97);
 }
-.shared-hint {
+.share-cta:focus-visible,
+.share-act:focus-visible {
+  outline: 2px solid var(--accent, #7c4deb);
+  outline-offset: 3px;
+}
+.share-hint {
   font-size: 13px;
   color: var(--bb-sub);
+  transition: opacity 300ms var(--bb-ease);
 }
-:root[data-theme="dark"] .shared-page::before {
-  background:
-    radial-gradient(70% 35% at 10% 15%, color-mix(in srgb, var(--n-aura-1) 35%, transparent) 0%, transparent 70%),
-    radial-gradient(80% 40% at 30% 100%, color-mix(in srgb, var(--n-aura-3) 40%, transparent) 0%, transparent 70%);
+/* The expired page: the same card dulled, its words gone, the sticker plain. Reached by fading in (a link opened late) or in place
+   (a voice that ran out while the page was open). */
+.share-page .card-slot .card-face {
+  transition:
+    filter 700ms var(--bb-ease),
+    opacity 700ms var(--bb-ease);
 }
-:root[data-theme="dark"] .shared-face {
-  background: linear-gradient(165deg, var(--n-aura-3) 0%, #1c1724 52%, #110f16 100%);
+.share-page .card-slot .card-face > * {
+  transition: opacity 500ms var(--bb-ease);
+}
+.share-page.is-expired .card-slot .card-face {
+  filter: grayscale(1) brightness(0.9);
+  opacity: 0.6;
+}
+.share-page.is-expired .card-slot .card-face > *:not(.pk-shapes):not(.face-sheen) {
+  opacity: 0;
+  pointer-events: none;
+}
+.share-page.is-expired .share-sticker {
+  background: transparent;
+  box-shadow: none;
+  color: var(--bb-sub);
+  top: -44px;
+  transform: translateX(-50%);
+}
+/* the neutral card of an expired link: a plain soft surface (no character, no colours) */
+.share-page .share-blank,
+.share-page.is-expired .card-slot .card-face {
+  background: linear-gradient(160deg, #dedbe3, #eeecf1);
+}
+:root[data-theme="dark"] .share-page .share-blank,
+:root[data-theme="dark"] .share-page.is-expired .card-slot .card-face {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+}
+.share-page.is-expired .share-sticker::before {
+  opacity: 0;
+}
+.share-page.is-expired .share-hint {
+  opacity: 0;
+}
+.share-page .share-blank {
+  animation: share-dull 700ms var(--bb-ease) backwards;
+}
+@keyframes share-dull {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The share sheet (opened from the long-press menu's 分享为卡片). */
+.share-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--s-dim, rgba(12, 11, 16, 0.42));
+  animation: share-fade 240ms var(--bb-ease) backwards;
+}
+.share-scrim.is-out {
+  animation: share-fade 200ms reverse forwards;
+}
+@keyframes share-fade {
+  from {
+    opacity: 0;
+  }
+}
+.share-sheet,
+.share-pop {
+  position: fixed;
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  background: var(--s-solid, #fff);
   color: var(--bb-ink);
+  box-shadow: 0 -10px 40px rgba(20, 16, 30, 0.2);
 }
-:root[data-theme="dark"] .shared-latin {
-  color: var(--n-accent);
+.share-sheet {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 10px 20px calc(24px + env(safe-area-inset-bottom));
+  border-radius: 26px 26px 0 0;
+  transform-origin: 50% 100%;
+  animation: bb-sheet 360ms var(--bb-ease) backwards;
 }
-:root[data-theme="dark"] .shared-foot,
-:root[data-theme="dark"] .shared-dur {
-  color: #d9d5e2;
+.share-pop {
+  width: 340px;
+  padding: 16px;
+  border-radius: 20px;
+  gap: 12px;
+  box-shadow: 0 18px 50px rgba(20, 16, 30, 0.25);
+  transform-origin: 0 100%;
+  animation: bb-pop 240ms var(--bb-ease) backwards;
 }
-:root[data-theme="dark"] .shared-card {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+.share-sheet.is-out,
+.share-pop.is-out {
+  animation: share-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
-:root[data-theme="dark"] .shared-play {
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
-  color: var(--bb-ink);
+@keyframes share-out {
+  to {
+    transform: translateY(40%);
+    opacity: 0;
+  }
 }
-:root[data-theme="dark"] .shared-play-dot {
-  background: var(--n-accent);
-  color: #0c0b10;
+.share-grip {
+  width: 38px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bb-line);
+  margin-bottom: 4px;
 }
-:root[data-theme="dark"] .shared-wave {
-  color: rgba(255, 255, 255, 0.24);
+.share-mini {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--aura-1, #e9e2f2), var(--aura-2, #f2eee9));
+  color: #141414;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
 }
-:root[data-theme="dark"] .shared-sticker {
+:root[data-theme="dark"] .share-mini {
+  background: linear-gradient(135deg, var(--n-aura-1, #4b2bc9), var(--n-aura-3, #2a1c4a));
+  color: #f5f3f7;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.share-av {
+  width: 48px;
+  height: 48px;
+  flex: none;
+}
+.share-name {
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.2;
+}
+.share-no {
+  margin-top: 2px;
+  font: 11px var(--bb-mono);
+  opacity: 0.7;
+}
+.share-pill {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px 0 6px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+:root[data-theme="dark"] .share-pill {
+  background: rgba(255, 255, 255, 0.16);
+}
+.share-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #141414;
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+:root[data-theme="dark"] .share-dot {
   background: #f5f3f7;
+  color: #141414;
+}
+.share-dot svg {
+  width: 12px;
+  height: 12px;
+}
+.share-link {
+  position: relative;
+  width: 100%;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--s-line, #e4ded7);
+  font: 13px var(--bb-mono);
+  color: var(--bb-sub);
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: all;
+}
+.share-link span {
+  transition:
+    opacity 260ms var(--bb-ease),
+    transform 260ms var(--bb-ease);
+}
+.share-link[data-state="busy"] span {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.share-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(128, 128, 128, 0.16) 50%, transparent 70%);
+  opacity: 0;
+  transition: opacity 200ms var(--bb-ease);
+  animation: share-sheen 1.1s linear infinite;
+}
+.share-link[data-state="busy"] .share-sheen {
+  opacity: 1;
+}
+@keyframes share-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.share-actions-row,
+.share-sheet .share-actions,
+.share-pop .share-actions {
+  position: static;
+  padding: 0;
+  flex-direction: row;
+  gap: 10px;
+  width: 100%;
+}
+.share-act {
+  flex: 1;
+  height: 48px;
+  border-radius: 24px;
+  border: 1px solid var(--s-line, #e4ded7);
+  background: transparent;
+  color: var(--bb-ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition:
+    background 240ms var(--bb-ease),
+    color 240ms var(--bb-ease),
+    opacity 240ms var(--bb-ease),
+    transform 160ms var(--bb-ease);
+}
+.share-act svg {
+  width: 18px;
+  height: 18px;
+}
+.share-act:disabled {
+  opacity: 0.45;
+}
+.share-act:active {
+  transform: scale(0.97);
+}
+.share-act-main {
+  background: var(--s-out, #141414);
+  color: var(--bb-paper, #fff);
+  border-color: transparent;
+}
+.share-act[data-state="failed"],
+.share-link[data-state="failed"] {
+  color: #b3402f;
+  border-color: rgba(179, 64, 47, 0.45);
+}
+:root[data-theme="dark"] .share-act[data-state="failed"],
+:root[data-theme="dark"] .share-link[data-state="failed"] {
+  color: #ff9d8d;
+  border-color: rgba(255, 157, 141, 0.45);
+}
+.share-act[data-state="done"] {
+  background: #3a7667;
+  color: #fff;
+  border-color: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -20312,14 +22788,44 @@ html.theme-fade *::after {
   .bl-row,
   .cc-sheet,
   .cc-sheet .cc-editor,
-  .shared-sticker,
-  .shared-card {
+  .cc-rel-slot,
+  .cc-rel-mem,
+  .cc-rel-list,
+  .share-sticker,
+  .share-cta,
+  .share-page .share-blank,
+  .share-sheet,
+  .share-pop,
+  .share-scrim,
+  .share-sheen {
+    animation: none;
+  }
+}
+
+/* ---- Part 38a: a voice message waiting its turn: its bars breathe softly until it plays ---- */
+.page-shell .voice-bubble .play-button[data-queued="true"] .sound-bars {
+  opacity: 0.55;
+  animation: pk-queued 1400ms ease-in-out infinite;
+}
+.page-shell .voice-bubble .play-button .sound-bars {
+  transition: opacity 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes pk-queued {
+  50% {
+    opacity: 0.9;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-shell .voice-bubble .play-button .sound-bars {
+    transition: none;
+  }
+  .page-shell .voice-bubble .play-button[data-queued="true"] .sound-bars {
     animation: none;
   }
 }
 
 /* ======================================================================================================================
-   Part 31b (player): a character's picture over the initials (card face 148, arc as before, chat header 36 with a 2.5 px halo, message
+   Part 31b (player): a character's picture over the initials (card face 148, arc as before, message (the chat header has no avatar, Part 38a)
    avatars 30 on the last bubble of a group), the four states, and the 100 ms landing fade of a returning visit. Player selectors only.
    ====================================================================================================================== */
 .page-shell .portrait {
@@ -20397,15 +22903,6 @@ html.theme-fade *::after {
     0 0 0 9px var(--bb-paper, #0c0b10),
     0 0 0 12px var(--n-aura-3);
 }
-.page-shell .chat-head .chat-mark {
-  width: 36px;
-  height: 36px;
-  font-size: 14px;
-  border-width: 2.5px;
-  box-sizing: border-box;
-  position: relative;
-  overflow: hidden;
-}
 .page-shell .message-row .message-avatar {
   width: 30px;
   height: 30px;
@@ -20413,10 +22910,7 @@ html.theme-fade *::after {
   position: relative;
   overflow: hidden;
 }
-/* an avatar only beside the last bubble of a group: the space stays, so the bubbles keep their column */
-.page-shell .message-row.incoming:has(+ .message-row.incoming) > .message-avatar {
-  visibility: hidden;
-}
+/* Part 38a (owner decision 2026-11-15): every character message shows its avatar, not only the last of a group; the player's stay as they are */
 /* a returning visit lands on its card at once; the page fades in over 100 ms (no spin from position 1) */
 .page-shell[data-landing="resume"] .carousel,
 .page-shell[data-landing="resume"] .avatar-nav {
@@ -20505,8 +22999,7 @@ html.theme-fade *::after {
   initial-value: 1;
 }
 .card-slot[data-skin] .card-shell,
-.card-slot[data-skin] .card-face,
-.shared-face {
+.card-slot[data-skin] .card-face {
   isolation: isolate;
 }
 .pk-shapes {
@@ -20519,6 +23012,14 @@ html.theme-fade *::after {
   contain: layout paint;
 }
 .pk-shape {
+  --pk-ease-d:
+    var(--c-d) 0%, color-mix(in srgb, var(--c-d) 78%, transparent) 18%,
+    color-mix(in srgb, var(--c-d) 48%, transparent) 40%, color-mix(in srgb, var(--c-d) 22%, transparent) 62%,
+    color-mix(in srgb, var(--c-d) 7%, transparent) 82%, transparent 100%;
+  --pk-ease-n:
+    var(--c-n) 0%, color-mix(in srgb, var(--c-n) 78%, transparent) 18%,
+    color-mix(in srgb, var(--c-n) 48%, transparent) 40%, color-mix(in srgb, var(--c-n) 22%, transparent) 62%,
+    color-mix(in srgb, var(--c-n) 7%, transparent) 82%, transparent 100%;
   position: absolute;
   left: var(--x);
   top: var(--y);
@@ -20526,13 +23027,13 @@ html.theme-fade *::after {
   height: var(--h);
   border-radius: 50%;
   transform: translate(-50%, -50%) rotate(var(--r));
-  background: radial-gradient(closest-side, var(--c-d), transparent);
-  filter: blur(var(--blur));
+  /* Part 41 (Android Chrome, audit F-15): gradient only. A CSS blur on up to five large, composited shapes per card is what Android
+     Chrome's GPU raster turned into hard colour blocks; the eased stops below give the soft edge the blur used to. */
+  background: radial-gradient(closest-side, var(--pk-ease-d));
   opacity: calc(var(--o) * 0.8);
-  will-change: transform;
 }
 :root[data-theme="dark"] .pk-shape {
-  background: radial-gradient(closest-side, var(--c-n), transparent);
+  background: radial-gradient(closest-side, var(--pk-ease-n));
   opacity: var(--o);
 }
 /* the main: the play button (a readable glyph), the played part of the progress */
@@ -20552,63 +23053,62 @@ html.theme-fade *::after {
   background: var(--pk-n-main);
   color: var(--pk-n-glyph);
 }
-.face-progress {
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: 5px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--accent);
-  transform: scaleX(var(--pk-progress, 0));
-  transform-origin: left center;
-  transition: transform 180ms linear;
-  pointer-events: none;
-}
-:root[data-theme="dark"] .face-progress {
-  background: var(--n-accent, var(--accent));
-}
 .sound-bars {
   position: relative;
   display: inline-flex;
 }
-.sound-bars .pk-played {
+.sound-bars .pk-played,
+.face-bars .pk-played {
   position: absolute;
   left: 0;
   top: 0;
   color: var(--accent);
   clip-path: inset(0 calc((1 - var(--pk-progress, 0)) * 100%) 0 0);
-  transition: clip-path 180ms linear;
 }
-:root[data-theme="dark"] .sound-bars .pk-played {
+/* Part 49: in the chat the played copy beats the generic playing colour (which painted BOTH layers teal): the unplayed bars step back,
+   the played ones are the character's main at full strength. */
+.page-shell .sound-bars svg:not(.pk-played) {
+  transition: opacity 240ms ease;
+}
+.page-shell .play-button[data-playing="true"] .sound-bars svg:not(.pk-played) {
+  color: var(--accent);
+  opacity: 0.32;
+}
+.page-shell .play-button .sound-bars svg.pk-played {
+  color: var(--accent);
+  opacity: 1;
+}
+:root[data-theme="dark"] .page-shell .play-button[data-playing="true"] .sound-bars svg:not(.pk-played),
+:root[data-theme="dark"] .page-shell .play-button .sound-bars svg.pk-played {
+  color: var(--n-accent, var(--accent));
+}
+/* smooth between the ~4 Hz time updates while it plays; a stop snaps back with no sweep */
+[data-playing="true"] > .sound-bars .pk-played,
+[data-playing="true"] > .face-bars .pk-played {
+  transition: clip-path 260ms linear;
+}
+:root[data-theme="dark"] .sound-bars .pk-played,
+:root[data-theme="dark"] .face-bars .pk-played {
   color: var(--n-accent, var(--accent));
 }
 /* the accents: the Latin name, the No., the sticker tape */
-.card-slot[data-skin] .face-latin,
-.shared-page[data-skin] .shared-latin {
+.card-slot[data-skin] .face-latin {
   color: var(--pk-d-t1);
 }
-.card-slot[data-skin] .face-top span:last-child,
-.shared-page[data-skin] .shared-top span:last-child {
+.card-slot[data-skin] .face-top span:last-child {
   color: var(--pk-d-t1);
 }
-:root[data-theme="dark"] .card-slot[data-skin] .face-latin,
-:root[data-theme="dark"] .shared-page[data-skin] .shared-latin {
+:root[data-theme="dark"] .card-slot[data-skin] .face-latin {
   color: var(--pk-n-t1);
 }
-:root[data-theme="dark"] .card-slot[data-skin] .face-top span:last-child,
-:root[data-theme="dark"] .shared-page[data-skin] .shared-top span:last-child {
+:root[data-theme="dark"] .card-slot[data-skin] .face-top span:last-child {
   color: var(--pk-n-t1);
-}
-.shared-page[data-skin] .shared-sticker::before {
-  background: color-mix(in srgb, var(--pk-d-a2) 55%, transparent);
-}
-:root[data-theme="dark"] .shared-page[data-skin] .shared-sticker::before {
-  background: color-mix(in srgb, var(--pk-n-a2) 55%, transparent);
 }
 /* the light on the name: it sweeps in once from the top-left, like a door opening, then stays */
 .card-slot[data-skin] .face-name {
   --pk-nl: var(--pk-d-name);
+}
+.card-slot[data-skin] .face-name-text {
   background: linear-gradient(
     118deg,
     var(--pk-nl) 0%,
@@ -20636,12 +23136,914 @@ html.theme-fade *::after {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .face-progress,
-  .sound-bars .pk-played {
+  [data-playing="true"] > .sound-bars .pk-played,
+  [data-playing="true"] > .face-bars .pk-played {
     transition: none;
   }
 }
+/* Part 40: ONE layout for every home card, the front card and the ones beside it: the avatar circle at the top (the initials in the same
+   circle when there is no picture), the nickname at its own size with its vertical centre at 61.8% of the card's height, the welcome
+   voice bar directly below it. Everything is placed from the card's own box, so no state of the card (front, side, hover) moves it.
+   The one thing a side does keep is the side its text hugs, so the sliver that sticks out still shows the name. */
+.page-shell .card-slot .card-face:not(.face-reserve) {
+  /* Part 41 (owner spec 2026-11-18): the avatar is 10% smaller than Part 40's 148px, centred at 38.2% from the top (61.8% from the bottom). */
+  --face-avatar: 133.2px;
+  --face-name-half: calc(var(--name-size, 0.3) * 47.5cqw);
+}
+.page-shell .card-slot .card-face:not(.face-reserve) .face-main {
+  display: block;
+  flex: none;
+  padding: 0;
+}
+.page-shell .card-slot .card-face:not(.face-reserve) .face-portrait {
+  position: absolute;
+  top: 38.2%;
+  left: 50%;
+  translate: -50% -50%;
+  margin: 0;
+  width: var(--face-avatar);
+  height: var(--face-avatar);
+}
+.page-shell .card-slot .card-face:not(.face-reserve) .face-name {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 61.8%;
+  translate: 0 -50%;
+  font-size: calc(var(--name-size, 0.3) * 100cqw);
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+  text-align: left;
+}
+.page-shell .card-slot[data-side="r"] .card-face:not(.face-reserve) .face-name {
+  text-align: right;
+}
+.page-shell .card-slot .card-face:not(.face-reserve) .face-voice {
+  display: flex;
+  position: absolute;
+  /* Part 41: 75% of the card; the gap under the nickname is half its font size; the play button (8px inside the bar) starts where the
+     nickname's text starts (16px). On the right-hand side, where the name hugs the right, the bar hugs it too. */
+  left: 8px;
+  width: 75%;
+  top: calc(61.8% + var(--face-name-half) + var(--name-size, 0.3) * 50cqw);
+}
+.page-shell .card-slot[data-side="r"] .card-face:not(.face-reserve) .face-voice {
+  left: auto;
+  right: 8px;
+}
+.page-shell .card-slot:not(.is-active) .card-face:not(.face-reserve) .face-voice {
+  pointer-events: none;
+}
+.page-shell .card-slot.is-active .card-face:not(.face-reserve) .face-latin {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
+}
+/* Part 41: Android Chrome only. No blend mode over the large card layers: the sheen is a plain, lighter overlay there. */
+:root[data-platform="android"] .face-sheen {
+  mix-blend-mode: normal;
+  opacity: 0.4;
+}
+
+/* Part 46: a sideways swipe is the app's own (the cards), never the browser's "back": desktop trackpad swipes (Chrome, Edge, Safari) and
+   Android Chrome's in-page swipe-to-go-back are told to leave horizontal overscroll alone. Vertical scrolling and pinch zoom are not touched. */
+html,
+body,
+.carousel,
+.card-deck,
+.avatar-nav {
+  overscroll-behavior-x: none;
+}
+
+/* ---- Part 47: the deck's last card is the first step of the relationship flow (a sentence with a tappable partner slot), and the fixed
+   card 「一天」 has six parts. Pastel faces keep dark ink in both themes (see the .cc-card rule above). ---- */
+.cc-rel-entry-face {
+  min-height: 0;
+  gap: 14px;
+  padding: 18px 16px 16px;
+  cursor: default;
+}
+.cc-rel-sentence {
+  margin: 0;
+  padding-right: 0;
+  line-height: 2.1;
+  overflow-wrap: anywhere;
+}
+.cc-rel-me {
+  font-weight: 900;
+}
+.cc-rel-slot,
+.cc-rel-mem {
+  vertical-align: middle;
+}
+.cc-rel-slot {
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  max-width: 100%;
+  margin: 0 2px;
+  padding: 0 12px;
+  border: 1.5px solid #1d2a27;
+  border-radius: 12px;
+  background: #fff;
+  color: #141414;
+  font: inherit;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  animation: cc-rel-pop 240ms var(--bb-ease) both;
+  transition:
+    background 160ms ease,
+    transform 200ms var(--bb-ease);
+}
+.cc-rel-slot:active {
+  transform: scale(0.97);
+}
+.cc-rel-slot.is-open {
+  background: #ece6f8;
+}
+.cc-rel-slot:focus-visible {
+  outline: 3px solid #1d2a27;
+  outline-offset: 2px;
+}
+.cc-rel-caret {
+  display: inline-block;
+  font-style: normal;
+  font-size: 12px;
+  transition: transform 200ms var(--bb-ease);
+}
+.cc-rel-slot.is-open .cc-rel-caret {
+  transform: rotate(180deg);
+}
+.cc-rel-mem {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 2px;
+  border-radius: 12px;
+  background: #fff;
+  animation: cc-rel-pop 240ms var(--bb-ease) both;
+}
+.cc-rel-mem .cc-rel-slot {
+  margin: 0;
+  border-color: transparent;
+  padding-right: 4px;
+  animation: none;
+}
+.cc-rel-sentence .cc-rel-x {
+  width: 32px;
+  height: 32px;
+  margin-right: 4px;
+}
+.cc-rel-sentence .cc-rel-dice {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin-left: 4px;
+  vertical-align: middle;
+  background: #e9e3f7;
+  font-size: 20px;
+  line-height: 1;
+}
+.cc-rel-list {
+  display: grid;
+  gap: 2px;
+  max-height: 232px;
+  margin: 0;
+  padding: 6px;
+  overflow: auto;
+  list-style: none;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(40, 24, 60, 0.2);
+  animation: cc-rel-list-in 220ms var(--bb-ease) both;
+  overscroll-behavior: contain;
+}
+.cc-rel-list[hidden] {
+  display: none;
+}
+.cc-rel-list .cc-rel-option {
+  min-height: 44px;
+  height: auto;
+}
+.cc-rel-list .cc-rel-option.is-mine {
+  background: #ece6f8;
+  font-weight: 800;
+}
+@keyframes cc-rel-list-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+.cc-rel-entry-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cc-rel-entry .cc-rel-plus {
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+.cc-rel-entry .cc-rel-plus[hidden] {
+  display: none;
+}
+.cc-rel-card-next {
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  margin-left: auto;
+  padding: 0 22px;
+  border-radius: 999px;
+  background: #1d2a27;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  transition:
+    opacity 200ms ease,
+    transform 200ms var(--bb-ease);
+}
+.cc-rel-card-next:focus-visible {
+  outline: 3px solid #1d2a27;
+  outline-offset: 2px;
+}
+.cc-rel-card-next:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.cc-rel-card-next:not(:disabled):active {
+  transform: scale(0.97);
+}
+/* 一天: six parts in one card */
+.cc-day-editor {
+  display: grid;
+  gap: 10px;
+}
+.cc-day-part {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.cc-day-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.cc-day-ok {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #8bb5a3;
+  color: #fff;
+  font-style: normal;
+  font-size: 11px;
+  opacity: 0;
+  transform: scale(0.4);
+  transition:
+    opacity 180ms ease,
+    transform 220ms var(--bb-ease);
+}
+.cc-day-ok.is-on {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-rel-slot,
+  .cc-rel-caret,
+  .cc-rel-card-next,
+  .cc-day-ok {
+    transition: none;
+  }
+}
+
 /* Last in the file, as the skin's reduced-motion test requires: the rule that cancels every bb- animation (repeated from Part 25b). */
+/* ======================================================================================================================
+   Part 48: the first-paint skeleton (static markup in index.html) and its hand-over to the real cards.
+   It uses the real cards' own classes and the same orbit numbers (orbit.ts: offset ±1 = x .382 card widths, y 8, scale .96, opacity .83;
+   the centre card is at rest), so the real cards land exactly where the skeleton's were and nothing moves when the data arrives.
+   ====================================================================================================================== */
+.page-shell.is-skeleton {
+  --card-w: min(376px, calc(100vw - 108px));
+}
+@media (max-width: 600px) {
+  .page-shell.is-skeleton {
+    --card-w: min(300px, calc(100vw - 96px));
+  }
+}
+.page-shell.is-skeleton .sk-aura {
+  --aura-1: #e9e2f2;
+  --aura-2: #f2eee9;
+  --aura-3: #dcd6e6;
+  opacity: 1;
+  transition: none;
+}
+.sk-slot {
+  --orbit-x: 0px;
+  --orbit-y: 0px;
+  --orbit-scale: 1;
+  --orbit-opacity: 1;
+  --accent: #141414;
+  z-index: 100;
+  pointer-events: none;
+  transition: none;
+}
+.sk-slot.sk-left {
+  --orbit-x: calc(var(--card-w) * -0.382);
+  --orbit-y: 8px;
+  --orbit-scale: 0.96;
+  --orbit-opacity: 0.83;
+  --fan: -3.5;
+  z-index: 99;
+}
+.sk-slot.sk-right {
+  --orbit-x: calc(var(--card-w) * 0.382);
+  --orbit-y: 8px;
+  --orbit-scale: 0.96;
+  --orbit-opacity: 0.83;
+  --fan: 3.5;
+  z-index: 99;
+}
+/* The centre skeleton is not "active" (so no script that waits for the real active card ever finds it); these put back what an active
+   card has: its label, its centred column. */
+.page-shell.is-skeleton .sk-slot.sk-center .face-top span:first-child {
+  display: inline;
+}
+.page-shell.is-skeleton .sk-slot.sk-center .face-main {
+  flex: 1;
+  justify-content: center;
+  padding-top: 0;
+}
+/* the real bar holds the account row on a phone (68 px), the footer note is one line (32 px). Both are reserved on the real page too:
+   the footer's words and the account entries arrive with the session, and the cards must not move when they do. */
+.page-shell .preview-note {
+  min-height: 32px;
+}
+@media (max-width: 600px) {
+  .page-shell .site-head {
+    min-height: 68px;
+  }
+  .page-shell.is-skeleton .site-head {
+    height: 68px;
+  }
+  .page-shell.is-skeleton .avatar-nav {
+    height: 86px;
+  }
+}
+/* (a phone hides every card that is not .is-active, and the skeleton's are not) */
+.page-shell.is-skeleton .card-slot.sk-slot {
+  visibility: visible;
+}
+.sk-face {
+  --aura-1: #e9e2f2;
+  --aura-2: #f2eee9;
+  --aura-3: #dcd6e6;
+}
+.sk-bar,
+.sk-portrait,
+.sk-play {
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.38) 0%,
+    rgba(255, 255, 255, 0.78) 50%,
+    rgba(255, 255, 255, 0.38) 100%
+  );
+  background-size: 220% 100%;
+  animation: sk-shimmer 1.5s ease-in-out infinite;
+}
+.sk-wordmark {
+  width: 104px;
+  height: 22px;
+}
+.sk-no {
+  width: 44px;
+  height: 10px;
+  margin-top: 1px;
+}
+.sk-portrait {
+  width: 148px;
+  height: 148px;
+  margin: 8px auto 18px;
+  border-radius: 50%;
+}
+.sk-name {
+  width: 58%;
+  height: 30px;
+  border-radius: 12px;
+}
+.sk-latin {
+  width: 34%;
+  height: 18px;
+  margin-top: 10px;
+}
+.sk-voice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 14px 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+}
+.sk-play {
+  width: 36px;
+  height: 36px;
+  flex: none;
+}
+.sk-wave {
+  flex: 1;
+  height: 14px;
+}
+@keyframes sk-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+/* The hand-over: the real page replaces the skeleton in one frame; the faces ease in over the same card shapes. */
+.page-shell.is-entering .card-face,
+.page-shell.is-entering .site-head .brand {
+  animation: vs-fill-in 240ms cubic-bezier(0.2, 0.82, 0.24, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-bar,
+  .sk-portrait,
+  .sk-play {
+    animation: none;
+  }
+  .page-shell.is-entering .card-face,
+  .page-shell.is-entering .site-head .brand {
+    animation: none;
+  }
+}
+
+/* ======================================================================================================================
+   Part 48: the verification sheet (one short line, the Turnstile widget when it wants a click, 重试 after a failure).
+   Closed it is invisible but laid out, so the check keeps running in the background; every change eases (no motion under reduced
+   motion: the sheet then simply appears and disappears).
+   ====================================================================================================================== */
+.vs-root {
+  position: fixed;
+  inset: 0;
+  z-index: 450;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+  visibility: hidden;
+  transition: visibility 0s 240ms;
+}
+.vs-root[data-open="true"] {
+  pointer-events: auto;
+  visibility: visible;
+  transition: visibility 0s;
+}
+.vs-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 20, 20, 0.34);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.vs-root[data-open="true"] .vs-scrim {
+  opacity: 1;
+}
+.vs-sheet {
+  position: relative;
+  box-sizing: border-box;
+  width: min(100%, 420px);
+  margin: 0 0 max(12px, env(safe-area-inset-bottom));
+  padding: 22px 20px 20px;
+  border-radius: 24px;
+  background: #fbf9f8;
+  color: #141414;
+  box-shadow: 0 24px 60px rgba(40, 24, 60, 0.28);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 220ms ease,
+    transform 260ms cubic-bezier(0.2, 0.82, 0.24, 1);
+}
+.vs-root[data-open="true"] .vs-sheet {
+  opacity: 1;
+  transform: none;
+}
+.vs-sheet:focus {
+  outline: none;
+}
+.vs-line {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+}
+.vs-widget {
+  display: flex;
+  justify-content: center;
+  min-height: 0;
+}
+.vs-retry {
+  min-width: 112px;
+  height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: #141414;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  transition:
+    transform 160ms ease,
+    opacity 160ms ease;
+}
+.vs-retry:active {
+  transform: scale(0.97);
+}
+.vs-retry[hidden] {
+  display: none;
+}
+.vs-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #6a6770;
+}
+.vs-close svg {
+  width: 18px;
+  height: 18px;
+}
+:root[data-theme="dark"] .vs-sheet {
+  background: #1c1b21;
+  color: #f4f2f7;
+}
+:root[data-theme="dark"] .vs-retry {
+  background: #f4f2f7;
+  color: #141414;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vs-scrim,
+  .vs-sheet,
+  .vs-retry,
+  .vs-root {
+    transition: none;
+  }
+  .vs-sheet {
+    transform: none;
+  }
+}
+/* What fills in when the session arrives eases in; nothing around it moves. */
+.face-dur.is-new,
+.preview-note.is-filled {
+  animation: vs-fill-in 200ms ease;
+}
+@keyframes vs-fill-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .face-dur.is-new,
+  .preview-note.is-filled {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-scrim,
+  .msg-menu,
+  .msg-lift,
+  .quote-strip,
+  .rating-mark.is-new,
+  .page-shell .message-row.is-flash .text-bubble,
+  .page-shell .message-row.is-flash .voice-bubble {
+    animation: none;
+  }
+}
+
+/* ====================================================================================================================
+   Part 36 (design board approved by the owner): bubbles in a row, avatars on the bubble's top line, the one long-press menu, quotes,
+   the rated mark. Every transition has motion; reduced motion drops it to a fade.
+   ==================================================================================================================== */
+/* both avatars sit on the same line as the top of their bubble */
+.page-shell .message-row,
+.page-shell .message-row.outgoing {
+  align-items: flex-start;
+}
+.page-shell .message-row .message-avatar,
+.page-shell .message-row.outgoing::after {
+  margin-top: 0;
+  align-self: flex-start;
+}
+/* several own bubbles in a row stack close; only the last keeps the full corner */
+.page-shell .message-row.outgoing:has(+ .message-row.outgoing) {
+  margin-bottom: 3px;
+}
+.page-shell .message-row.outgoing:has(+ .message-row.outgoing) .text-bubble {
+  border-bottom-right-radius: 6px;
+}
+/* the bubbles are pressed, not selected; nothing selects or calls out under a long press */
+.page-shell .message-row .text-bubble,
+.page-shell .message-row .voice-bubble {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.page-shell .message-row.is-lifted {
+  visibility: hidden;
+}
+.page-shell .message-row.is-flash .text-bubble,
+.page-shell .message-row.is-flash .voice-bubble {
+  animation: msg-flash 1200ms var(--bb-ease);
+}
+@keyframes msg-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  25% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--n-accent, var(--accent, #7c4deb)) 45%, transparent);
+  }
+}
+.msg-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(12, 11, 16, 0.38);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: msg-fade 180ms ease both;
+}
+.msg-lift-shell,
+.msg-lift-card {
+  display: contents;
+}
+.msg-lift {
+  position: fixed;
+  z-index: 901;
+  margin: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.28));
+  animation: msg-lift 220ms var(--bb-ease) both;
+}
+.msg-menu {
+  position: fixed;
+  z-index: 902;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 22px;
+  background: var(--s-solid, #fff);
+  color: var(--bb-ink, #141414);
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px var(--s-card-line, transparent);
+  transform-origin: var(--ox, 50%) var(--oy, 100%);
+  animation: msg-menu 240ms var(--bb-ease) both;
+}
+:root[data-theme="dark"] .msg-menu {
+  background: #25222d;
+  color: #f5f3f7;
+}
+.msg-scrim.is-closing,
+.msg-menu.is-closing {
+  animation: msg-fade 140ms ease reverse both;
+}
+.msg-menu-item {
+  height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 17px;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 160ms var(--bb-ease),
+    transform 160ms var(--bb-ease);
+}
+.msg-menu-item:active {
+  transform: scale(0.94);
+}
+.msg-menu-item:focus-visible {
+  outline: 2px solid var(--accent, #7c4deb);
+  outline-offset: -2px;
+}
+.msg-menu-item[data-on="true"] {
+  background: color-mix(in srgb, var(--n-accent, var(--accent, #7c4deb)) 18%, transparent);
+}
+.msg-menu-rule {
+  width: 1px;
+  height: 22px;
+  margin: 0 2px;
+  background: rgba(128, 128, 128, 0.3);
+}
+@keyframes msg-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes msg-lift {
+  to {
+    transform: scale(1.035);
+  }
+}
+@keyframes msg-menu {
+  from {
+    opacity: 0;
+    transform: scale(0.86) translateY(6px);
+  }
+}
+/* the quote: inside a sent bubble and in the composer's strip */
+.quote-ref {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  min-width: 0;
+  margin: 0 0 5px;
+  padding: 6px 10px 6px 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  overflow: hidden;
+  text-align: left;
+  cursor: pointer;
+}
+.quote-ref::before {
+  content: "";
+  flex: none;
+  width: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.45;
+}
+.quote-ref[data-from="her"]::before {
+  background: var(--n-accent, var(--accent, #7c4deb));
+  opacity: 1;
+}
+.quote-ref > span {
+  display: block;
+  min-width: 0;
+}
+.quote-ref b {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  opacity: 0.72;
+}
+.quote-ref i {
+  display: block;
+  max-width: 220px;
+  font-style: normal;
+  font-size: 13px;
+  line-height: 1.35;
+  opacity: 0.86;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quote-ref.is-gone {
+  cursor: default;
+  min-height: 30px;
+  opacity: 0.45;
+}
+.quote-ref:focus-visible {
+  outline: 2px solid var(--accent, #7c4deb);
+  outline-offset: 2px;
+}
+.composer.has-quote {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.quote-strip {
+  flex: 0 0 100%;
+  order: -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--bb-ink, inherit);
+  animation: msg-strip 260ms var(--bb-ease) both;
+}
+.quote-strip .quote-ref {
+  flex: 1;
+  margin: 0;
+  cursor: default;
+}
+.quote-strip.is-leaving {
+  animation: msg-strip 160ms var(--bb-ease) reverse both;
+}
+.quote-strip-x {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px -8px 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--bb-sub, inherit);
+  font-size: 18px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+@keyframes msg-strip {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+/* the rated mark: outside the bubble at its bottom-right corner, bottom on the bubble's bottom edge */
+.page-shell .voice-bubble,
+.page-shell .message-row.incoming .incoming-text {
+  position: relative;
+}
+.rating-mark {
+  position: absolute;
+  left: calc(100% + 6px);
+  bottom: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--s-solid, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  color: var(--n-accent, var(--accent, #7c4deb));
+  pointer-events: none;
+}
+.rating-mark svg {
+  width: 14px;
+  height: 14px;
+}
+.rating-mark[data-rating="down"] {
+  color: var(--bb-sub, #4a4a4a);
+}
+:root[data-theme="dark"] .rating-mark {
+  background: #2d2a36;
+}
+.rating-mark.is-new {
+  animation: msg-pop 320ms var(--bb-ease) both;
+}
+@keyframes msg-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card-slot.is-active:not(.is-chat) .face-sheen,
   .page-shell .card-slot.is-active:not(.is-chat),
@@ -20666,8 +24068,11 @@ html.theme-fade *::after {
   .bl-row,
   .cc-sheet,
   .cc-sheet .cc-editor,
-  .shared-sticker,
-  .shared-card {
+  .share-sticker,
+  .share-cta,
+  .share-sheet,
+  .share-pop,
+  .share-scrim {
     animation: none;
   }
 }

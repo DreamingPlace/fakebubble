@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { PLAYER_MODEL_IDS, type PlayerModelId } from '../../../packages/contracts/player-models.ts';
-import { writerDraftMessages, writerGuardMessages } from '../generation/writer-v8.ts';
+import { writerDraftMessages, writerGuardMessages, type WriterDraftProvider } from '../generation/writer-v8.ts';
 import type { WriterDraft } from '../generation/writer-v8.ts';
 import {
   REHEARSAL_COLUMN_KEYS,
@@ -13,12 +13,13 @@ import {
   REHEARSAL_SET_LABELS,
   REHEARSAL_SCRIPTS_MAX,
   REHEARSAL_TURNS_MAX,
-  REHEARSAL_TURNS_MIN,
+  rehearsalTurnsMin,
   REHEARSAL_SETS,
   charLength,
   checkTurns,
   isRehearsalModels,
   parseRehearsalColumn,
+  type RehearsalSet,
   rehearsalColumnLabel,
   type RehearsalCell,
   type RehearsalEstimate,
@@ -26,6 +27,7 @@ import {
   type RehearsalLibrary,
   type RehearsalMemeCell,
   type RehearsalMemeRow,
+  type RehearsalStyle,
   type RehearsalPhrases,
   type RehearsalRunDetail,
   type RehearsalRunInfo,
@@ -37,19 +39,25 @@ import { REVIEW_MODEL_LABELS, type ReviewModelId } from '../../../packages/contr
 import type { CastView } from '../../../packages/contracts/web-cast.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
-import { castForPreview } from '../cast/cast-store.ts';
+import { castForPreview, castPoolForPreview } from '../cast/cast-store.ts';
+import { matchLibraryOf, readMemeLibraryState } from '../memes/web-meme-library.ts';
+import { MEME_TURNS, readMemeUse } from '../../../packages/contracts/web-memes.ts';
+import { matchMemes } from '../memes/meme-match.ts';
 import { currentReviewModel } from '../admission/web-review-model.ts';
 import { promptMessages } from '../generation/accepted-text-prompt.ts';
 import { listPriceMicros } from '../generation/model-list-prices.ts';
 import { openingFrom } from '../generation/opening-line.ts';
+import { mergeOwnNames, ownNamesFromAliases, ownNamesFromProfile } from '../generation/writer-own-names.ts';
+import { writerRoster } from '../generation/writer-roster.ts';
 import { modelUsableHere, draftModelRef } from '../generation/web-text-routing.ts';
 import { contentHash } from './admin-content-hash.ts';
 import { identifier, keys, record } from './template-validation.ts';
+import { REHEARSAL_STYLE_ITEM } from './web-rehearsal-prompts.ts';
 import { characterProfileHash, upgradedProfile, type StoredWebCharacterProfile } from './web-character-catalog.ts';
 import { requirePreviewActor } from './web-character-preview.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { cleanPhrases, countReplies, DEFAULT_PHRASES, type AnalysedReply } from './web-rehearsal-analysis.ts';
-import { rehearsalRequest, type RehearsalFrozen } from './web-rehearsal-request.ts';
+import { memeCountsOf, rehearsalRequest, type RehearsalFrozen } from './web-rehearsal-request.ts';
 import { installRehearsal } from './web-rehearsal-schema.ts';
 import { installRehearsalErase, rehearsalNotErased } from './web-rehearsal-erase.ts';
 import { builtinSet, builtinSets, itemSpec, memeItems, memeItemsAllowed, memeTurnPlan } from './web-rehearsal-sets.ts';
@@ -61,6 +69,12 @@ export interface RehearsalActor {
 const REQUEST_ID = /^[A-Za-z0-9_.-]{8,64}$/;
 const natural = (n: unknown): n is number => Number.isSafeInteger(n) && Number(n) >= 0;
 /** The clock every estimate is computed at, so a total is a function of the inputs alone. */
+/** Part 40: how many cells carry each code (a cell without a reply that has one). Codes only: never a message or an id. */
+const errorCodes = (cells: readonly { errorCode: string | null }[]) => {
+  const out: Record<string, number> = {};
+  for (const cell of cells) if (cell.errorCode) out[cell.errorCode] = (out[cell.errorCode] ?? 0) + 1;
+  return out;
+};
 const ESTIMATE_AT = Date.parse('2026-11-04T04:00:00Z');
 const REPLY_CHARS = 60;
 
@@ -77,6 +91,8 @@ export interface RehearsalPlan {
   /** 0 when the run is on the live published version (frozen.liveVersion says which). */
   draftRevision: number;
   estimate: RehearsalEstimate;
+  /** Part 37a-3: the run judges the style of every column's replies. */
+  style: boolean;
 }
 
 interface UnitRow {
@@ -298,6 +314,20 @@ export class WebRehearsal {
   private castOf(characterId: string) {
     return castForPreview(this.store, characterId, 'draft');
   }
+  /**
+   * Part 51: her own names for this run: the cast DRAFT's aliases (what the owner is testing) merged with the profile settings of the
+   * version being rehearsed, the cast winning. Empty when there is no cast file.
+   */
+  private ownNamesOf(characterId: string, template: { name?: string; authorCanon?: unknown }) {
+    let cast: ReturnType<typeof ownNamesFromAliases> = [];
+    try {
+      const view = this.castOf(characterId)?.view;
+      if (view) cast = ownNamesFromAliases(view.self.aliases);
+    } catch {
+      // no cast file: only the profile settings
+    }
+    return mergeOwnNames(ownNamesFromProfile(template), cast);
+  }
   items(characterId: string): RehearsalItems {
     try {
       const cast = this.castOf(characterId);
@@ -317,7 +347,7 @@ export class WebRehearsal {
     if (value.kind === 'set') {
       keys(value, ['kind', 'set']);
       ensure((REHEARSAL_SETS as readonly unknown[]).includes(value.set), 'INVALID_REHEARSAL_SOURCE');
-      return { kind: 'set', set: value.set as 'chat' | 'repeat' };
+      return { kind: 'set', set: value.set as RehearsalSet };
     }
     keys(value, ['kind', 'items']);
     ensure(
@@ -349,6 +379,9 @@ export class WebRehearsal {
     );
     ensure(isRehearsalModels(input.models), 'INVALID_REHEARSAL_MODELS');
     ensure(typeof input.withCast === 'boolean', 'INVALID_REQUEST');
+    // Part 37a-3: judging the style of the replies is a choice of the run (one more judge call per column, in the estimate).
+    ensure(input.style === undefined || typeof input.style === 'boolean', 'INVALID_REQUEST');
+    const style = input.style === true;
     const source = this.parseSource(input.source);
     // Column keys, in display order (each model's 旧 then 新). A rehearsal never reads the live 回复写法 switch.
     const models = REHEARSAL_COLUMN_KEYS.filter((key) => (input.models as string[]).includes(key));
@@ -363,6 +396,7 @@ export class WebRehearsal {
           hash: input.profileHash as string,
         };
     const profile = based.profile;
+    const ownNames = this.ownNamesOf(characterId, profile.template);
     const withCast = input.withCast as boolean;
     ensure(source.kind !== 'memes' || withCast, 'REHEARSAL_MEMES_NEED_CAST');
     const cast = withCast ? this.castOf(characterId) : undefined;
@@ -379,7 +413,7 @@ export class WebRehearsal {
       turns = (JSON.parse(row.turns_json) as string[]).map((text) => ({ text, role: null, item: null }));
     } else if (source.kind === 'set') {
       scriptName = REHEARSAL_SET_LABELS[source.set];
-      turns = builtinSet(source.set).map((text) => ({ text, role: null, item: null }));
+      turns = builtinSet(source.set, ownNames).map((text) => ({ text, role: null, item: null }));
     } else {
       ensure(cast, 'CAST_CHARACTER_NOT_IN_CAST');
       ensure(memeItemsAllowed(source.items.length), 'INVALID_REHEARSAL_SOURCE');
@@ -395,13 +429,46 @@ export class WebRehearsal {
       turns = memeTurnPlan(source.items).map((slot) => ({ text: null, role: slot.role, item: slot.item }));
       // Turns of one item keep their order: hint 1, look-alike, hint 2 (the plan is the slot order; texts come with the hints).
     }
-    ensure(turns.length >= REHEARSAL_TURNS_MIN && turns.length <= REHEARSAL_TURNS_MAX, 'INVALID_REHEARSAL_SCRIPT');
+    ensure(
+      turns.length >= rehearsalTurnsMin(source.kind === 'set' ? source.set : undefined) &&
+        turns.length <= REHEARSAL_TURNS_MAX,
+      'INVALID_REHEARSAL_SCRIPT',
+    );
+    // The conversation starts from the first welcome line; 开场 starts from the first one that has a 情境 note (else the first).
+    const lines = profile.presentation.welcomes;
+    const line =
+      (source.kind === 'set' && source.set === 'opening' ? lines.find((l) => l.context) : undefined) ?? lines[0];
+    const opening = openingFrom(line?.text, line?.context);
+    const memesColumn = models.some((key) => parseRehearsalColumn(key)?.memes === true);
     const frozen: RehearsalFrozen = {
       template: profile.template,
-      ...(openingFrom(profile.presentation.welcomes[0]?.text)
-        ? { opening: openingFrom(profile.presentation.welcomes[0]?.text)! }
+      ...(opening ? { opening } : {}),
+      ...(models.some((key) => parseRehearsalColumn(key)?.writer === 'v8')
+        ? { roster: writerRoster(this.store, characterId) }
         : {}),
+      ...(models.some((key) => parseRehearsalColumn(key)?.writer === 'v8') && ownNames.length ? { ownNames } : {}),
       ...(cast ? { cast } : {}),
+      // Part 37c-1: what a 新+档案+梗 column needs of the dictionary and the cast, frozen with the run.
+      // Part 37c-1b: the effective library at the start of the run (the keys off, the owner's own entries, his edited meanings).
+      ...(memesColumn
+        ? (({ off, own, meanings }) => ({ memeOff: off, memeOwn: own, memeMeanings: meanings }))(
+            readMemeLibraryState(this.store),
+          )
+        : {}),
+      ...(memesColumn && cast
+        ? {
+            castPool: castPoolForPreview(this.store, characterId, [
+              ...turns.map((_, at) =>
+                turns
+                  .slice(Math.max(0, at - MEME_TURNS + 1), at + 1)
+                  .map((turn) => turn.text ?? '')
+                  .reverse(),
+              ),
+              // A 梗与故事 run writes its turns later: its own items are always in the pool.
+              ...(items.length ? [items.map((item) => item.label)] : []),
+            ]),
+          }
+        : {}),
       baseAt: now,
       ...(onLive ? { liveVersion: input.liveVersion as number } : {}),
     };
@@ -416,7 +483,8 @@ export class WebRehearsal {
       castView: cast?.view ?? null,
       profileHash: based.hash,
       draftRevision: onLive ? 0 : (input.draftRevision as number),
-      estimate: this.estimateOf(frozen, turns, models, items.length),
+      estimate: this.estimateOf(frozen, turns, models, items.length, style),
+      style,
     };
   }
 
@@ -430,6 +498,7 @@ export class WebRehearsal {
     turns: RehearsalPlan['turns'],
     models: string[],
     itemCount: number,
+    judgeStyle: boolean,
   ): RehearsalEstimate {
     const reviewer = currentReviewModel(this.store);
     const fixed = { ...frozen, baseAt: ESTIMATE_AT };
@@ -438,10 +507,29 @@ export class WebRehearsal {
     const baseBytes = Buffer.byteLength(JSON.stringify(promptMessages(first)), 'utf8');
     // Part 37a: a 新 column sends the v8 prompt (much shorter) and its second pass is the guard (a bigger prompt, a short answer).
     const v8First = rehearsalRequest(fixed, 'estimate', 'deepseek-v8', 1, players, []);
-    const v8Draft = Buffer.byteLength(JSON.stringify(writerDraftMessages(v8First)), 'utf8');
+    // Part 37b: a 新+档案 column's draft prompt is the same plus the card and the picked examples (the first turn's pick).
+    const v8ProfileFirst = models.some((key) => parseRehearsalColumn(key)?.profile)
+      ? rehearsalRequest(fixed, 'estimate', 'deepseek-v8p', 1, players, [])
+      : v8First;
+    // Part 37c-1: a 新+档案+梗 column adds the first turn's matched meanings and its selected cast context.
+    const v8MemesFirst = models.some((key) => parseRehearsalColumn(key)?.memes)
+      ? rehearsalRequest(fixed, 'estimate', 'deepseek-v8m', 1, players, [])
+      : v8ProfileFirst;
+    // Part 37a-3: the draft prompt carries the addendum of the model that writes it, so its size is per provider.
+    const v8Draft = (provider: WriterDraftProvider, profile = false, memes = false) =>
+      Buffer.byteLength(
+        JSON.stringify(writerDraftMessages(memes ? v8MemesFirst : profile ? v8ProfileFirst : v8First, provider)),
+        'utf8',
+      );
     const v8Guard = Buffer.byteLength(
       JSON.stringify(
-        writerGuardMessages(v8First, { mode: 'casual', bubbles: [], endsSession: false, markups: [] } as WriterDraft),
+        writerGuardMessages(v8First, {
+          mode: 'casual',
+          bubbles: [],
+          endsSession: false,
+          markups: [],
+          plan: null,
+        } as WriterDraft),
       ),
       'utf8',
     );
@@ -455,8 +543,9 @@ export class WebRehearsal {
         const growth = (t - 1) * (REPLY_CHARS * 3 + 2 * 260);
         if (column.writer === 'v8') {
           total += listPriceMicros(ref.provider, ref.model, {
-            inputTokens: Math.ceil((v8Draft + growth) / 2),
-            outputTokens: 120 + thinking,
+            inputTokens: Math.ceil((v8Draft(ref.provider, column.profile, column.memes) + growth) / 2),
+            // Part 58: the hidden plan (read + aim) is about 80 more output tokens.
+            outputTokens: 200 + thinking,
           });
           total += listPriceMicros('deepseek', reviewer, {
             inputTokens: Math.ceil((v8Guard + growth) / 2) + 150,
@@ -472,14 +561,20 @@ export class WebRehearsal {
     // Judge calls, on the house reviewer: one hint writer per item, one verdict per model and item.
     const hint = listPriceMicros('deepseek', reviewer, { inputTokens: 700, outputTokens: 200 });
     const verdict = listPriceMicros('deepseek', reviewer, { inputTokens: 1200 + REPLY_CHARS * 6, outputTokens: 120 });
-    const judgeCalls = itemCount * (1 + models.length);
-    total += itemCount * hint + itemCount * models.length * verdict;
+    // Part 37a-3: one style call per column when the run judges style; it reads every reply of the column.
+    const styleCalls = judgeStyle ? models.length : 0;
+    const style = listPriceMicros('deepseek', reviewer, {
+      inputTokens: 700 + turns.length * (REPLY_CHARS + 40) * 2,
+      outputTokens: 40 + turns.length * 12,
+    });
+    const judgeCalls = itemCount * (1 + models.length) + styleCalls;
+    total += itemCount * hint + itemCount * models.length * verdict + styleCalls * style;
     const replyCalls = models.length * turns.length * 2;
     return { models, turns: turns.length, replyCalls, judgeCalls, calls: replyCalls + judgeCalls, totalMicros: total };
   }
   estimate(characterId: string, input: unknown): RehearsalEstimate {
     record(input);
-    keys(input, ['draftRevision', 'profileHash', 'liveVersion', 'source', 'models', 'withCast']);
+    keys(input, ['draftRevision', 'profileHash', 'liveVersion', 'source', 'models', 'withCast', 'style']);
     return this.plan(characterId, input).estimate;
   }
 
@@ -495,6 +590,7 @@ export class WebRehearsal {
       'source',
       'models',
       'withCast',
+      'style',
       'acknowledgeMicros',
     ]);
     ensure(typeof input.requestId === 'string' && REQUEST_ID.test(input.requestId), 'INVALID_REQUEST');
@@ -588,6 +684,8 @@ export class WebRehearsal {
       for (const item of plan.items) unit('hint', null, null, item.key);
       for (let t = 1; t <= plan.turns.length; t++) for (const model of plan.models) unit('cell', model, t, null);
       for (const model of plan.models) for (const item of plan.items) unit('judge', model, null, item.key);
+      // Part 37a-3: a run that asked for it also has each column's replies judged for style (the units are the record of that).
+      if (plan.style) for (const model of plan.models) unit('judge', model, null, REHEARSAL_STYLE_ITEM);
       this.audit(actor, 'rehearsal-queued', runId, now);
       return { runId, replayed: false };
     });
@@ -637,6 +735,15 @@ export class WebRehearsal {
     };
   }
 
+  /** Part 37c-1: the dictionary's matches in a run, by code from its turns and what it froze (the same on every read). */
+  private memeCounts(runId: string, players: readonly string[]) {
+    const frozen = JSON.parse(
+      this.store.get<{ frozen_json: string }>('SELECT frozen_json FROM web_rehearsal_runs WHERE id=?', runId)!
+        .frozen_json,
+    ) as RehearsalFrozen;
+    return memeCountsOf(frozen, players);
+  }
+
   /** The whole run, computed from what is stored. `characterId` must be the run's: another character's run is not found. */
   detail(characterId: string, runId: unknown): RehearsalRunDetail {
     identifier(characterId);
@@ -671,13 +778,18 @@ export class WebRehearsal {
       const cells: RehearsalCell[] = turnRows.map((turn) => {
         const unit = units.find((u) => u.kind === 'cell' && u.model_key === key && u.turn === turn.turn);
         const result = unit?.result_json
-          ? (JSON.parse(unit.result_json) as { bubbles: string[]; answered: boolean | null })
+          ? (JSON.parse(unit.result_json) as {
+              bubbles: string[];
+              answered: boolean | null;
+              plan?: { read: string; aim: string; aims: string[] } | null;
+            })
           : null;
         return {
           state: unit ? cellState(unit.status) : 'pending',
           errorCode: unit?.error_code ?? null,
           bubbles: unit?.status === 'done' && result ? result.bubbles : null,
           answered: unit?.status === 'done' && result ? result.answered : null,
+          plan: unit?.status === 'done' && result?.plan ? result.plan : null,
         };
       });
       const analysed: AnalysedReply[] = [];
@@ -687,22 +799,52 @@ export class WebRehearsal {
             player: turnRows[index]!.text ?? '',
             bubbles: cell.bubbles,
             answered: column.writer === 'v8' ? null : cell.answered === true,
+            ...(cell.plan ? { aims: cell.plan.aims } : {}),
           });
         }
       });
+      // Part 37a-3: the column's style verdict (one flag per reply, in the order of the replies counted above).
+      const styleUnit = units.find(
+        (u) => u.kind === 'judge' && u.model_key === key && u.item_key === REHEARSAL_STYLE_ITEM,
+      );
+      const flags =
+        styleUnit?.status === 'done' && styleUnit.result_json
+          ? (JSON.parse(styleUnit.result_json) as { own: boolean[]; topic: boolean[]; emotion: boolean[] })
+          : null;
+      const tally = (list: boolean[] | undefined) => (list ? list.filter(Boolean).length : null);
+      const style: RehearsalStyle = {
+        state: !styleUnit
+          ? 'none'
+          : flags
+            ? 'judged'
+            : styleUnit.status === 'unconfirmed' || styleUnit.status === 'failed' || styleUnit.status === 'skipped'
+              ? styleUnit.status
+              : 'pending',
+        sharedOwn: tally(flags?.own),
+        startedTopic: tally(flags?.topic),
+        showedEmotion: tally(flags?.emotion),
+      };
       return {
         key,
         model: column.model,
         writer: column.writer,
         // 旧 / 新 is named only when the run compares writers; a run of 旧 columns reads as it always did.
-        label: info.models.some((k) => k.endsWith('-v8'))
+        label: info.models.some((k) => parseRehearsalColumn(k)?.writer === 'v8')
           ? rehearsalColumnLabel(key)
           : REHEARSAL_MODEL_LABELS[column.model],
         cells,
         counts: countReplies(analysed, lists, {
           unconfirmed: cells.filter((c) => c.state === 'unconfirmed').length,
           failed: cells.filter((c) => c.state === 'failed').length,
+          codes: errorCodes(cells),
         }),
+        style,
+        netMemes: column.memes
+          ? this.memeCounts(
+              runId,
+              turnRows.map((t) => t.text ?? ''),
+            )
+          : null,
       };
     });
     let memes: RehearsalMemeRow[] | null = null;

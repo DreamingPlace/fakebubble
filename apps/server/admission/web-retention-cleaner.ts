@@ -1,3 +1,7 @@
+import { purgeBroadcastWorld } from '../broadcast/web-broadcast-schema.ts';
+import { purgeShareWorld } from '../share/web-share-schema.ts';
+import { purgeTurnsWorld } from '../turns/web-turn-schema.ts';
+import { purgeFeedbackWorld } from '../turns/web-feedback-schema.ts';
 import { createHmac } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { emptySession } from '../../../packages/domain/schedule.ts';
@@ -10,6 +14,7 @@ import { auditWebLifecycleWorld, unexpectedWorldData } from './web-lifecycle-aud
 import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
 import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
 import { archivePlayerChats, chatReviewTablesExist, sweepReviewArchive } from '../review/web-chat-review.ts';
+import { markExternalAttemptsUnknown } from '../budget/web-external-tickets.ts';
 import {
   bonusKeepsGuest,
   guestPurgeDue,
@@ -223,14 +228,12 @@ export class WebRetentionCleaner {
             );
           } else
             ensure(
-              this.store.run(
-                `UPDATE web_external_attempts SET dispatch_state='unknown'
-            WHERE operation_id=? AND stage=? AND phase=? AND ordinal=? AND dispatch_state='sent'`,
-                operation.id,
-                attempt.stage,
-                attempt.phase,
-                attempt.ordinal,
-              ).changes === 1,
+              markExternalAttemptsUnknown(this.store, {
+                operationId: operation.id,
+                stage: attempt.stage as 'text' | 'audio',
+                phase: attempt.phase,
+                ordinal: attempt.ordinal,
+              }) === 1,
               'WEB_DISPATCH_STALE',
             );
         }
@@ -390,6 +393,12 @@ export class WebRetentionCleaner {
           attempt.ordinal,
         );
       }
+      purgeBroadcastWorld(this.store, world);
+      // Part 45: the world's share links and their requests.
+      purgeShareWorld(this.store, world);
+      // Part 36: the world's turn rows, ratings and their request rows.
+      purgeTurnsWorld(this.store, world);
+      purgeFeedbackWorld(this.store, world);
       this.store.run('DELETE FROM messages WHERE world_id=?', world);
       this.store.run('UPDATE contacts SET state_json=? WHERE world_id=?', JSON.stringify(emptySession()), world);
       this.store.run("UPDATE world_characters SET relationship='new' WHERE world_id=?", world);
