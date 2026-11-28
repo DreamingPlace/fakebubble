@@ -222,7 +222,12 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     ),
     body,
   );
-  const empty = h('p', { class: 'admin-hint', text: '还没有邀请批次。', hidden: true });
+  const empty = h('p', {
+    class: 'admin-hint',
+    text: '还没有邀请批次。',
+    attrs: { 'data-empty': 'true' },
+    hidden: true,
+  });
   // The open batch's codes: one element that moves under whichever row is open (a row of the same table, full width).
   const detail = h('section', { class: 'tiers-detail', hidden: true });
   const status = h('span', { class: 'head-status' });
@@ -561,6 +566,7 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
         ? [
             h('p', {
               class: 'admin-hint tiers-masked-note',
+              attrs: { 'data-reason': 'true' },
               text: '这批邀请码由其他管理员创建，邀请码已隐藏；批次信息和兑换情况仍然可见。',
             }),
           ]

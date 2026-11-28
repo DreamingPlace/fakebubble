@@ -423,7 +423,7 @@ export function systemView(
           ['最早一条已过', v.retention.oldestAgeBucket ? BUCKETS[v.retention.oldestAgeBucket] : '—'],
           ['正在清理', exactCount(v.retention.purging)],
         ])
-      : h('p', { class: 'admin-hint', text: '这个环境没有提供清理状态。' });
+      : h('p', { class: 'admin-hint', text: '这个环境没有提供清理状态。', attrs: { 'data-empty': 'true' } });
     const failures =
       v.retention && v.retention.failures.length > 0
         ? h(
@@ -486,15 +486,18 @@ export function systemView(
           ),
           pill('告警收件人', 'ALERT_RECIPIENT', have(flags.alertRecipientSet), tone(flags.alertRecipientSet)),
         )
-      : h('p', { class: 'admin-hint', text: '这个环境没有提供开关信息。' });
-    // What to do about a failing cleanup: the server retries every day by itself and has no retry button (the cause is the backend's).
-    const retryNote = failures
-      ? h('p', {
-          class: 'admin-hint sys-cleanup-note',
-          text: '系统每天会自动重试。连续失败说明需要修代码：把这张表交给开发。',
-        })
-      : null;
-    const cleanupCard = section('清理与开关', cleanup, failures, retryNote, switches);
+      : h('p', { class: 'admin-hint', text: '这个环境没有提供开关信息。', attrs: { 'data-empty': 'true' } });
+    // What to do about a failing cleanup (the server retries every day by itself and has no retry button; the cause is the backend's)
+    // is the heading's hover tip while it fails (Part 24b-7f: no explanatory line on the page).
+    const cleanupCard = section('清理与开关', cleanup, failures, switches);
+    if (failures) {
+      const heading = cleanupCard.querySelector('h3');
+      if (heading) {
+        hoverValue(heading as HTMLElement, '系统每天会自动重试。连续失败说明需要修代码：把这张表交给开发。');
+        // the tip keeps the class the 24b-6b checks find the sentence by
+        heading.querySelector('.ad-tip')?.classList.add('sys-cleanup-note');
+      }
+    }
     cleanupCard.classList.add('sys-switches');
     cleanupCard.dataset.section = 'cleanup';
     sections.replaceChildren(

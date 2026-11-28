@@ -436,14 +436,19 @@ test('24b-7e 聊天人数 × 按角色: the pie is off with its reason, lines an
   assert.ok(!heads.some((h) => h.includes('占比')), 'no share column');
   assert.ok(heads.some((h) => h.includes('成功')) && heads.some((h) => h.includes('回复')), 'the counts stay');
   assert.ok(all(chatTable, '.ot-row').length >= 3, 'its rows are there');
-  // a pie that was showing falls back to the line when it becomes unavailable
+  // a pie that was showing falls back to the line when it becomes unavailable.
+  // Named exception (Part 24b-7f): 聊天人数 × 全部 has no pie either (its pie is the by-character one, with the same over-count), so
+  // the pie that falls back is started from 回复, and 全部 is asserted off with the same reason (see the 24b-7f test below).
+  press(f.root, '指标', '回复');
   press(f.root, '分组', '全部');
   press(f.root, '图表类型', '饼图');
   assert.equal(tab('图表类型', '饼图').getAttribute('aria-pressed'), 'true');
-  press(f.root, '分组', '按角色');
+  press(f.root, '指标', '聊天人数');
   await flush();
   assert.equal(tab('图表类型', '饼图').getAttribute('aria-pressed'), 'false');
   assert.equal(tab('图表类型', '折线').getAttribute('aria-pressed'), 'true');
+  press(f.root, '分组', '按角色');
+  await flush();
   // back to 回复: the pie and 占比 are back
   press(f.root, '指标', '回复');
   await flush();
@@ -471,4 +476,30 @@ test('24b-7d round 2 the calendar has a 清除 button, the quick picks say what 
   assert.match(picks[0]!.getAttribute('title')!, /从今天起 30 天/);
   assert.equal(picks[1]!.getAttribute('title'), '不设截止日期');
   assert.ok(DATE_PROBLEM.includes(`${new Date().getUTCFullYear()}-01-31`));
+});
+
+test('24b-7f 聊天人数 × 全部: the pie is off with the same reason, lines and bars stay, and a pie that was showing falls back to the line', async (t) => {
+  const f = mountOverview(t);
+  await f.api.load();
+  const tab = (group: string, label: string) =>
+    all(f.root, `[aria-label="${group}"] button`).find((b) => b.textContent === label)!;
+  const REASON = '一位玩家可能和几个角色都聊过，按角色的人数不能相加成占比';
+  press(f.root, '指标', '回复');
+  press(f.root, '分组', '全部');
+  press(f.root, '图表类型', '饼图');
+  await flush();
+  assert.equal(tab('图表类型', '饼图').disabled, false);
+  assert.equal(tab('图表类型', '饼图').getAttribute('aria-pressed'), 'true');
+  press(f.root, '指标', '聊天人数');
+  await flush();
+  assert.equal(tab('图表类型', '饼图').disabled, true);
+  assert.equal(tab('图表类型', '饼图').getAttribute('title'), REASON);
+  assert.equal(tab('图表类型', '饼图').getAttribute('aria-pressed'), 'false');
+  assert.equal(tab('图表类型', '折线').getAttribute('aria-pressed'), 'true');
+  assert.equal(tab('图表类型', '折线').disabled, false);
+  assert.equal(tab('图表类型', '柱状').disabled, false);
+  // 活跃 is untouched by this rule
+  press(f.root, '指标', '活跃');
+  await flush();
+  assert.equal(tab('图表类型', '饼图').disabled, false);
 });

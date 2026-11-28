@@ -29,6 +29,7 @@ export function opsView(
   ): OpenColumn<StageLatencyDay> => ({
     key: label,
     label,
+    width: '176px',
     align: 'end',
     mono: true,
     cell: (d) => ms(pick(d)),
@@ -49,6 +50,7 @@ export function opsView(
       {
         key: 'operations',
         label: '回复数',
+        width: '84px',
         align: 'end',
         mono: true,
         cell: (d) => exactCount(d.operations),
@@ -61,6 +63,7 @@ export function opsView(
       {
         key: 'review',
         label: '审核改写率',
+        width: '148px',
         align: 'end',
         mono: true,
         cell: (d) => (d.review.samples ? `${percent(d.review.rate)}（${d.review.changed}/${d.review.samples}）` : '—'),
@@ -69,16 +72,25 @@ export function opsView(
       {
         key: 'memoryDropped',
         label: '话题/事实丢弃',
+        width: '112px',
         align: 'end',
         mono: true,
         cell: (d) => `${d.memoryDropped?.topics ?? 0}/${d.memoryDropped?.facts ?? 0}`,
         tip: (d) => `话题 ${d.memoryDropped?.topics ?? 0} · 事实 ${d.memoryDropped?.facts ?? 0}`,
       },
-      { key: 'rateLimitRetries', label: '限流重试', align: 'end', mono: true, cell: (d) => String(d.rateLimitRetries) },
-      { key: 'fallbacks', label: '回退', align: 'end', mono: true, cell: (d) => String(d.fallbacks) },
+      {
+        key: 'rateLimitRetries',
+        label: '限流重试',
+        width: '84px',
+        align: 'end',
+        mono: true,
+        cell: (d) => String(d.rateLimitRetries),
+      },
+      { key: 'fallbacks', label: '回退', width: '64px', align: 'end', mono: true, cell: (d) => String(d.fallbacks) },
       {
         key: 'cache',
         label: '缓存命中 草稿/审核',
+        width: '148px',
         align: 'end',
         mono: true,
         cell: (d) => `${percent(d.cache.draft.hitRatio)} / ${percent(d.cache.review.hitRatio)}`,
@@ -88,6 +100,7 @@ export function opsView(
       {
         key: 'embedding',
         label: '向量化 调用/失败/未知',
+        width: '148px',
         align: 'end',
         mono: true,
         cell: (d) => `${d.embedding.calls}/${d.embedding.failures}/${d.embedding.unknowns}`,

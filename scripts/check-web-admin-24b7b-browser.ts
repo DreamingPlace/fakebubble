@@ -286,6 +286,10 @@ try {
       Number(selected.weight) > Number(hovered.weight),
       `${w}: the selected tab is bolder (${selected.weight} vs ${hovered.weight})`,
     );
+    // Named exception (Part 24b-7f round 3): the rail is 64 px at rest and a group's label has no room there; it opens (with the three
+    // tools) when the rail expands, so the headings are read with the pointer on the rail.
+    await page.locator('.wb-roster').hover();
+    await page.waitForTimeout(600);
     const rail = (await page.evaluate(`(() => {
       const marks = [...document.querySelectorAll('.admin-pick-st, .admin-pick-head b, .admin-pick[data-seed], .cocreation-badge')];
       const head = document.querySelector('.admin-pick-head .dc-text span');
@@ -447,6 +451,9 @@ try {
 
       // the rail: headings readable, never under the open character's row
       await open(`characters/${people.lqy}`);
+      // Named exception (Part 24b-7f round 3): a group's label opens with the 64 px rail, so the headings are read with the pointer on it.
+      await page.locator('.wb-roster').hover();
+      await page.waitForTimeout(600);
       const rail = (await page.evaluate(`(() => {
         const out = [];
         for (const g of document.querySelectorAll('.admin-pick-group')) {

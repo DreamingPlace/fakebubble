@@ -461,7 +461,9 @@ export function broadcastView(
   const listBox = h('div', { class: 'bc-list' });
   const paintList = () => {
     if (!rows.length) {
-      listBox.replaceChildren(h('p', { class: 'admin-hint', text: '还没有发过广播。' }));
+      listBox.replaceChildren(
+        h('p', { class: 'admin-hint', text: '还没有发过广播。', attrs: { 'data-empty': 'true' } }),
+      );
       return;
     }
     const head = h(

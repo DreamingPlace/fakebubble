@@ -18642,6 +18642,409 @@ button:not(
 .account-admin-page.admin-shell .cs-versions-pop[hidden] {
   display: none;
 }
+/* ======================================================================================================================
+   Part 24b-7f: the role rail, the top spacing of 发布 / 版本历史 / 预演, and the type size of 测试对话 (docs/ADMIN_LAYOUT.md §7-§9). Layout
+   only; every rule is scoped to the admin shell and sits last in the admin CSS, with the weight of an id (:is(.admin-shell, #ad-layout)).
+   ====================================================================================================================== */
+.account-admin-page.admin-shell {
+  --ad-fs-body: 13px; /* body text: the rows of a list and the lines of a conversation are one size */
+  --ad-rail-pitch: 42px; /* one avatar row (a 36 px avatar, 3 px above and below): the heading is one pitch too, so a scrolled rail ends on a whole row */
+}
+/* ---- the rail (Part 24b-7f round 3): 64 px at rest, 212 px expanded over the page; a heading is ONE row (chevron, label, count), the three
+   icon tools are ONE row when expanded; 15 avatars without scrolling at 1440×900 ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roster {
+  gap: var(--ad-sp-2);
+  padding: var(--ad-sp-2) 0;
+  /* the tools' hover tip (fixed in the window) shows over the rail's own edge; the avatar list scrolls in its own box */
+  overflow: visible;
+}
+/* the scroller: a whole number of pitches (the heading is one, each avatar row one), as many as the rail's own height (the window less its
+   top 104 and its foot 48, which keeps it from moving when the page scrolls) leaves after its chrome (58): 16 at 900 high (the heading and
+   all 15 avatars), 14 at 800 (the rail then scrolls inside itself) */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: round(down, calc(100dvh - 210px), var(--ad-rail-pitch));
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles .admin-pick-group > h3 {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: var(--ad-rail-pitch);
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles .admin-pick-row {
+  height: var(--ad-rail-pitch);
+  min-height: var(--ad-rail-pitch);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles .admin-pick {
+  height: 100%;
+  min-height: 0;
+}
+/* chevron | label | count in ONE row: at rest the label has no room (it opens with the rail, 200 ms) */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .admin-pick-head {
+  flex: 1 1 auto;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--ad-sp-1);
+  width: 100%;
+  height: var(--ad-h-compact);
+  min-height: 0;
+  padding: 0 var(--ad-sp-2);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .admin-pick-head > .dc-chev {
+  order: 0;
+  flex: none;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .admin-pick-head > .dc-text {
+  order: 1;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  text-align: left;
+  text-overflow: clip;
+  white-space: nowrap;
+  transition:
+    max-width var(--ad-t-slide) var(--ad-ease),
+    opacity var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  #admin-characters
+  .wb-roster:is(:hover, :focus-within)
+  .admin-pick-head
+  > .dc-text {
+  max-width: 120px;
+  opacity: 1;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .admin-pick-head > .dc-text span {
+  max-width: none;
+  opacity: 1;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .admin-pick-head > b {
+  order: 2;
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+}
+/* a row: the avatar never moves when the rail grows; the name and the state word come with the rail */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles .admin-pick {
+  gap: var(--ad-sp-3);
+  padding: 0 var(--ad-sp-2) 0 13px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .admin-pick-text strong {
+  min-width: 0;
+  font-size: var(--ad-fs-body);
+  text-overflow: clip;
+}
+/* the avatar's status dot and the 共创 badge follow the pitch */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .admin-pick-st {
+  top: 2px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles .cocreation-badge {
+  top: 11px;
+}
+/* the tools: 32 px squares at the foot of the rail, named by aria-label and the console's hover tip. At rest the first (新建) is the only
+   one with room; expanded, all three sit in ONE row (the other two open with the rail: width and opacity, the console's tokens) */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-tools {
+  display: flex;
+  flex: none;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0;
+  padding: 0 calc((64px - 2px - var(--ad-h-compact)) / 2);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-tools:not(:has(> :not([hidden]))) {
+  display: none;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-tools .ad-icon-tool {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: var(--ad-h-compact);
+  min-width: 0;
+  height: var(--ad-h-compact);
+  min-height: var(--ad-h-compact);
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-radius);
+  background: transparent;
+  color: var(--ad-muted);
+  font-size: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  #admin-characters
+  .wb-tools
+  .ad-icon-tool:not(:first-child) {
+  width: 0;
+  margin-left: 0;
+  border-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+  transition:
+    width var(--ad-t-slide) var(--ad-ease),
+    margin var(--ad-t-slide) var(--ad-ease),
+    opacity var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  #admin-characters
+  .wb-roster:is(:hover, :focus-within)
+  .wb-tools
+  .ad-icon-tool {
+  width: var(--ad-h-compact);
+  margin-left: var(--ad-sp-1);
+  border-width: 1px;
+  opacity: 1;
+  pointer-events: auto;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  #admin-characters
+  .wb-roster:is(:hover, :focus-within)
+  .wb-tools
+  .ad-icon-tool:first-child {
+  margin-left: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-tools .ad-icon-tool::before {
+  content: none;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-tools .ad-icon-tool:hover {
+  background: var(--ad-bg);
+  color: var(--ad-text);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-tools .ad-icon-tool:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 1px;
+}
+/* the avatar field's button keeps its tip beside it (the limits are the tip, not a line under the button) */
+.account-admin-page.admin-shell .av-pick-wrap {
+  display: inline-flex;
+}
+/* ---- the top spacing: every tab's first content starts 24 px under the tab bar (the card body's padding) ---- */
+/* a section that holds nothing visible takes no row (it used to add a 28 px gap above 预演) */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  #admin-characters
+  .wb-card-body
+  > .character-flow:not(:has(> :not([hidden]))) {
+  display: none;
+}
+/* the first node of a tab has no step above it (the 24 px between sections sat above 版本历史's only section) */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-card .character-flow > .wb-first {
+  margin-top: 0;
+}
+/* a fold that opens a tab (发布): its heading is a compact row like the field label of the tabs without folds, not a 44 px row */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  #admin-characters
+  .wb-card
+  .character-flow
+  > details.wb-first
+  > summary {
+  box-sizing: border-box;
+  height: var(--ad-h-compact);
+  min-height: var(--ad-h-compact);
+  padding-block: 0;
+}
+/* 共创积分's heading, in the row of its own fields, looks as it did inside its old wrapper */
+.account-admin-page.admin-shell .pt-cc > h3 {
+  align-self: center;
+  min-width: 160px;
+  margin: 0;
+  color: var(--ad-text);
+  font-size: 18px;
+  font-weight: 900;
+}
+/* 预演's right half: the 整理预演 bar and the results under it are one step (16) apart, not a 12 margin plus the 16 gap (28) */
+.account-admin-page.admin-shell .rh-main > .pw-manage {
+  margin-bottom: 0;
+}
+/* ---- 系统状态 (round 3): every table fits its content; what does not fit scrolls INSIDE its own card, never the page ---- */
+/* 技术指标: eleven fixed-width columns (ops-view.ts) in a card that scrolls sideways; header and cells share one grid, numbers right */
+.account-admin-page.admin-shell .system-metrics .ops-grid {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+}
+.account-admin-page.admin-shell .system-metrics .ops-grid > :is(.ot-head, .ot-body) {
+  width: max-content;
+  min-width: 100%;
+}
+.account-admin-page.admin-shell .system-metrics .ops-grid .ot-head {
+  height: auto;
+  min-height: 48px;
+  padding-block: var(--ad-sp-2);
+  align-items: end;
+}
+.account-admin-page.admin-shell .system-metrics .ops-grid .ot-head .ot-cell {
+  line-height: 1.3;
+}
+.account-admin-page.admin-shell .system-metrics .ops-grid .ot-cell.is-mono {
+  white-space: nowrap;
+}
+/* 未确认的调用: the money and age columns are numbers (right), the codes wrap inside their cell, the 核对 cell is one row */
+.account-admin-page.admin-shell .sys-unknown-calls .admin-table :is(th, td).is-end {
+  text-align: right;
+}
+.account-admin-page.admin-shell .sys-unknown-calls .admin-table td {
+  vertical-align: middle;
+}
+.account-admin-page.admin-shell .sys-unknown-calls .sys-uc-code {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.account-admin-page.admin-shell .sys-unknown-calls .sys-uc-settle {
+  display: table-cell;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .sys-unknown-calls .sys-uc-settle input {
+  width: var(--ad-w-xs);
+  margin-right: var(--ad-sp-2);
+}
+/* 清理失败明细: the message shape wraps inside its cell instead of running off it */
+.account-admin-page.admin-shell .sys-failures .admin-table td,
+.account-admin-page.admin-shell .sys-failures .admin-table .admin-dev {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.account-admin-page.admin-shell .sys-failures .admin-table td:nth-child(5),
+.account-admin-page.admin-shell .sys-failures .admin-table td:nth-child(5) .admin-dev {
+  min-width: 14ch;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* ---- buttons size to their label (round 3): a label is one line and is never cut or squeezed; the whole-card hit areas (named in
+   docs/ADMIN_LAYOUT.md §1) and the 声音 tab (Part 30) keep their own geometry ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+:is(button, a.admin-primary, a.admin-secondary):not(
+  .vc-materials *,
+  .admin-pick,
+  .cs-card-open,
+  .cc-row-open,
+  .cn-add-card,
+  .cs-cell,
+  .cs-head,
+  .cs-star-hit,
+  .ot-row,
+  .cc-card-open,
+  .rh-pick
+) {
+  min-width: min-content;
+  white-space: nowrap;
+}
+/* 多轮预演's model rows: the four writer toggles each fit their label (the old 64 px columns cut 「新+档案+梗」); the toggles share the widest */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .rh-model {
+  grid-template-columns: 160px repeat(4, minmax(max-content, 1fr));
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .rh-model .rh-toggle {
+  padding-inline: var(--ad-sp-3);
+}
+/* ---- tabs: twelve fit one row at 1280 (3 px tighter each side; the console has no media queries but the narrow-window notice) ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-tab {
+  padding-inline: 10px;
+}
+/* ---- collapsible sections (round 3): one pattern. The header is a compact row (chevron, then its text); the body starts under the header's
+   TEXT (not the chevron), 8 px below it, behind a hairline that runs from the chevron: header and body read as one unit. A section inside a
+   section steps in once more per level. Opening and closing animate height and opacity with the console's tokens (none under reduced
+   motion); the body stops clipping once open, so a tip or a focus ring is never cut. ---- */
+.account-admin-page.admin-shell {
+  --ad-fold-chev: 14px; /* the chevron */
+  --ad-fold-indent: 30px; /* header padding 8 + chevron 14 + gap 8: where the header's text starts */
+  interpolate-size: allow-keywords;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  details:has(> summary.dc):not(.vc-materials *, :has(> .vc-materials))
+  > summary.dc {
+  box-sizing: border-box;
+  min-height: var(--ad-h-compact);
+  margin-bottom: 0;
+  padding: 0 var(--ad-sp-2);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  details:has(> summary.dc):not(.vc-materials *, :has(> .vc-materials))::details-content {
+  box-sizing: border-box;
+  block-size: 0;
+  opacity: 0;
+  overflow: clip;
+  margin-left: calc(var(--ad-sp-2) + var(--ad-fold-chev) / 2);
+  padding: 0 0 0 calc(var(--ad-fold-indent) - var(--ad-sp-2) - var(--ad-fold-chev) / 2 - 1px);
+  border-left: 1px solid var(--ad-hairline);
+  transition:
+    block-size var(--ad-t-open) var(--ad-ease),
+    opacity var(--ad-t-open) var(--ad-ease),
+    padding-block var(--ad-t-open) var(--ad-ease),
+    content-visibility var(--ad-t-open) allow-discrete,
+    overflow var(--ad-t-open) allow-discrete;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  details[open]:has(> summary.dc):not(.vc-materials *, :has(> .vc-materials))::details-content {
+  block-size: auto;
+  opacity: 1;
+  overflow: visible;
+  padding-block: var(--ad-sp-2) var(--ad-sp-1);
+  /* opening shows the content at once (a field in it takes focus the moment it opens); only closing waits for the motion to end */
+  transition:
+    block-size var(--ad-t-open) var(--ad-ease),
+    opacity var(--ad-t-open) var(--ad-ease),
+    padding-block var(--ad-t-open) var(--ad-ease),
+    overflow var(--ad-t-open) allow-discrete;
+}
+/* a tab that is one section has no header: no hairline, no step */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) details.wb-sole:has(> summary.dc)::details-content {
+  margin-left: 0;
+  padding: 0;
+  border-left: 0;
+}
+/* a table row that opens below: its detail starts under the row's text and joins the tinted row without a gap */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .ot-detail {
+  margin: 0 var(--ad-sp-5) var(--ad-sp-4) calc(20px + 20px + var(--ad-sp-3));
+}
+/* a danger zone's body steps in once under its opener */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .dz > .dz-panel {
+  box-sizing: border-box;
+  width: calc(100% - var(--ad-sp-4));
+  margin-left: var(--ad-sp-4);
+}
+/* the 预演 settings line opens its settings under its text, one step in */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-settings-panel {
+  box-sizing: border-box;
+  width: calc(100% - var(--ad-sp-4));
+  margin-left: var(--ad-sp-4);
+}
+/* the quick picks of a date field (7 / 30 / 90 天 / 不限) fit their labels, 4 px apart, instead of four 35 px slots */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-date-picks {
+  display: flex;
+  gap: var(--ad-sp-1);
+  width: auto;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-date-pick:is(button) {
+  padding-inline: var(--ad-sp-2);
+  font-size: 12px;
+}
+/* the sidebar's last item is never half under the account pill */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-nav {
+  padding-block-end: 72px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .admin-pick-head {
+  overflow: hidden;
+}
+/* ---- 测试对话: the conversation's lines are the size of the list beside them ---- */
+.account-admin-page.admin-shell .review-text,
+.account-admin-page.admin-shell .review-list .admin-table :is(td, th) {
+  font-size: var(--ad-fs-body);
+}
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {

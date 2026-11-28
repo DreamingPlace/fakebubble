@@ -355,6 +355,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       h('h2', { text: '还没有角色' }),
       h('p', {
         class: 'cs-hint',
+        attrs: { 'data-empty': 'true' },
         text: canEdit() ? '先在角色工作台建一个角色，或者导入一份阵容文件。' : '阵容里还没有角色（你只有查看权限）。',
       }),
     );
@@ -952,10 +953,13 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       state.importing = null;
       paintImporter();
     });
+    frame.importer.setAttribute('data-irreversible', 'true'); // the whole panel is the confirm step of 确认导入 (it replaces the draft)
     frame.importer.append(
       h('h2', { text: '导入文件' }),
       h('p', {
         class: 'cs-hint',
+        // beside the irreversible 确认导入 (it replaces the whole draft): kept (docs/ADMIN_COPY.md)
+        attrs: { 'data-irreversible': 'true' },
         text: '确认后，这份文件会替换整份阵容草稿（现在草稿里有、文件里没有的角色会被移出阵容，角色本身不会被删除）。只改草稿：不会发布，也不会动玩家的任何数据。',
       }),
       lines,

@@ -155,6 +155,7 @@ export function conversationsView(
   const confirmHost = h('div', { class: 'review-confirm' });
   const characterFilter = toolbar({
     title: conversationsCopy.title,
+    titleTip: conversationsCopy.hint,
     filters: [
       { kind: 'select', id: 'character', label: '角色', options: [['', '全部角色']] },
       {
@@ -199,15 +200,7 @@ export function conversationsView(
   if (exportButton) characterFilter.root.append(h('span', { class: 'admin-bar-spacer' }), exportButton);
   const closedNode = deps.owner ? closedPanel() : null;
   if (closedNode) closedNode.hidden = true;
-  const listArea = h(
-    'div',
-    { class: 'review-list' },
-    characterFilter.root,
-    h('p', { class: 'admin-hint', text: conversationsCopy.hint }),
-    confirmHost,
-    plainTable.root,
-    closedNode,
-  );
+  const listArea = h('div', { class: 'review-list' }, characterFilter.root, confirmHost, plainTable.root, closedNode);
   const pager = h('div', { class: 'review-pager', hidden: true });
   const detailArea = h('div', { class: 'review-detail', hidden: true });
   root.replaceChildren(listArea, pager, detailArea);
@@ -234,7 +227,12 @@ export function conversationsView(
   function closedPanel() {
     const body = h('div', { class: 'closed-body' });
     const rowsHost = h('div', { class: 'closed-rows' });
-    const hint = h('p', { class: 'admin-hint', text: conversationsCopy.closedPolicyHint });
+    // beside the permanent-deletion policy (立即): kept
+    const hint = h('p', {
+      class: 'admin-hint',
+      text: conversationsCopy.closedPolicyHint,
+      attrs: { 'data-irreversible': 'true' },
+    });
     const state = { policy: 'retention' as 'retention' | 'immediate' };
     const pick = segmented(
       conversationsCopy.closedPolicy,

@@ -6,6 +6,7 @@ import {
 } from '../../../../../../packages/contracts/web-cast.ts';
 import { h } from '../../cocreation/h.ts';
 import { dragOrder } from '../ui/drag-order.ts';
+import { hoverValue } from '../ui/hover-value.ts';
 import { dragHandle, liveRegion, movedSentence, removeButton } from '../ui/item-controls.ts';
 import { markDirty } from '../ui/unsaved.ts';
 import { issueSentence } from './cast-model.ts';
@@ -81,8 +82,10 @@ export function itemList<T extends CastText>(spec: ItemListSpec<T>): HTMLElement
       h(
         'div',
         { class: 'cs-items-head' },
-        h('span', { class: 'cs-items-label', text: spec.label }),
-        spec.hint ? h('span', { class: 'cs-hint-line', text: spec.hint }) : null,
+        // Part 24b-7f: the explanation is the label's hover tip, not a line beside it
+        spec.hint
+          ? hoverValue(h('span', { class: 'cs-items-label', text: spec.label }), spec.hint)
+          : h('span', { class: 'cs-items-label', text: spec.label }),
         count,
       ),
     );
@@ -155,7 +158,7 @@ export function itemList<T extends CastText>(spec: ItemListSpec<T>): HTMLElement
       refresh();
     });
     root.append(rows, live.node);
-    if (!items.length) root.append(h('p', { class: 'cs-hint-line', text: '还没有' }));
+    if (!items.length) root.append(h('p', { class: 'cs-hint-line', text: '还没有', attrs: { 'data-empty': 'true' } }));
     if (edit) {
       const add = h('button', {
         class: 'cs-add cs-dashed',

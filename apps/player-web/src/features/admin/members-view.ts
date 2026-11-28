@@ -214,7 +214,7 @@ export function membersView(options: MembersViewOptions) {
     });
     item.append(heading);
     if (member.role === 'owner') {
-      item.append(h('p', { text: '主管理员保留所有功能权限，不能在此撤权。' }));
+      item.append(h('p', { text: '主管理员保留所有功能权限，不能在此撤权。', attrs: { 'data-reason': 'true' } }));
       options.list.append(item);
       return;
     }
