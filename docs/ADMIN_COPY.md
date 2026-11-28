@@ -135,7 +135,7 @@ Player pages: one line on the terms page (the license notice and its link); noth
 ## Part 59 — never lose an edit, per-item handling, offline characters
 | Where | Words |
 |---|---|
-| the connection line (floats over the page, top right) | **保存没完成，修改都还在，验证或重新登录后会自动再存一次** (a save was interrupted) · 连接中断，修改都还在，验证或重新登录后会自动继续 (a read was) · button **验证 / 重新登录** (opens the console in a popup; the page stays where it is) |
+| the connection line (floats over the page, top right) | **保存没完成，修改都还在，验证或重新登录后会自动再存一次** (a save was interrupted) · 连接中断，修改都还在，验证或重新登录后会自动继续 (a read was) · button **验证 / 重新登录** (opens the console in a popup; the page stays where it is) · Part 60: a page whose load timed out or lost the connection is named: **「共创收件箱」没能加载：连接超时或中断，修改都还在** (the page's name only, never an id) with the button **重试** · a first sign-in request that timed out: 连接超时，请再试一次。 |
 | a kept buffer, at the top of its editor | 这个浏览器里留着 MM-DD HH:MM 没保存的修改（N 处）· **恢复未保存的修改** · 放弃这些修改 |
 | 共创收件箱, a card in 新 that is partly handled | chip **已处理 x/n** (n = its answers, plus the players' reason of a two-person note) |
 | 共创收件箱, one answer | 复制 · 采纳 · **不采纳** · **标为已处理** · after: 已采用 / 不采纳 / 已复制 / 已处理 + 撤销标记 |

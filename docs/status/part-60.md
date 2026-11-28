@@ -1,0 +1,49 @@
+# Part 60 — the admin console must never freeze (P0)
+
+Branch `part-60`. No migration: `expected-migrations` byte-identical to main. No prompt, policy or pinned hash changed. No new STOP code (the one new internal code `WEB_SYSTEM_SOURCE_TIMEOUT` is a bounded error string of the budget block, see "Server side").
+
+## The cause (confirmed in the code)
+What the owner saw: the cursor became "not allowed", nothing could be clicked, a force refresh froze the login page too.
+1. `account-admin-page.ts`: `run()` set ONE page-wide `busy`, and `render()` did `control.disabled = busy || …` for EVERY `button, input, select, textarea` (CSS `button:disabled → cursor: not-allowed`). Every page load (`void run(load)` on a nav click) went through it, and so did every save.
+2. `busy` **started `true`** and was only cleared in the `.finally` of `restore().then(active)` — and `active()` *awaited the first page's whole load* inside that chain. So the login form (and, after a restore, the first page) stayed disabled until the session read **and** the first page's load had answered.
+3. `invite-admin-api.ts request()`: only `/session` had a deadline (15 s, Part 59). Any other request (a stuck answer, a Cloudflare challenge page that never finishes, a connection that died while the tab slept) had none: `await work()` never returned, `busy` stayed set forever. Nothing but closing the tab helped.
+Additional causes found and fixed:
+- A page load is several requests in a row (`readRoster()` swallows its error, then `refreshCounts()`, then the page's own read…). With one deadline per request a dead connection cost 20 s **per request**; now the first interrupted read of a load cancels the rest of that load.
+- `restore()` (the background session read) set `csrf = null` before asking: a read that timed out left the console without its token, so the next write started with a 403 and a re-sync. The token is kept when the read is only interrupted.
+- `readRoster()` memoised a failed read forever (the roster colours never loaded after one hiccup); it tries again at the next page-open.
+- A request that timed out before any sign-in was reported as `ACCESS_REQUIRED` and raised the Cloudflare Access notice. A timeout is now its own sentence (「连接超时，请再试一次。」) and the form is simply there.
+
+## What changed
+### Transport (`services/invite-admin-api.ts`, `admin-connection.ts`)
+Every admin request has a deadline; a timeout is an `AdminInterruptedError('network')` — the existing Part 59 path (connection line, edits kept, 4 s probe, automatic retry of registered saves). The timeout also covers a body that stalls after the headers, and works with a fetch that ignores the abort signal.
+
+| request | deadline |
+|---|---|
+| `/session` (the background read) | 15 s (as in Part 59) |
+| every other request (reads and writes) | **20 s** (`ADMIN_DEADLINE_MS`) |
+| exports — a path with `export` (`/export/*`, `*-export`) | **60 s** (`ADMIN_EXPORT_DEADLINE_MS`) |
+| generations that wait for a provider call inside the business object — `wordings/generate`, `relation/tidy`, `generate`, `speak`, `start`, `take-audio`, imports, `upload` | **60 s** (`ADMIN_GENERATE_DEADLINE_MS`) |
+Nothing is above 60 s. Reads (the last path segment is one of `list read status detail counts draft order versions validate …`, see `READ_PATH`) always get 20 s.
+
+**A timed-out write is unknown, not failed.** The line says the edits are kept (`writePending`); the write is never sent again under a new request id. Where a save has a request id the views hold it until the save succeeded (`pending` maps in points, system, broadcast, models, invite tiers; `requestIds` in 网络梗; `requestFor` in the cast), so both the owner's manual retry and the automatic resend after re-verification reuse it. The workbench / 说话档案 draft saves carry no request id: they are compare-and-swap on the draft revision (a resend after an unknown outcome answers a revision conflict, which the Part 55 field merge handles). Tests: the transport test resends through `adminConnection.retryAfterReauth` and compares the two request bodies.
+
+### The page (`features/admin/account-admin-page.ts`)
+- **No page-wide `busy`.** `render()` disables only the controls inside the **scope** of a running save. The scope is the form (or `[data-save-scope]`, the workbench editor, the 预演 column, the import/arc hosts, a dialog) the owner touched last — a capture listener on the console records it — or, without a form, just the control they pressed. `run()` keeps "never two saves of the same form at once" (key = that scope; without an event, the same piece of code). Navigation, sign-out and the other fields stay usable. `workbench.update()` / `previewBench.update()` receive "my part is locked", as before but scoped.
+- **Loads never lock.** Opening a page (nav click, hash change, role pick, 重试, the first page after sign-in) is `startLoad()`: the newest click wins, the older load is aborted (`AbortController` → the transport cancels that load's READS only — the whitelist above; writes are never cancelled by navigating) and shows nothing. A page without a loader cancels the older load as well. `runLatest` (used by 测试对话) is the same mechanism.
+- **Start-up.** The login form is usable at once (no `busy = true`). The first `/session` read runs in the background; signed in → the console replaces the form and the first page loads on its own; failed or timed out → nothing happens (no Access notice for a timeout).
+- **Connection line.** When a read of the page being opened is interrupted, `failedLoad` is set, the rest of that load is cancelled, and the line reads 「共创收件箱」没能加载：连接超时或中断，修改都还在 (the page's nav name only, no ids) with a 重试 button; 重试 — or the connection coming back, which the 4 s probe notices — loads the page again. Opening another page repaints the line (no stale name). Copy added to docs/ADMIN_COPY.md. The button is created in the page's own markup next to the existing ones; no CSS changed (the redesign session owns it).
+- Kept as in Part 59: edit backup and restore banner, Access re-verify popup, auto-retry, scroll preservation, the background session refresh (15 s deadline, nothing disabled).
+
+## Server side (report; one small fix)
+Read what 共创收件箱 and 系统状态 load inside the business object:
+- **系统状态 `system/status`**
+  - `sources.budget()` and `sources.retention()` are RPC reads that leave the business object (the budget Worker, the retention ledger). Neither had any bound: a stuck answer held the whole status read. **Fixed (small, clearly unbounded):** both are now bounded to 8 s (`SYSTEM_SOURCE_DEADLINE_MS`, below the console's 20 s). After that the budget block says unavailable (`error: 'WEB_SYSTEM_SOURCE_TIMEOUT'`, the existing `available:false` shape) and the retention block is empty. Test: `web-system-admin-22b` (appended). `retention()` is still called twice per status read (once for the block, once for the warnings); not merged here.
+  - Listed, not fixed: `unknownKinds` and `unknownNew` run `count(*) … WHERE state='unknown'` on `web_provider_attempts` / `web_embed_attempts` (a full scan of `web_provider_attempts`: I found no index on `state`; `web_external_attempts` and `web_embed_attempts` have one). The table grows with every provider call. A fix is a new index = a new migration, which is out of scope (expected-migrations stay byte-identical). Also `stageLatencyRows(31)` builds the technical-metrics days in one pass over `web_operation_metrics` (one row per reply for 31 days, percentiles in JS) plus a join with `web_provider_attempts` + `json_extract`. Bounded by 31 days, but large at volume.
+  - 总览 (the other page the 60 s auto-reload loads) shares `systemWarnings` (the same two scans).
+- **共创收件箱** (`counts`, `list`, `detail`): every read has a `LIMIT` (page = 30, `PAGE + 1` rows); the cursor is keyset. Listed: `list` with no character filter sorts the whole submissions table (`ORDER BY created_at DESC` cannot use the `(character_id,status,created_at)` index; same for 已处理 with `coalesce(processed_at,created_at)`); the 搜索 box runs `LIKE` + `json_extract` per answer row (a scan); `firstAnswer` / `handledOf` are a query per row (30 rows). `counts` scans the `status='new'` rows grouped by character. None is unbounded in size of the answer; the scans grow with the table. No fix (an index would be a migration).
+
+## Tests
+- `apps/player-web/tests/components/admin-60.test.ts`: for each of the 14 admin pages a fetch that never answers → nothing disabled, a nav click opens the other page, nothing before 20 s, then the connection line names the page, no ids, 重试 offered; 重试 reloads; a never-answering `/session` at start → the login fields take input, nothing disabled, no Access notice; a late signed-in answer switches to the console; never two saves of one form and navigation works during a save; the deadline table; each request kind times out as an interruption (read at 20 s and not a lost write, write flagged as a write, export at 60 s); a timed-out write is resent only with the same requestId.
+- `tests/web/integration/web-system-admin-22b…` (appended): the stuck budget / retention sources.
+- `scripts/check-web-part-60-browser.ts` (`pnpm check:web:all -- part-60`): the 共创收件箱 load stalled in a real browser: nav clickable, cursor not "not-allowed", no control disabled, another page opens within 1.5 s, the line names 共创收件箱 after 20 s with 重试, 重试 loads; a save in flight locks only its form; `/session` never answering at start (also after a force refresh) → the login form takes input.
+- Named exception (commented in place): `account-admin-preview-pick.test.ts` — the two "of several clicks during one load" tests described the queue Part 60 removed (a load waits for the older one; never two loads at once). They now assert the newest click starts at once and stays the one that is open.
