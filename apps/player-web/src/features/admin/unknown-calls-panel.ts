@@ -127,7 +127,9 @@ export function unknownCallsPanel(deps: {
     const region = h('div', { class: 'admin-table-region' }, h('div', { class: 'admin-table-wrap' }, table));
     root.replaceChildren(
       head,
-      view.calls.length ? region : h('p', { class: 'admin-hint', text: '没有未确认的调用。' }),
+      view.calls.length
+        ? region
+        : h('p', { class: 'admin-hint', text: '没有未确认的调用。', attrs: { 'data-empty': 'true' } }),
       ...(view.other.embed > 0
         ? [
             h('p', {

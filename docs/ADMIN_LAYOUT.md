@@ -41,17 +41,17 @@ right and text left.
 They become a short label (`data-short`, shown by CSS) with the full sentence as the label's text and hover tip
 (发布: 已核对差异与预演).
 
-## 7. The rail (Part 24b-7f)
-One column of avatars, **124 px at rest** (`--ad-rail-w`; it grows over the page to 212 on hover or focus, as before, and the page does not
-move). It is as wide as three 32 px tools in one row need.
-- **A group heading is ONE row:** collapse chevron, label (「当前阵容」, read at rest) and count, 32 px high (`--ad-h-compact`).
-- **新建 / 导入 / 首页顺序 are three icon buttons in ONE row** at the foot of the rail: 32 px squares, 4 px apart, each with an `aria-label`
-  and the console's hover / focus tip (`ui/icon-tool.ts`, `ui/tooltip.ts`).
-- **15 avatars without scrolling at 1440×900:** the pitch is 42 (`--ad-rail-pitch`: a 36 px avatar, never below 32; it was 46), the heading is
-  one pitch (a 32 px row centred in it, it was two), and the scroller is a whole number of pitches in what the rail's own height (the window less its top 104 and its 48 px foot, which keeps
-  it still when the page scrolls) leaves after its chrome (58): 16 at 900 high (the heading and all 15 avatars). At 1280×800 it holds 14 and scrolls inside itself; avatars snap
-  to its top edge, so a scrolled rail ends on a whole row, and the open character is kept in view.
-- Avatars stay where they are when the rail grows; the name is read at rest, the state word only when it grows.
+## 7. The rail (Part 24b-7f, round 3)
+One column of avatars, **64 px at rest**; it grows to 212 over the page on hover or focus (the page does not move) and everything else opens with it.
+- **A group heading is ONE row:** collapse chevron, label (「当前阵容」) and count, 32 px high (`--ad-h-compact`). At rest the label has no room
+  (chevron and count share the row); it opens with the rail (200 ms, `--ad-t-slide`).
+- **新建 / 导入 / 首页顺序 are three icon buttons** at the foot of the rail: 32 px squares in ONE row when the rail is expanded (at rest only
+  新建 is shown; the other two open with the rail), each with an `aria-label` and the console's hover / focus tip (`ui/icon-tool.ts`).
+- **15 avatars without scrolling at 1440×900:** the pitch is 42 (`--ad-rail-pitch`: a 36 px avatar, never below 32), the heading is one pitch,
+  and the scroller is a whole number of pitches in what the rail's own height (the window less its top 104 and its 48 px foot, which keeps it
+  still when the page scrolls) leaves after its chrome (58): 16 at 900 high. At 1280×800 it holds 14 and scrolls inside itself; avatars snap
+  to its top edge and the open character is kept in view.
+- Avatars never move when the rail grows; the name and the state word come with the rail.
 
 ## 8. The top spacing of a workbench tab
 Every tab's first content starts the card body's 24 px under the tab bar. A section that holds nothing visible takes no row, the first node
@@ -64,3 +64,22 @@ of a tab (`.wb-first`) has no step above it, and a fold that opens a tab has a c
 The system's rules are written last and carry the weight of an id (`:is(.admin-shell, #ad-layout)`), so they win over the
 page-by-page rules above them without `!important`. A later correction of a page that still has an id-weighted rule uses the page's
 id (`#admin-characters …`).
+
+## 10. Tables that do not fit (round 3)
+A table never makes the page wider and its text never overlaps. Each column fits its content (a fixed track where the values are short and
+mono, `ui/open-table.ts` `width`); text wraps or is cut with the full value on hover; numbers are right-aligned and so is their header, text
+is left. A table that still does not fit scrolls INSIDE its own card (`overflow-x: auto`, like Part 44's `.rh-scroll`): 系统状态's 技术指标
+(eleven columns), 未确认的调用 and 清理失败明细. Check: `check:web:admin-24b7f` (section F).
+
+## 11. Button text (round 3)
+A button is as wide as its label (`white-space: nowrap`, `min-width: min-content`) at one of the two heights; buttons of a group may share the
+widest label's width. The audit (`scripts/admin-button-audit-24b7g.ts`, run by `check:web:admin-24b7f` on every page, open state and workbench tab
+at 1280 and 1440) fails on a clipped or wrapped label. Named exemptions: the whole-card hit areas of §1, the rail, the 声音 tab, and what is inside
+Part 44's `.rh-scroll`.
+
+## 12. Collapsible sections (round 3)
+One pattern for every native `<details>` with a disclosure header: a compact header row (chevron, then its text); the body starts under the
+header's TEXT (`--ad-fold-indent`, 30 px), 8 px below it, behind a hairline that runs down from the chevron, so header and body are one
+unit; a section inside a section steps in once more per level. Opening and closing animate height and opacity with `--ad-t-open` (nothing under
+reduced motion) and the body stops clipping once open. Table rows that open below (`.ot-detail`) start under the row's text; danger zones and
+the 预演 settings line step in one level.
